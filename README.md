@@ -12,7 +12,7 @@ Please treat the project as an evolving tool rather than a finished product.
 
 🧩 Project Overview
 
-The Quinn Optimiser Toolkit started as a simple Windows cleanup script and has grown into a multi-module, UI-based optimisation suite designed for IT professionals.
+The Quinn Optimiser Toolkit started as a simple Windows cleanup script and has grown into a multi module, UI based optimisation suite designed for IT professionals.
 It focuses on:
 
 • System cleanups
@@ -24,10 +24,10 @@ It focuses on:
 • Logging
 • Modular design for future features
 
-Long-term, the goal is to create an all-in-one IT support utility.
+Long-term, the goal is to create an all in one IT support utility.
 
 ✅ Version Breakdown
-V1 – Core Script (Completed)
+V1 Core Script (Completed)
 
 The first version was a single PowerShell script that performed the basics:
 
@@ -42,7 +42,7 @@ The first version was a single PowerShell script that performed the basics:
 V1 had no UI, no modules and no app intelligence.
 It was the foundation that proved the idea worked.
 
-V2 – UI + Modular System (Completed)
+V2 UI + Modular System (Completed)
 
 V2 introduced a full WPF-powered UI and broke the logic into separate modules.
 This release focused on usability and structure.
@@ -60,7 +60,7 @@ Main changes:
 
 V2 is the point where the toolkit became a real application rather than a script.
 
-V3 – Smart Toolkit Upgrade (In Development)
+V3 Smart Toolkit Upgrade (In Development)
 
 This is the current work in progress.
 
@@ -102,7 +102,7 @@ Advanced Features
 
 V3 is focused on making the toolkit smarter, more visual, and closer to a professional IT management tool.
 
-V4 – Imaging & Deployment Module (Planning Stage)
+V4 Imaging & Deployment Module (Planning Stage)
 
 This is a future concept, not yet started.
 
@@ -122,7 +122,7 @@ This module will be explicitly for IT admins, not casual users.
 • Many modules are missing or empty (on purpose)
 • UI, structure and folder layout may change
 • V3 features are being added gradually
-• V4 is future-planned only — nothing implemented yet
+• V4 is future-planned only nothing implemented yet
 
 Expect breakage, experimental code and ongoing changes.
 
