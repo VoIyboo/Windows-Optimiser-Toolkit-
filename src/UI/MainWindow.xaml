@@ -192,169 +192,150 @@
                     Grid.Row="1">
 
             <!-- DASHBOARD TAB -->
-            <TabItem Header="Dashboard">
-                <Grid Margin="8,18,8,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+<TabItem Header="Dashboard">
+  <Grid Margin="5,20,5,5">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="3*"/>
+      <ColumnDefinition Width="2*"/>
+    </Grid.ColumnDefinitions>
 
-                    <!-- Top row: quick stats -->
-                    <StackPanel Grid.Row="0"
-                                Grid.ColumnSpan="2"
-                                Orientation="Horizontal"
-                                Margin="0,0,0,8">
-                        <Border Background="{StaticResource CardBrush}"
-                                BorderBrush="{StaticResource BorderBrushMain}"
-                                BorderThickness="1"
-                                Padding="10"
-                                Margin="0,0,8,0"
-                                Width="240">
-                            <StackPanel>
-                                <TextBlock Text="CPU / RAM"
-                                           Foreground="{StaticResource MutedTextBrush}"
-                                           FontSize="11"/>
-                                <TextBlock x:Name="CpuRamSummary"
-                                           Text="CPU: 0%   RAM: 0%"
-                                           Foreground="White"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Border>
+    <!-- Top summary tiles -->
+    <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,0,0,10">
+      <!-- CPU / RAM -->
+      <Border Background="#020617" Padding="10" Margin="0,0,10,0"
+              BorderBrush="#374151" BorderThickness="1" Width="260">
+        <StackPanel>
+          <TextBlock Text="CPU / RAM"
+                     Foreground="#9CA3AF"
+                     FontSize="11"/>
+          <TextBlock x:Name="CpuRamText"
+                     Text="CPU: 0%   RAM: 0%"
+                     Foreground="White"
+                     FontSize="14"
+                     FontWeight="Bold"
+                     Margin="0,4,0,0"/>
+        </StackPanel>
+      </Border>
 
-                        <Border Background="{StaticResource CardBrush}"
-                                BorderBrush="{StaticResource BorderBrushMain}"
-                                BorderThickness="1"
-                                Padding="10"
-                                Margin="0,0,8,0"
-                                Width="260">
-                            <StackPanel>
-                                <TextBlock Text="Disk usage (C:)"
-                                           Foreground="{StaticResource MutedTextBrush}"
-                                           FontSize="11"/>
-                                <TextBlock x:Name="DiskSummary"
-                                           Text="0 GB used / 0 GB free"
-                                           Foreground="White"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Border>
+      <!-- Disk usage -->
+      <Border Background="#020617" Padding="10" Margin="0,0,10,0"
+              BorderBrush="#374151" BorderThickness="1" Width="260">
+        <StackPanel>
+          <TextBlock Text="Disk usage (C:)"
+                     Foreground="#9CA3AF"
+                     FontSize="11"/>
+          <TextBlock x:Name="DiskUsageText"
+                     Text="0 GB used / 0 GB free"
+                     Foreground="White"
+                     FontSize="14"
+                     FontWeight="Bold"
+                     Margin="0,4,0,0"/>
+        </StackPanel>
+      </Border>
 
-                        <Border Background="{StaticResource CardBrush}"
-                                BorderBrush="{StaticResource BorderBrushMain}"
-                                BorderThickness="1"
-                                Padding="10"
-                                Width="260">
-                            <StackPanel>
-                                <TextBlock Text="System health"
-                                           Foreground="{StaticResource MutedTextBrush}"
-                                           FontSize="11"/>
-                                <TextBlock x:Name="HealthSummary"
-                                           Text="Waiting for scan..."
-                                           Foreground="White"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+      <!-- System health -->
+      <Border Background="#020617" Padding="10"
+              BorderBrush="#374151" BorderThickness="1" Width="260">
+        <StackPanel>
+          <TextBlock Text="System health"
+                     Foreground="#9CA3AF"
+                     FontSize="11"/>
+          <TextBlock x:Name="SystemHealthText"
+                     Text="Waiting for scan..."
+                     Foreground="White"
+                     FontSize="14"
+                     FontWeight="Bold"
+                     Margin="0,4,0,0"/>
+        </StackPanel>
+      </Border>
+    </StackPanel>
 
-                    <!-- Left side: details -->
-                    <Grid Grid.Row="1"
-                          Grid.Column="0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+    <!-- Left side: storage + maintenance -->
+    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,10,0">
+      <!-- Storage overview -->
+      <GroupBox Header="Storage overview" Margin="0,0,0,10">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
 
-                        <GroupBox Header="Storage overview" Grid.Row="0">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
+          <StackPanel Grid.Column="0" Margin="0,0,10,0">
+            <TextBlock Text="Largest folders (C:)" Foreground="#9CA3AF" Margin="0,0,0,4"/>
+            <ListView x:Name="LargestFoldersList"
+                      Background="#020617"
+                      Foreground="White"
+                      BorderBrush="#374151"
+                      BorderThickness="1"
+                      Height="170">
+              <ListView.View>
+                <GridView>
+                  <GridViewColumn Header="Folder" DisplayMemberBinding="{Binding Name}" Width="180"/>
+                  <GridViewColumn Header="Size (GB)" DisplayMemberBinding="{Binding SizeGB}" Width="80"/>
+                </GridView>
+              </ListView.View>
+            </ListView>
+          </StackPanel>
 
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Largest folders (C:)"
-                                               Foreground="{StaticResource MutedTextBrush}"
-                                               Margin="0,0,0,4"/>
-                                    <ListView x:Name="LargestFoldersList"
-                                              Background="{StaticResource CardAltBrush}"
-                                              BorderBrush="{StaticResource BorderBrushMain}">
-                                        <!-- Items: Path / Size -->
-                                    </ListView>
-                                </StackPanel>
+          <StackPanel Grid.Column="1">
+            <TextBlock Text="Largest installed apps" Foreground="#9CA3AF" Margin="0,0,0,4"/>
+            <ListView x:Name="LargestAppsList"
+                      Background="#020617"
+                      Foreground="White"
+                      BorderBrush="#374151"
+                      BorderThickness="1"
+                      Height="170">
+              <ListView.View>
+                <GridView>
+                  <GridViewColumn Header="App" DisplayMemberBinding="{Binding Name}" Width="180"/>
+                  <GridViewColumn Header="Size (MB)" DisplayMemberBinding="{Binding SizeMB}" Width="80"/>
+                </GridView>
+              </ListView.View>
+            </ListView>
+          </StackPanel>
+        </Grid>
+      </GroupBox>
 
-                                <StackPanel Grid.Column="1"
-                                            Margin="8,0,0,0">
-                                    <TextBlock Text="Largest installed apps"
-                                               Foreground="{StaticResource MutedTextBrush}"
-                                               Margin="0,0,0,4"/>
-                                    <ListView x:Name="LargestAppsList"
-                                              Background="{StaticResource CardAltBrush}"
-                                              BorderBrush="{StaticResource BorderBrushMain}">
-                                        <!-- Items: Name / Size -->
-                                    </ListView>
-                                </StackPanel>
-                            </Grid>
-                        </GroupBox>
+      <!-- Maintenance summary -->
+      <GroupBox Header="Maintenance summary">
+        <StackPanel>
+          <TextBlock Text="Last maintenance run:" Foreground="#9CA3AF"/>
+          <TextBlock x:Name="LastMaintenanceText"
+                     Text="Never run"
+                     Foreground="White"
+                     Margin="0,2,0,8"/>
 
-                        <GroupBox Header="Maintenance summary" Grid.Row="1">
-                            <StackPanel>
-                                <TextBlock Text="Last maintenance run:"
-                                           Foreground="{StaticResource MutedTextBrush}"/>
-                                <TextBlock x:Name="LastMaintenanceText"
-                                           Text="Never run"
-                                           Foreground="White"
-                                           Margin="0,0,0,6"/>
+          <TextBlock Text="Recommended quick actions:" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+          <TextBlock x:Name="QuickActionsText"
+                     Text="Run a scan to get recommendations."
+                     Foreground="White"
+                     TextWrapping="Wrap"/>
+        </StackPanel>
+      </GroupBox>
+    </StackPanel>
 
-                                <TextBlock Text="Recommended quick actions:"
-                                           Foreground="{StaticResource MutedTextBrush}"
-                                           Margin="0,4,0,2"/>
+    <!-- Right side: Quinn recommendations -->
+    <GroupBox Grid.Row="1" Grid.Column="1" Header="Quinn recommendations">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+          <TextBlock Text="Run a scan to generate personalised recommendations for this device."
+                     TextWrapping="Wrap"
+                     Foreground="White"
+                     Margin="0,0,0,8"/>
+          <Button x:Name="RecommendButton"
+                  Content="Analyse system and refresh recommendations"
+                  Width="260"
+                  HorizontalAlignment="Left"/>
+        </StackPanel>
+      </DockPanel>
+    </GroupBox>
 
-                                <ItemsControl x:Name="RecommendedActionsList">
-                                    <!-- Each item can be a TextBlock or button via code -->
-                                </ItemsControl>
-                            </StackPanel>
-                        </GroupBox>
-                    </Grid>
-
-                    <!-- Right side: Quinn recommendations + notes -->
-                    <Grid Grid.Row="1"
-                          Grid.Column="1">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="2*"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <GroupBox Header="Quinn recommendations" Grid.Row="0">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock x:Name="QuinnRecommendationsText"
-                                               Text="Run a scan to generate personalised recommendations for this device."
-                                               TextWrapping="Wrap"
-                                               Foreground="{StaticResource MutedTextBrush}"
-                                               Margin="0,0,0,6"/>
-                                    <Button x:Name="BtnRunHealthScan"
-                                            Content="Analyse system and refresh recommendations"
-                                            HorizontalAlignment="Left"/>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </GroupBox>
-
-                        <GroupBox Header="Notes" Grid.Row="1">
-                            <TextBlock TextWrapping="Wrap"
-                                       Foreground="{StaticResource MutedTextBrush}">
-                                The dashboard is read-only. Changes are made from the other tabs. 
-                                Use this view to quickly see device health and what Quinn suggests doing next.
-                            </TextBlock>
-                        </GroupBox>
-                    </Grid>
-                </Grid>
-            </TabItem>
+  </Grid>
+</TabItem>
 
             <!-- TWEAKS & CLEANING TAB -->
             <TabItem Header="Tweaks &amp; Cleaning">
