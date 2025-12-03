@@ -1,5 +1,6 @@
 # MainWindow.ps1
-# Defines Show-QMainWindow which loads the WPF MainWindow.xaml
+# Defines Show-QMainWindow which loads MainWindow.xaml
+# and wires up basic status + dashboard system health scan.
 
 Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase
 
@@ -26,7 +27,9 @@ function Show-QMainWindow {
     $xaml   = Get-Content -Path $xamlPath -Raw
     $window = [Windows.Markup.XamlReader]::Parse($xaml)
 
-    # Grab key controls so the engine / modules can talk to them
+    # ------------------------------------------------------------------
+    # Grab key global controls (status bar, run button, etc.)
+    # ------------------------------------------------------------------
     $Global:QOT_StatusLabel  = $window.FindName("StatusLabel")
     $Global:QOT_MainProgress = $window.FindName("MainProgress")
     $Global:QOT_SummaryText  = $window.FindName("SummaryText")
@@ -38,7 +41,21 @@ function Show-QMainWindow {
         $Global:QOT_StatusLabel.Text = "Idle"
     }
 
-    # Simple status helper, only define it if nothing else has already
+    # ------------------------------------------------------------------
+    # Dashboard controls (must match x:Name values in MainWindow.xaml)
+    # ------------------------------------------------------------------
+    $Global:QOT_DashCpuRamText          = $window.FindName("DashCpuRamText")
+    $Global:QOT_DashDiskText            = $window.FindName("DashDiskText")
+    $Global:QOT_DashHealthText          = $window.FindName("DashHealthText")
+    $Global:QOT_DashFoldersList         = $window.FindName("DashFoldersList")
+    $Global:QOT_DashAppsList            = $window.FindName("DashAppsList")
+    $Global:QOT_DashLastMaintenanceText = $window.FindName("DashLastMaintenanceText")
+    $Global:QOT_DashQuickActionsText    = $window.FindName("DashQuickActionsText")
+    $Global:QOT_DashScanButton          = $window.FindName("DashScanButton")
+
+    # ------------------------------------------------------------------
+    # Status helper (only define if not already present)
+    # ------------------------------------------------------------------
     if (-not (Get-Command -Name Set-QStatus -ErrorAction SilentlyContinue)) {
         function Set-QStatus {
             param(
@@ -67,10 +84,79 @@ function Show-QMainWindow {
         }
     }
 
-    # Wire the Run button with a temporary placeholder handler
+    # ------------------------------------------------------------------
+    # Dashboard UI updater – takes the summary object from Dashboard.psm1
+    # ------------------------------------------------------------------
+    function Update-QDashboardUi {
+        param(
+            $Summary
+        )
+
+        if (-not $Summary) { return }
+
+        # CPU / RAM
+        if ($Global:QOT_DashCpuRamText -and $Summary.CpuRam) {
+            $Global:QOT_DashCpuRamText.Text = "CPU: {0}%   RAM: {1}%" -f `
+                [int]$Summary.CpuRam.CpuPercent,
+                [int]$Summary.CpuRam.RamPercent
+        }
+
+        # Disk
+        if ($Global:QOT_DashDiskText -and $Summary.Disk) {
+            $d = $Summary.Disk
+            $Global:QOT_DashDiskText.Text = "{0} used / {1} free ({2} total, {3}% free)" -f `
+                ("{0} GB" -f $d.UsedGB),
+                ("{0} GB" -f $d.FreeGB),
+                ("{0} GB" -f $d.TotalGB),
+                $d.FreePercent
+        }
+
+        # Health text
+        if ($Global:QOT_DashHealthText) {
+            $Global:QOT_DashHealthText.Text = $Summary.HealthSummary
+        }
+
+        # Largest folders
+        if ($Global:QOT_DashFoldersList) {
+            $Global:QOT_DashFoldersList.Items.Clear()
+            foreach ($f in $Summary.LargestFolders) {
+                $Global:QOT_DashFoldersList.Items.Add(
+                    ("{0}  ({1} GB)" -f $f.Path, $f.SizeGB)
+                ) | Out-Null
+            }
+        }
+
+        # Largest apps
+        if ($Global:QOT_DashAppsList) {
+            $Global:QOT_DashAppsList.Items.Clear()
+            foreach ($a in $Summary.LargestApps) {
+                $Global:QOT_DashAppsList.Items.Add(
+                    ("{0}  ({1} MB)" -f $a.Name, $a.SizeMB)
+                ) | Out-Null
+            }
+        }
+
+        # Last maintenance / scan time
+        if ($Global:QOT_DashLastMaintenanceText) {
+            $Global:QOT_DashLastMaintenanceText.Text =
+                "Last health scan: {0}" -f $Summary.ScanTime.ToString("yyyy-MM-dd HH:mm")
+        }
+
+        # Recommended quick actions
+        if ($Global:QOT_DashQuickActionsText -and $Summary.RecommendedActions) {
+            $Global:QOT_DashQuickActionsText.Text =
+                ($Summary.RecommendedActions -join "`r`n")
+        }
+    }
+
+    # ------------------------------------------------------------------
+    # Wire Run button (still placeholder for now)
+    # ------------------------------------------------------------------
     if ($Global:QOT_RunButton) {
         $Global:QOT_RunButton.Add_Click({
-            Set-QStatus -Text "Run button wired - engine actions still to be connected." -Progress 0 -Busy:$false
+            Set-QStatus -Text "Run button wired - engine actions still to be connected." `
+                         -Progress 0 `
+                         -Busy:$false
         })
     }
 
@@ -81,6 +167,51 @@ function Show-QMainWindow {
         $Global:QOT_SummaryText.Text =
             "System summary will appear here once the engine scan is implemented."
     }
+
+    # ------------------------------------------------------------------
+    # Wire up the dashboard "Analyse system" button
+    # ------------------------------------------------------------------
+    if ($Global:QOT_DashScanButton) {
+        $Global:QOT_DashScanButton.Add_Click({
+            Set-QStatus "Scanning system health..." 0 $true
+            try {
+                if (Get-Command -Name Get-QDashboardSummary -ErrorAction SilentlyContinue) {
+                    $summary = Get-QDashboardSummary
+                    Update-QDashboardUi -Summary $summary
+                    Set-QStatus "Idle" 0 $false
+                } else {
+                    if ($Global:QOT_DashHealthText) {
+                        $Global:QOT_DashHealthText.Text = "Dashboard module not loaded."
+                    }
+                    Set-QStatus "Dashboard module not loaded." 0 $false
+                }
+            }
+            catch {
+                Write-QLog "Dashboard scan error: $($_.Exception.Message)" "ERROR"
+                if ($Global:QOT_DashHealthText) {
+                    $Global:QOT_DashHealthText.Text = "Scan failed. See log for details."
+                }
+                Set-QStatus "Error during dashboard scan." 0 $false
+            }
+        })
+    }
+
+    # Optional: auto-scan once when the window opens
+    $window.Add_Loaded({
+        try {
+            Set-QStatus "Scanning system health..." 0 $true
+            if (Get-Command -Name Get-QDashboardSummary -ErrorAction SilentlyContinue) {
+                $summary = Get-QDashboardSummary
+                Update-QDashboardUi -Summary $summary
+            }
+        }
+        catch {
+            Write-QLog "Initial dashboard scan error: $($_.Exception.Message)" "ERROR"
+        }
+        finally {
+            Set-QStatus "Idle" 0 $false
+        }
+    })
 
     # Show the window
     $null = $window.ShowDialog()
