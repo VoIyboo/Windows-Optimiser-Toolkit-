@@ -1,10 +1,24 @@
+. "$PSScriptRoot\..\Core\Logging.psm1"
+
 function Get-QStartupItems {
-    return @()
+    Write-QLog "Startup items requested (stub)."
+
+    @(
+        [pscustomobject]@{
+            Name     = "Example Startup"
+            Location = "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
+            Enabled  = $true
+            Risk     = "Green"
+        }
+    )
 }
 
 function Set-QStartupItem {
-    param($Item, $Enabled)
-    Write-QLog "Startup item change: $Item -> $Enabled"
+    param(
+        [string]$Name,
+        [bool]$Enabled
+    )
+    Write-QLog "Startup change: $Name -> Enabled=$Enabled (stub)."
 }
 
 Export-ModuleMember -Function Get-QStartupItems, Set-QStartupItem
