@@ -1,225 +1,103 @@
-<#
-    Quinn Optimiser Toolkit - bootstrap.ps1
+<#  Quinn Optimiser Toolkit - bootstrap.ps1
 
-    What this script does:
-    - Checks PowerShell version
-    - Works both from:
-        * local clone (when src\ exists beside this file)
-        * temp download (when run from the one-liner)
-    - Downloads latest ZIP from GitHub if needed
-    - Extracts it into %TEMP%\QuinnOptimiserToolkit
-    - Locates src\Core, src\Modules, src\UI
-    - Imports all .psm1 modules
-    - Dot-sources MainWindow.ps1 which must expose Show-QMainWindow
-    - Starts the WPF UI
+Usage (one-liner):
+
+  irm https://raw.githubusercontent.com/VoIyboo/Windows-Optimiser-Toolkit-/main/bootstrap.ps1 | iex
+
+This will:
+  - Check PowerShell version
+  - Download + unpack the repo (if needed)
+  - Import core + modules
+  - Launch the WPF UI
 #>
 
-param(
-    [switch]$ForceUpdate
-)
+# Ensure TLS 1.2 for GitHub
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$ErrorActionPreference = "Stop"
-
-# ---------------------------
-# Basic checks
-# ---------------------------
-$MinimumPSMajor = 5
-
-function Test-PowerShellVersion {
-    if ($PSVersionTable.PSVersion.Major -lt $MinimumPSMajor) {
-        Write-Host "Quinn Optimiser Toolkit requires PowerShell $MinimumPSMajor or higher." -ForegroundColor Red
-        Write-Host "Current version: $($PSVersionTable.PSVersion.ToString())"
-        throw "PowerShell version too low"
-    }
+# --- Basic checks -------------------------------------------------
+if ($PSVersionTable.PSVersion.Major -lt 5) {
+    Write-Host "Quinn Optimiser Toolkit requires PowerShell 5.1 or later." -ForegroundColor Red
+    return
 }
 
-# Returns the folder where the toolkit should live
-function Get-ToolkitRoot {
-    # If src exists beside this file, assume we are running from the repo clone
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $srcPath   = Join-Path $scriptDir "src"
+# Admin check (UI has nicer handling later, this is just a safety net)
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$IsAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-    if (Test-Path $srcPath) {
-        return $scriptDir
-    }
+if (-not $IsAdmin) {
+    Write-Host "Please run PowerShell as Administrator before launching the toolkit." -ForegroundColor Yellow
+    # You can comment this return out if you want non-admin mode later
+    return
+}
 
-    # Otherwise use a temp folder for downloaded version
+# --- Locate or download repo --------------------------------------
+$repo   = "VoIyboo/Windows-Optimiser-Toolkit-"
+$branch = "main"
+
+# Try to use local copy first (when user cloned the repo)
+$rootFromScript = $null
+try {
+    $rootFromScript = Split-Path -Parent $MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
+} catch { }
+
+if ($rootFromScript -and (Test-Path (Join-Path $rootFromScript "src"))) {
+    # Running from a cloned repo
+    $Global:QOT_Root = $rootFromScript
+} else {
+    # Running via one-liner – download zip to temp
     $tempRoot = Join-Path $env:TEMP "QuinnOptimiserToolkit"
     if (-not (Test-Path $tempRoot)) {
-        New-Item -Path $tempRoot -ItemType Directory -Force | Out-Null
+        New-Item -Path $tempRoot -ItemType Directory | Out-Null
     }
-    return $tempRoot
+
+    $zipPath = Join-Path $tempRoot "toolkit.zip"
+    $extractPath = Join-Path $tempRoot "repo"
+
+    if (Test-Path $extractPath) {
+        Remove-Item $extractPath -Recurse -Force
+    }
+
+    $zipUrl = "https://github.com/$repo/archive/refs/heads/$branch.zip"
+    Write-Host "Downloading Quinn Optimiser Toolkit..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+
+    Write-Host "Extracting..." -ForegroundColor Cyan
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+    # The extracted folder is usually repoName-branch
+    $repoFolder = Get-ChildItem -Path $extractPath | Where-Object { $_.PSIsContainer } | Select-Object -First 1
+    $Global:QOT_Root = $repoFolder.FullName
 }
 
-# GitHub details for your repo
-function Get-GitHubDownloadInfo {
-    # These are now hard wired to your repo
-    $owner  = "VoIyboo"
-    $repo   = "Windows-Optimiser-Toolkit-"
-    $branch = "main"
+# --- Import core + modules ----------------------------------------
+$srcPath      = Join-Path $Global:QOT_Root "src"
+$corePath     = Join-Path $srcPath "Core"
+$modulesPath  = Join-Path $srcPath "Modules"
+$uiPath       = Join-Path $srcPath "UI"
 
-    $zipUrl  = "https://github.com/$owner/$repo/archive/refs/heads/$branch.zip"
-    $zipName = "$repo-$branch.zip"
-
-    [pscustomobject]@{
-        Owner   = $owner
-        Repo    = $repo
-        Branch  = $branch
-        ZipUrl  = $zipUrl
-        ZipName = $zipName
-    }
+if (-not (Test-Path $corePath) -or -not (Test-Path $uiPath)) {
+    Write-Host "Toolkit files are missing (src/Core or src/UI). Check the GitHub repo structure." -ForegroundColor Red
+    return
 }
 
-# Finds src\ for either local repo or downloaded zip
-function Get-ToolkitSrcPath {
-    param(
-        [string]$Root
-    )
+# Core modules
+Import-Module (Join-Path $corePath "Logging.psm1") -Force
+Import-Module (Join-Path $corePath "Config.psm1")  -Force
+Import-Module (Join-Path $corePath "Engine.psm1")  -Force
 
-    # Local src
-    $localSrc = Join-Path $Root "src"
-    if (Test-Path $localSrc) {
-        return $localSrc
-    }
-
-    # Downloaded zip structure: Root\Repo-Branch\src
-    $info           = Get-GitHubDownloadInfo
-    $unzippedFolder = Join-Path $Root ("{0}-{1}" -f $info.Repo, $info.Branch)
-    $downloadedSrc  = Join-Path $unzippedFolder "src"
-
-    if (Test-Path $downloadedSrc) {
-        return $downloadedSrc
-    }
-
-    return $null
-}
-
-function Get-ToolkitInstalled {
-    param(
-        [string]$Root
-    )
-
-    $srcPath = Get-ToolkitSrcPath -Root $Root
-    return [bool]$srcPath
-}
-
-# Downloads and extracts the latest code from GitHub
-function Install-ToolkitFromGitHub {
-    param(
-        [string]$Root
-    )
-
-    $info = Get-GitHubDownloadInfo
-
-    Write-Host "Downloading Quinn Optimiser Toolkit from GitHub..." -ForegroundColor Cyan
-    $zipPath = Join-Path $Root $info.ZipName
-
-    if (Test-Path $zipPath) {
-        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-    }
-
-    Invoke-WebRequest -Uri $info.ZipUrl -OutFile $zipPath
-
-    Write-Host "Extracting archive..." -ForegroundColor Cyan
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $Root)
-
-    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
-
-    $srcPath = Get-ToolkitSrcPath -Root $Root
-    if (-not $srcPath) {
-        throw "Could not locate src folder after extraction."
-    }
-
-    Write-Host "Toolkit extracted to $Root" -ForegroundColor Green
-    return $srcPath
-}
-
-# Imports all Core and Module .psm1 files, plus the UI wiring
-function Import-ToolkitModules {
-    param(
-        [string]$SrcPath
-    )
-
-    $corePath    = Join-Path $SrcPath "Core"
-    $modulesPath = Join-Path $SrcPath "Modules"
-    $uiPath      = Join-Path $SrcPath "UI"
-
-    if (-not (Test-Path $corePath)) {
-        throw "Core folder not found at $corePath"
-    }
-    if (-not (Test-Path $uiPath)) {
-        throw "UI folder not found at $uiPath"
-    }
-
-    # Import Core modules first
-    Get-ChildItem $corePath -Filter *.psm1 | ForEach-Object {
+# Feature modules (auto-import every .psm1 under Modules)
+if (Test-Path $modulesPath) {
+    Get-ChildItem -Path $modulesPath -Filter *.psm1 | ForEach-Object {
         Import-Module $_.FullName -Force
     }
-
-    # Import feature modules (DiskCleanup, Apps, Tweaks, etc)
-    if (Test-Path $modulesPath) {
-        Get-ChildItem $modulesPath -Filter *.psm1 | ForEach-Object {
-            Import-Module $_.FullName -Force
-        }
-    }
-
-    # Dot source the main UI script, which defines Show-QMainWindow
-    $mainUi = Join-Path $uiPath "MainWindow.ps1"
-    if (-not (Test-Path $mainUi)) {
-        throw "MainWindow.ps1 not found in $uiPath"
-    }
-
-    . $mainUi
 }
 
-function Start-QuinnToolkit {
-    Test-PowerShellVersion
+# UI module
+. (Join-Path $uiPath "MainWindow.ps1")
 
-    $root = Get-ToolkitRoot
+# --- Init + launch ------------------------------------------------
+Set-QLogRoot (Join-Path $Global:QOT_Root "Logs")
+Load-QConfig
+Write-QLog "Bootstrap complete. Launching main window."
 
-    # If we are not installed in this root, or user forced update, pull latest from GitHub
-    if ($ForceUpdate -or -not (Get-ToolkitInstalled -Root $root)) {
-        $null = Install-ToolkitFromGitHub -Root $root
-    }
-
-    $srcPath = Get-ToolkitSrcPath -Root $root
-    if (-not $srcPath) {
-        throw "Toolkit src folder not found at $root."
-    }
-
-    Import-ToolkitModules -SrcPath $srcPath
-
-    # Optional: if Logging module exists, set the log root to the same place
-    if (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) {
-        Set-QLogRoot -Root $root
-    }
-
-    # Optional: load config if Config module exists
-    if (Get-Command Load-QConfig -ErrorAction SilentlyContinue) {
-        Load-QConfig
-    }
-
-    # UI module must provide Show-QMainWindow
-    if (-not (Get-Command Show-QMainWindow -ErrorAction SilentlyContinue)) {
-        throw "Show-QMainWindow not found. Check UI\MainWindow.ps1 exports it."
-    }
-
-    Show-QMainWindow
-}
-
-try {
-    Start-QuinnToolkit
-}
-catch {
-    Write-Host "Quinn Optimiser Toolkit failed to start." -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-
-    if ($_.ScriptStackTrace) {
-        Write-Host ""
-        Write-Host "Stack:" -ForegroundColor DarkGray
-        Write-Host $_.ScriptStackTrace
-    }
-    exit 1
-}
+Show-QMainWindow
