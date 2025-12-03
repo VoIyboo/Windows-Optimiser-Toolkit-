@@ -196,22 +196,33 @@ function Show-QMainWindow {
         })
     }
 
-    # Optional: auto-scan once when the window opens
+        # Optional: auto scan when the window opens
     $window.Add_Loaded({
         try {
             Set-QStatus "Scanning system health..." 0 $true
+
             if (Get-Command -Name Get-QDashboardSummary -ErrorAction SilentlyContinue) {
                 $summary = Get-QDashboardSummary
-                Update-QDashboardUi -Summary $summary
+                Update-QDashboardUI -Summary $summary
             }
-        }
-        catch {
-            Write-QLog "Initial dashboard scan error: $($_.Exception.Message)" "ERROR"
-        }
-        finally {
+        } catch {
+            Write-QLog ("Initial dashboard scan error: {0}" -f $_.Exception.Message) "ERROR"
+        } finally {
             Set-QStatus "Idle" 0 $false
         }
     })
+
+    # Hook dashboard controls if module is loaded
+    if (Get-Command -Name Hook-QDashboardUI -ErrorAction SilentlyContinue) {
+        Hook-QDashboardUI -Window $window
+    }
+
+    # Wire the "Analyse system and refresh recommendations" button
+    if ($Global:QOT_RecommendButton -and (Get-Command -Name Start-QDashboardScan -ErrorAction SilentlyContinue)) {
+        $Global:QOT_RecommendButton.Add_Click({
+            Start-QDashboardScan
+        })
+    }
 
     # Show the window
     $null = $window.ShowDialog()
