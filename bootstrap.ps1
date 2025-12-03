@@ -3,12 +3,15 @@
 
     What this script does:
     - Checks PowerShell version
-    - Figures out where to keep the toolkit files
-    - If running from GitHub one liner, downloads the repo zip to %TEMP%\QuinnOptimiserToolkit
-    - Extracts it and finds the src folder
-    - Imports Core and Modules
-    - Loads the WPF UI (MainWindow.xaml + MainWindow.ps1)
-    - Starts the Quinn Optimiser Toolkit window
+    - Works both from:
+        * local clone (when src\ exists beside this file)
+        * temp download (when run from the one-liner)
+    - Downloads latest ZIP from GitHub if needed
+    - Extracts it into %TEMP%\QuinnOptimiserToolkit
+    - Locates src\Core, src\Modules, src\UI
+    - Imports all .psm1 modules
+    - Dot-sources MainWindow.ps1 which must expose Show-QMainWindow
+    - Starts the WPF UI
 #>
 
 param(
@@ -50,9 +53,9 @@ function Get-ToolkitRoot {
 
 # GitHub details for your repo
 function Get-GitHubDownloadInfo {
-    # Change these two to your real GitHub account and repo name
-    $owner  = "YourGitHubUserOrOrg"
-    $repo   = "QuinnOptimiserToolkit"
+    # These are now hard wired to your repo
+    $owner  = "VoIyboo"
+    $repo   = "Windows-Optimiser-Toolkit-"
     $branch = "main"
 
     $zipUrl  = "https://github.com/$owner/$repo/archive/refs/heads/$branch.zip"
