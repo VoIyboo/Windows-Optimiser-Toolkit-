@@ -1,1 +1,1 @@
-irm https://raw.githubusercontent.com/VoIyboo/Windows-Optimiser-Toolkit-/main/bootstrap.ps1 | iex
+W.I.P Please advoid using until it's in Beta mode please :)
