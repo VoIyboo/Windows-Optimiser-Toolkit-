@@ -7,17 +7,23 @@ if (-not (Test-Path $Global:QOT_LogRoot)) {
 
 function Set-QLogRoot {
     param([string]$Root)
-    if (Test-Path $Root) {
-        $Global:QOT_LogRoot = $Root
+
+    if ([string]::IsNullOrWhiteSpace($Root)) { return }
+    if (-not (Test-Path $Root)) {
+        New-Item -Path $Root -ItemType Directory -Force | Out-Null
     }
+    $Global:QOT_LogRoot = $Root
 }
 
 function Write-QLog {
-    param([string]$Message, [string]$Level = "INFO")
+    param(
+        [string]$Message,
+        [ValidateSet("INFO","WARN","ERROR")]
+        [string]$Level = "INFO"
+    )
 
-    $logFile = Join-Path $Global:QOT_LogRoot "Toolkit.log"
     $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-
+    $logFile   = Join-Path $Global:QOT_LogRoot "Toolkit.log"
     Add-Content -Path $logFile -Value "[$timestamp] [$Level] $Message"
 }
 
