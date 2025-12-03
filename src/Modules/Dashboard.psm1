@@ -1,244 +1,196 @@
 # Dashboard.psm1
-# System health summary + Dashboard tab wiring for Quinn Optimiser Toolkit
+# System health summary and dashboard wiring for Quinn Optimiser Toolkit
 
-# --------------------------------------------------------------------
-# Safe logging helper (uses core Write-QLog if available)
-# --------------------------------------------------------------------
-if (-not (Get-Command -Name Write-QLog -ErrorAction SilentlyContinue)) {
-    function Write-QLog {
-        param(
-            [string]$Message,
-            [string]$Level = "INFO"
-        )
-        # Fallback: no-op if logging module isn't loaded yet
-    }
-}
-
-# --------------------------------------------------------------------
-# Module-scope references to WPF controls
-# --------------------------------------------------------------------
-$script:CpuRamText        = $null
-$script:DiskUsageText     = $null
-$script:SystemHealthText  = $null
-$script:FoldersList       = $null
-$script:AppsList          = $null
-$script:LastMaintText     = $null
-$script:QuickActionsText  = $null
-
-# --------------------------------------------------------------------
-# Core: collect system summary
-# --------------------------------------------------------------------
-function Get-QDashboardSummary {
-    [CmdletBinding()]
+# --------- Helper: logging wrapper ----------
+function Write-QDashLog {
     param(
-        [string]$DriveLetter = "C",
-        [int]   $TopFolders  = 6,
-        [int]   $TopApps     = 6
+        [string]$Message,
+        [string]$Level = "INFO"
     )
 
-    Write-QLog "Dashboard: collecting system summary..." "INFO"
-
-    $summary = [ordered]@{
-        CpuPercent                = $null
-        RamPercent                = $null
-        DiskUsedGB                = $null
-        DiskFreeGB                = $null
-        DiskTotalGB               = $null
-        LargestFolders            = @()
-        LargestApps               = @()
-        SystemHealth              = "Unknown"
-        LastMaintenance           = "Never run"
-        RecommendedQuickActions   = @()
+    if (Get-Command -Name Write-QLog -ErrorAction SilentlyContinue) {
+        Write-QLog $Message $Level
     }
-
-    # ---- CPU --------------------------------------------------------
-    try {
-        $cpu = Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop
-        $summary.CpuPercent = [math]::Round(
-            ($cpu | Measure-Object -Property LoadPercentage -Average).Average,
-            0
-        )
-    } catch {
-        Write-QLog ("Dashboard: failed to read CPU load: {0}" -f $_.Exception.Message) "WARN"
-    }
-
-    # ---- RAM --------------------------------------------------------
-    try {
-        $os       = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
-        $totalGB  = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)  # KB -> GB
-        $freeGB   = [math]::Round($os.FreePhysicalMemory / 1MB, 1)
-
-        if ($totalGB -gt 0) {
-            $usedPct            = [math]::Round((($totalGB - $freeGB) / $totalGB) * 100, 0)
-            $summary.RamPercent = $usedPct
-        }
-    } catch {
-        Write-QLog ("Dashboard: failed to read RAM: {0}" -f $_.Exception.Message) "WARN"
-    }
-
-    # ---- Disk (C:) --------------------------------------------------
-    try {
-        $drive    = Get-PSDrive -Name $DriveLetter -ErrorAction Stop
-        $usedGB   = [math]::Round($drive.Used / 1GB, 1)
-        $freeGB   = [math]::Round($drive.Free / 1GB, 1)
-        $totalGB  = [math]::Round(($drive.Used + $drive.Free) / 1GB, 1)
-
-        $summary.DiskUsedGB  = $usedGB
-        $summary.DiskFreeGB  = $freeGB
-        $summary.DiskTotalGB = $totalGB
-    } catch {
-        Write-QLog ("Dashboard: failed to read drive {0}: {1}" -f $DriveLetter, $_.Exception.Message) "WARN"
-    }
-
-    # ---- Simple health rating --------------------------------------
-    if ($summary.DiskFreeGB -ne $null -and $summary.DiskFreeGB -lt 10) {
-        $summary.SystemHealth = "Low disk space"
-        $summary.RecommendedQuickActions += "Clean temp files and update cache."
-    }
-    elseif ($summary.RamPercent -ne $null -and $summary.RamPercent -gt 85) {
-        $summary.SystemHealth = "High memory usage"
-        $summary.RecommendedQuickActions += "Close unused apps or add more RAM."
-    }
-    else {
-        $summary.SystemHealth = "Healthy"
-    }
-
-    # ---- Largest folders (lightweight scan) ------------------------
-    try {
-        $root = "$DriveLetter`:\"
-        $topRoots = Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue |
-                    Select-Object -First 10
-
-        $largest = @()
-
-        foreach ($folder in $topRoots) {
-            try {
-                $sizeBytes = (Get-ChildItem -Path $folder.FullName -Recurse -File -ErrorAction SilentlyContinue |
-                              Measure-Object -Property Length -Sum).Sum
-
-                $sizeGB = if ($sizeBytes) { [math]::Round($sizeBytes / 1GB, 2) } else { 0 }
-
-                $largest += [pscustomobject]@{
-                    Name   = $folder.Name
-                    Path   = $folder.FullName
-                    SizeGB = $sizeGB
-                }
-            } catch {
-                Write-QLog ("Dashboard: error while scanning folder {0}: {1}" -f $folder.FullName, $_.Exception.Message) "WARN"
-            }
-        }
-
-        $summary.LargestFolders = $largest |
-            Where-Object { $_.SizeGB -gt 0 } |
-            Sort-Object SizeGB -Descending |
-            Select-Object -First $TopFolders
-    } catch {
-        Write-QLog ("Dashboard: folder scan failed: {0}" -f $_.Exception.Message) "WARN"
-    }
-
-    # ---- Largest apps (if Apps module exposes inventory) -----------
-    if (Get-Command -Name Get-QInstalledApps -ErrorAction SilentlyContinue) {
-        try {
-            $apps = Get-QInstalledApps
-            $summary.LargestApps = $apps |
-                Where-Object { $_.SizeMB -gt 0 } |
-                Sort-Object SizeMB -Descending |
-                Select-Object -First $TopApps
-        } catch {
-            Write-QLog ("Dashboard: failed to read installed apps: {0}" -f $_.Exception.Message) "WARN"
-        }
-    }
-
-    [pscustomobject]$summary
 }
 
-# --------------------------------------------------------------------
-# Hook dashboard WPF controls
-# --------------------------------------------------------------------
+# --------- Core summary function (fast) ----------
+function Get-QDashboardSummary {
+    Write-QDashLog "Dashboard: collecting quick system summary..."
+
+    # CPU
+    $cpuPercent = 0
+    try {
+        $cpuSample  = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1
+        $cpuPercent = [math]::Round($cpuSample.CounterSamples.CookedValue, 0)
+    } catch {
+        Write-QDashLog ("Dashboard: CPU read failed: {0}" -f $_.Exception.Message) "WARN"
+    }
+
+    # RAM
+    $ramPercent = 0
+    try {
+        $os        = Get-CimInstance Win32_OperatingSystem
+        $totalMB   = $os.TotalVisibleMemorySize
+        $freeMB    = $os.FreePhysicalMemory
+        if ($totalMB -gt 0) {
+            $usedPct   = (1 - ($freeMB / $totalMB)) * 100
+            $ramPercent = [math]::Round($usedPct, 0)
+        }
+    } catch {
+        Write-QDashLog ("Dashboard: RAM read failed: {0}" -f $_.Exception.Message) "WARN"
+    }
+
+    # Disk C
+    $diskUsedGB  = 0
+    $diskFreeGB  = 0
+    $diskTotalGB = 0
+    try {
+        $drive = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
+        if ($drive) {
+            $diskTotalGB = [math]::Round($drive.Size / 1GB, 1)
+            $diskFreeGB  = [math]::Round($drive.FreeSpace / 1GB, 1)
+            $diskUsedGB  = [math]::Round($diskTotalGB - $diskFreeGB, 1)
+        }
+    } catch {
+        Write-QDashLog ("Dashboard: disk read failed: {0}" -f $_.Exception.Message) "WARN"
+    }
+
+    # Simple health text based on thresholds
+    $health = "Healthy"
+    if ($cpuPercent -ge 85 -or $ramPercent -ge 85) {
+        $health = "Under load"
+    }
+    if ($diskTotalGB -gt 0 -and $diskFreeGB -lt ($diskTotalGB * 0.15)) {
+        $health = "Low disk space"
+    }
+
+    # For now keep these light weight
+    $largestFolders = @()
+    $largestApps    = @()
+
+    # Placeholders for maintenance data until the scheduler module is hooked in
+    $lastMaintenance  = "Never run"
+    $recommendedQuick = "Run a scan to get recommendations."
+
+    [pscustomobject]@{
+        CpuPercent          = $cpuPercent
+        RamPercent          = $ramPercent
+        DiskUsedGB          = $diskUsedGB
+        DiskFreeGB          = $diskFreeGB
+        DiskTotalGB         = $diskTotalGB
+        SystemHealth        = $health
+        LargestFolders      = $largestFolders
+        LargestApps         = $largestApps
+        LastMaintenance     = $lastMaintenance
+        RecommendedActions  = $recommendedQuick
+    }
+}
+
+# --------- Hook UI controls into globals ----------
 function Hook-QDashboardUI {
-    [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true)]
         [System.Windows.Window]$Window
     )
 
-    # These names must match the x:Name values in MainWindow.xaml
-    $script:CpuRamText        = $Window.FindName("CpuRamText")
-    $script:DiskUsageText     = $Window.FindName("DiskUsageText")
-    $script:SystemHealthText  = $Window.FindName("SystemHealthText")
-    $script:FoldersList       = $Window.FindName("LargestFoldersList")
-    $script:AppsList          = $Window.FindName("LargestAppsList")
-    $script:LastMaintText     = $Window.FindName("LastMaintenanceText")
-    $script:QuickActionsText  = $Window.FindName("QuickActionsText")
+    Write-QDashLog "Dashboard: hooking UI controls."
 
-    Write-QLog "Dashboard: UI controls hooked." "INFO"
+    $Global:QOT_DashCpuText          = $Window.FindName("CpuText")
+    $Global:QOT_DashRamText          = $Window.FindName("RamText")
+    $Global:QOT_DashDiskText         = $Window.FindName("DiskUsageText")
+    $Global:QOT_DashHealthText       = $Window.FindName("HealthText")
+
+    $Global:QOT_DashLargestFolderDG  = $Window.FindName("LargestFoldersGrid")
+    $Global:QOT_DashLargestAppsDG    = $Window.FindName("LargestAppsGrid")
+
+    $Global:QOT_DashLastMaintText    = $Window.FindName("LastMaintenanceText")
+    $Global:QOT_DashQuickActionsText = $Window.FindName("QuickActionsText")
+
+    $Global:QOT_RecommendButton      = $Window.FindName("RecommendButton")
+
+    # In case names do not match yet
+    if (-not $Global:QOT_DashCpuText)          { Write-QDashLog "Dashboard: CpuText not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashRamText)          { Write-QDashLog "Dashboard: RamText not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashDiskText)         { Write-QDashLog "Dashboard: DiskUsageText not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashHealthText)       { Write-QDashLog "Dashboard: HealthText not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashLargestFolderDG)  { Write-QDashLog "Dashboard: LargestFoldersGrid not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashLargestAppsDG)    { Write-QDashLog "Dashboard: LargestAppsGrid not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashLastMaintText)    { Write-QDashLog "Dashboard: LastMaintenanceText not found in XAML." "WARN" }
+    if (-not $Global:QOT_DashQuickActionsText) { Write-QDashLog "Dashboard: QuickActionsText not found in XAML." "WARN" }
+    if (-not $Global:QOT_RecommendButton)      { Write-QDashLog "Dashboard: RecommendButton not found in XAML." "WARN" }
 }
 
-# --------------------------------------------------------------------
-# Push summary into the UI
-# --------------------------------------------------------------------
+# --------- Push summary into the UI ----------
 function Update-QDashboardUI {
-    [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true)]
         $Summary
     )
 
-    if ($script:CpuRamText -and
-        $Summary.CpuPercent -ne $null -and
-        $Summary.RamPercent -ne $null) {
-
-        $script:CpuRamText.Text = "CPU: {0}%   RAM: {1}%" -f $Summary.CpuPercent, $Summary.RamPercent
+    if (-not $Summary) {
+        Write-QDashLog "Dashboard: Update-QDashboardUI called with null summary" "WARN"
+        return
     }
 
-    if ($script:DiskUsageText -and $Summary.DiskUsedGB -ne $null) {
-        $script:DiskUsageText.Text = "{0} GB used / {1} GB free (of {2} GB)" -f `
-            $Summary.DiskUsedGB, $Summary.DiskFreeGB, $Summary.DiskTotalGB
+    # CPU / RAM
+    if ($Global:QOT_DashCpuText) {
+        $Global:QOT_DashCpuText.Text = "CPU: {0}%" -f $Summary.CpuPercent
+    }
+    if ($Global:QOT_DashRamText) {
+        $Global:QOT_DashRamText.Text = "RAM: {0}%" -f $Summary.RamPercent
     }
 
-    if ($script:SystemHealthText -and $Summary.SystemHealth) {
-        $script:SystemHealthText.Text = $Summary.SystemHealth
+    # Disk
+    if ($Global:QOT_DashDiskText) {
+        $Global:QOT_DashDiskText.Text = "{0} GB used / {1} GB free" -f $Summary.DiskUsedGB, $Summary.DiskFreeGB
     }
 
-    if ($script:FoldersList) {
-        $script:FoldersList.ItemsSource = $Summary.LargestFolders
+    # Health
+    if ($Global:QOT_DashHealthText) {
+        $Global:QOT_DashHealthText.Text = $Summary.SystemHealth
     }
 
-    if ($script:AppsList) {
-        $script:AppsList.ItemsSource = $Summary.LargestApps
+    # Maintenance text
+    if ($Global:QOT_DashLastMaintText) {
+        $Global:QOT_DashLastMaintText.Text = $Summary.LastMaintenance
+    }
+    if ($Global:QOT_DashQuickActionsText) {
+        $Global:QOT_DashQuickActionsText.Text = $Summary.RecommendedActions
     }
 
-    if ($script:LastMaintText -and $Summary.LastMaintenance) {
-        $script:LastMaintText.Text = $Summary.LastMaintenance
+    # Data grids (placeholders for now)
+    if ($Global:QOT_DashLargestFolderDG) {
+        $Global:QOT_DashLargestFolderDG.ItemsSource = $Summary.LargestFolders
+        $Global:QOT_DashLargestFolderDG.Items.Refresh()
     }
-
-    if ($script:QuickActionsText) {
-        if ($Summary.RecommendedQuickActions -and $Summary.RecommendedQuickActions.Count -gt 0) {
-            $script:QuickActionsText.Text = ($Summary.RecommendedQuickActions -join "`r`n")
-        } else {
-            $script:QuickActionsText.Text = "No urgent actions detected. You can still run a cleanup from Tweaks & Cleaning."
-        }
+    if ($Global:QOT_DashLargestAppsDG) {
+        $Global:QOT_DashLargestAppsDG.ItemsSource = $Summary.LargestApps
+        $Global:QOT_DashLargestAppsDG.Items.Refresh()
     }
 }
 
-# --------------------------------------------------------------------
-# Entry point for scans (used by window Loaded + button)
-# --------------------------------------------------------------------
+# --------- Full scan entry point used by the button and auto load ----------
 function Start-QDashboardScan {
-    Set-QStatus "Scanning system health..." 0 $true
+    Write-QDashLog "Dashboard: scan started."
+    if (Get-Command -Name Set-QStatus -ErrorAction SilentlyContinue) {
+        Set-QStatus "Scanning system health..." 0 $true
+    }
 
     try {
         $summary = Get-QDashboardSummary
         Update-QDashboardUI -Summary $summary
+        Write-QDashLog "Dashboard: scan completed."
     } catch {
-        Write-QLog ("Dashboard: fatal error in Start-QDashboardScan: {0}" -f $_.Exception.Message) "ERROR"
+        Write-QDashLog ("Dashboard: scan error: {0}" -f $_.Exception.Message) "ERROR"
     } finally {
-        Set-QStatus "Idle" 0 $false
+        if (Get-Command -Name Set-QStatus -ErrorAction SilentlyContinue) {
+            Set-QStatus "Idle" 0 $false
+        }
     }
 }
 
 Export-ModuleMember -Function `
     Get-QDashboardSummary, `
-    Hook-QDashboardUI, `
     Update-QDashboardUI, `
+    Hook-QDashboardUI, `
     Start-QDashboardScan
