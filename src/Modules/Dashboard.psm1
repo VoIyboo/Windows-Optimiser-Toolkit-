@@ -1,103 +1,119 @@
-# src/Modules/Dashboard.psm1
-# System health / dashboard logic for Quinn Optimiser Toolkit
+# Dashboard.psm1
+# System health + dashboard helpers for Quinn Optimiser Toolkit
 
-# Requires: Logging.psm1 already imported (Write-QLog)
+# We assume Logging.psm1 has Write-QLog and Engine/Core has Set-QStatus available.
 
-function Get-QCpuAndRamUsage {
+# ---------------------------
+# UI wiring
+# ---------------------------
+function Hook-QDashboardUI {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Window]$Window
+    )
+
+    # Grab references to dashboard controls from XAML
+    $Global:QOT_CpuRamValue        = $Window.FindName("CpuRamValueText")
+    $Global:QOT_DiskUsageValue     = $Window.FindName("DiskUsageValueText")
+    $Global:QOT_SystemHealthValue  = $Window.FindName("SystemHealthValueText")
+    $Global:QOT_LargestFoldersList = $Window.FindName("LargestFoldersList")
+    $Global:QOT_LargestAppsList    = $Window.FindName("LargestAppsList")
+    $Global:QOT_RecommendButton    = $Window.FindName("BtnAnalyseSystem")
+
+    Write-QLog "Dashboard UI hooked: CPU/RAM, disk, system health and lists."
+}
+
+# ---------------------------
+# Core data helpers
+# ---------------------------
+
+function Get-QCpuRamSnapshot {
+    [CmdletBinding()]
+    param()
+
     try {
-        # CPU
-        $cpuSample = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1
-        $cpu = [math]::Round($cpuSample.CounterSamples[0].CookedValue, 1)
+        # Quick CPU sample
+        $cpuObj = Get-WmiObject -Class Win32_Processor -ErrorAction Stop
+        $cpuAvg = ($cpuObj | Measure-Object -Property LoadPercentage -Average).Average
 
-        # RAM
-        $os = Get-CimInstance -ClassName Win32_OperatingSystem
-        $totalMb = [math]::Round($os.TotalVisibleMemorySize / 1024, 1)
-        $freeMb  = [math]::Round($os.FreePhysicalMemory / 1024, 1)
-        $usedMb  = $totalMb - $freeMb
-        $ramPct  = if ($totalMb -gt 0) { [math]::Round(($usedMb / $totalMb) * 100, 1) } else { 0 }
+        # RAM from OS
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+        $total = [double]$os.TotalVisibleMemorySize
+        $free  = [double]$os.FreePhysicalMemory
+        $usedPct = [math]::Round((($total - $free) / $total) * 100, 0)
 
-        return [pscustomobject]@{
-            CpuPercent = $cpu
-            RamPercent = $ramPct
-            RamUsedMB  = $usedMb
-            RamTotalMB = $totalMb
+        [pscustomobject]@{
+            CpuPercent = [int][math]::Round($cpuAvg, 0)
+            RamPercent = [int]$usedPct
         }
     }
     catch {
-        Write-QLog "Dashboard: failed to read CPU/RAM usage: $($_.Exception.Message)" "WARN"
-        return [pscustomobject]@{
+        Write-QLog ("Dashboard: CPU/RAM snapshot failed: {0}" -f $_.Exception.Message) "WARN"
+        [pscustomobject]@{
             CpuPercent = 0
             RamPercent = 0
-            RamUsedMB  = 0
-            RamTotalMB = 0
         }
     }
 }
 
-function Get-QDiskUsage {
-    param(
-        [string]$DriveName = 'C'
-    )
+function Get-QDiskUsageC {
+    [CmdletBinding()]
+    param()
 
     try {
-        $drive = Get-PSDrive -Name $DriveName -ErrorAction Stop
-        $usedGb  = [math]::Round($drive.Used / 1GB, 1)
-        $freeGb  = [math]::Round($drive.Free / 1GB, 1)
-        $totalGb = [math]::Round(($drive.Used + $drive.Free) / 1GB, 1)
-        $freePct = if (($drive.Used + $drive.Free) -gt 0) {
-            [math]::Round(($drive.Free / ($drive.Used + $drive.Free)) * 100, 1)
-        } else { 0 }
+        $drive = Get-PSDrive -Name C -ErrorAction Stop
+        $usedGB  = [math]::Round($drive.Used  / 1GB, 1)
+        $freeGB  = [math]::Round($drive.Free  / 1GB, 1)
+        $totalGB = [math]::Round(($drive.Used + $drive.Free) / 1GB, 1)
 
-        return [pscustomobject]@{
-            Drive       = "$DriveName`:"
-            UsedGB      = $usedGb
-            FreeGB      = $freeGb
-            TotalGB     = $totalGb
-            FreePercent = $freePct
+        [pscustomobject]@{
+            UsedGB  = $usedGB
+            FreeGB  = $freeGB
+            TotalGB = $totalGB
         }
     }
     catch {
-        Write-QLog "Dashboard: failed to read disk usage for drive $DriveName`: $($_.Exception.Message)" "WARN"
-        return [pscustomobject]@{
-            Drive       = "$DriveName`:"
-            UsedGB      = 0
-            FreeGB      = 0
-            TotalGB     = 0
-            FreePercent = 0
+        Write-QLog ("Dashboard: disk usage snapshot failed: {0}" -f $_.Exception.Message) "WARN"
+        [pscustomobject]@{
+            UsedGB  = 0
+            FreeGB  = 0
+            TotalGB = 0
         }
     }
 }
 
 function Get-QLargestFolders {
+    [CmdletBinding()]
     param(
-        [string]$Root = 'C:\',
-        [int]$Top = 5
+        [string]$Root = "C:\",
+        [int]$Top = 10
     )
 
-    # Light-weight “good enough” scan: only direct subfolders of the root
     $results = @()
 
     try {
-        $folders = Get-ChildItem -Path $Root -Directory -ErrorAction SilentlyContinue
-        foreach ($f in $folders) {
+        # Keep it reasonably fast: only top-level folders, shallow size calc
+        $folders = Get-ChildItem -Path $Root -Directory -ErrorAction Stop
+
+        foreach ($folder in $folders) {
             try {
-                $size = (Get-ChildItem -Path $f.FullName -Recurse -File -ErrorAction SilentlyContinue |
-                         Measure-Object -Property Length -Sum).Sum
-                $sizeGb = [math]::Round(($size / 1GB), 2)
+                $sizeBytes = (Get-ChildItem -Path $folder.FullName -Recurse -File -ErrorAction SilentlyContinue |
+                              Measure-Object -Property Length -Sum).Sum
+                if (-not $sizeBytes) { $sizeBytes = 0 }
+
                 $results += [pscustomobject]@{
-                    Name   = $f.Name
-                    Path   = $f.FullName
-                    SizeGB = $sizeGb
+                    Name   = $folder.Name
+                    Path   = $folder.FullName
+                    SizeGB = [math]::Round($sizeBytes / 1GB, 2)
                 }
             }
             catch {
-                # Ignore individual folder errors
-                Write-QLog "Dashboard: failed to calculate size for folder $($f.FullName): $($_.Exception.Message)" "DEBUG"
+                Write-QLog ("Dashboard: error while scanning folders under {0}: {1}" -f $folder.FullName, $_.Exception.Message) "WARN"
             }
         }
     }
     catch {
-        Write-QLog ("Dashboard: error while scanning folders under {0}: {1}" -f $folder.FullName, $_.Exception.Message) "WARN"
+        Write-QLog ("Dashboard: top-level folder enumeration failed: {0}" -f $_.Exception.Message) "WARN"
     }
 
     $results |
@@ -106,102 +122,109 @@ function Get-QLargestFolders {
         Select-Object -First $Top
 }
 
-function Get-QLargestInstalledApps {
+# Placeholder – you can later swap this for a smarter app size scan
+function Get-QLargestAppsPlaceholder {
+    [CmdletBinding()]
     param(
-        [int]$Top = 5
+        [int]$Top = 10
     )
 
-    $paths = @(
-        'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    Write-QLog "Dashboard: using placeholder app list (hook into Apps module later)."
+
+    1..$Top | ForEach-Object {
+        [pscustomobject]@{
+            Name   = "App $_ (placeholder)"
+            SizeGB = 0
+        }
+    }
+}
+
+function Get-QSystemHealthSummary {
+    param(
+        [int]$CpuPercent,
+        [int]$RamPercent,
+        [double]$FreeDiskGB
     )
 
-    $apps = foreach ($path in $paths) {
-        Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
-            if (-not $_.DisplayName) { return }
+    if ($FreeDiskGB -lt 20) {
+        return "Warning: low free space on C: (less than 20 GB)."
+    }
+    elseif ($RamPercent -gt 90) {
+        return "Warning: RAM usage consistently high."
+    }
+    elseif ($CpuPercent -gt 90) {
+        return "Warning: CPU under heavy load."
+    }
+    else {
+        return "Overall system health looks OK."
+    }
+}
 
-            # Skip pure system updates
-            if ($_.ReleaseType -eq 'Security Update' -or $_.ParentKeyName) { return }
+# ---------------------------
+# Main dashboard scan
+# ---------------------------
+function Start-QDashboardScan {
+    [CmdletBinding()]
+    param()
 
-            $sizeMb = $null
-            if ($_.EstimatedSize) { $sizeMb = [math]::Round($_.EstimatedSize / 1024, 1) }
+    Write-QLog "Dashboard: starting system scan."
+    try {
+        Set-QStatus "Analysing system..." 0 $true
+    }
+    catch {
+        # If Set-QStatus is not available yet, just ignore
+    }
 
-            if ($sizeMb -and $sizeMb -gt 0) {
-                [pscustomobject]@{
-                    Name   = $_.DisplayName
-                    Publisher = $_.Publisher
-                    SizeMB = $sizeMb
-                }
-            }
+    $usage  = Get-QCpuRamSnapshot
+    $disk   = Get-QDiskUsageC
+    $health = Get-QSystemHealthSummary -CpuPercent $usage.CpuPercent -RamPercent $usage.RamPercent -FreeDiskGB $disk.FreeGB
+    $folders = Get-QLargestFolders -Root "C:\" -Top 10
+    $apps    = Get-QLargestAppsPlaceholder -Top 10
+
+    # Update tiles
+    if ($Global:QOT_CpuRamValue) {
+        $Global:QOT_CpuRamValue.Text = ("CPU: {0}%    RAM: {1}%" -f $usage.CpuPercent, $usage.RamPercent)
+    }
+
+    if ($Global:QOT_DiskUsageValue) {
+        $Global:QOT_DiskUsageValue.Text = ("{0} GB used / {1} GB free" -f $disk.UsedGB, $disk.FreeGB)
+    }
+
+    if ($Global:QOT_SystemHealthValue) {
+        $Global:QOT_SystemHealthValue.Text = $health
+    }
+
+    # Update largest folders list
+    if ($Global:QOT_LargestFoldersList) {
+        $Global:QOT_LargestFoldersList.Items.Clear()
+        foreach ($f in $folders) {
+            $Global:QOT_LargestFoldersList.Items.Add(
+                ("{0}  ({1} GB)" -f $f.Path, $f.SizeGB)
+            ) | Out-Null
         }
     }
 
-    $apps |
-        Sort-Object SizeMB -Descending |
-        Select-Object -First $Top
+    # Placeholder largest apps list
+    if ($Global:QOT_LargestAppsList) {
+        $Global:QOT_LargestAppsList.Items.Clear()
+        foreach ($a in $apps) {
+            $Global:QOT_LargestAppsList.Items.Add(
+                ("{0}  ({1} GB)" -f $a.Name, $a.SizeGB)
+            ) | Out-Null
+        }
+    }
+
+    try {
+        Set-QStatus "Idle" 0 $false
+    }
+    catch { }
+
+    Write-QLog "Dashboard: system scan completed."
 }
 
-function Get-QDashboardSummary {
-    <#
-        Returns a single object with everything the UI needs:
-        - CPU / RAM
-        - Disk usage (C:)
-        - Largest folders on C:\
-        - Largest installed apps
-        - Simple health string + recommended actions text
-    #>
-
-    Write-QLog "Dashboard: starting system health scan."
-
-    $cpuRam   = Get-QCpuAndRamUsage
-    $disk     = Get-QDiskUsage -DriveName 'C'
-    $folders  = Get-QLargestFolders -Root 'C:\' -Top 5
-    $apps     = Get-QLargestInstalledApps -Top 5
-
-    # Very simple health scoring
-    $issues = @()
-
-    if ($cpuRam.CpuPercent -gt 80) {
-        $issues += "High CPU usage detected."
-    }
-    if ($cpuRam.RamPercent -gt 80) {
-        $issues += "RAM usage is above 80%."
-    }
-    if ($disk.FreePercent -lt 15) {
-        $issues += "Disk C: has less than 15% free space."
-    }
-
-    if (-not $issues) {
-        $healthText = "Healthy"
-    }
-    else {
-        $healthText = ($issues -join " ")
-    }
-
-    $recommended = @()
-    if ($disk.FreePercent -lt 20) {
-        $recommended += "Run disk cleanup to free space on C:."
-    }
-    if ($cpuRam.RamPercent -gt 80) {
-        $recommended += "Close heavy apps or consider adding more RAM."
-    }
-    if (-not $recommended) {
-        $recommended = @("No urgent actions detected. You can still run maintenance to keep things tidy.")
-    }
-
-    $summary = [pscustomobject]@{
-        CpuRam        = $cpuRam
-        Disk          = $disk
-        LargestFolders = $folders
-        LargestApps    = $apps
-        HealthSummary  = $healthText
-        RecommendedActions = $recommended
-        ScanTime      = (Get-Date)
-    }
-
-    Write-QLog "Dashboard: system health scan finished."
-    return $summary
-}
-
-Export-ModuleMember -Function Get-QDashboardSummary
+Export-ModuleMember -Function `
+    Hook-QDashboardUI, `
+    Start-QDashboardScan, `
+    Get-QCpuRamSnapshot, `
+    Get-QDiskUsageC, `
+    Get-QLargestFolders
