@@ -97,7 +97,7 @@ function Get-QLargestFolders {
         }
     }
     catch {
-        Write-QLog "Dashboard: error while scanning folders under $Root: $($_.Exception.Message)" "WARN"
+        Write-QLog ("Dashboard: error while scanning folders under {0}: {1}" -f $folder.FullName, $_.Exception.Message) "WARN"
     }
 
     $results |
