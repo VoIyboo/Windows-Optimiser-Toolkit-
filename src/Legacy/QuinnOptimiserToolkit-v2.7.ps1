@@ -1019,7 +1019,6 @@ $BtnUninstallSelected.Add_Click({
             $failures += $app.Name
         }
     }
-
     # 5. Refresh both lists after uninstall
     Refresh-InstalledApps
     Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
@@ -1037,21 +1036,6 @@ $BtnUninstallSelected.Add_Click({
         ) | Out-Null
     }
 })
-
-
-
-    Set-Status "Idle" 0 $false
-    Refresh-InstalledApps
-
-    [System.Windows.MessageBox]::Show(
-        "Uninstall actions finished. The list has been refreshed. Check the log for details.",
-        "Apps",
-        'OK',
-        'Information'
-    ) | Out-Null
-})
-
-
 # Install grid: per-row Install button with bulk support
 $InstallGrid.AddHandler(
     [System.Windows.Controls.Button]::ClickEvent,
