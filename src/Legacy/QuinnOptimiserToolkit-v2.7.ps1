@@ -239,25 +239,32 @@ function Initialise-InstallAppsList {
         @{ Name = "Visual Studio Code"; WingetId = "Microsoft.VisualStudioCode" }
     )
 
-    $Collection.Clear()
+$Collection.Clear()
 
-    foreach ($def in $definitions) {
-        $status = "Not installed"
-        if (Test-AppInstalledWinget -Id $def.WingetId) {
-            $status = "Installed"
-        }
-
-        $obj = [pscustomobject]@{
-            IsSelected = $false
-            Name       = $def.Name
-            WingetId   = $def.WingetId
-            Status     = $status
-        }
-        $Collection.Add($obj) | Out-Null
+foreach ($def in $definitions) {
+    $status = "Not installed"
+    if (Test-AppInstalledWinget -Id $def.WingetId) {
+        $status = "Installed"
     }
 
-    Write-Log "Initialised InstallApps list with $($Collection.Count) entries."
+    $isInstalled  = ($status -eq "Installed")
+
+    $obj = [pscustomobject]@{
+        IsSelected      = $false
+        Name            = $def.Name
+        WingetId        = $def.WingetId
+        Status          = $status
+
+        # New fields used by the XAML bindings
+        InstallLabel    = if ($isInstalled) { "Installed" } else { "Install" }
+        IsInstallable   = -not $isInstalled
+        InstallTooltip  = if ($isInstalled) { "Already installed" } else { "Click to install" }
+    }
+
+    $Collection.Add($obj) | Out-Null
 }
+
+Write-Log "Initialised InstallApps list with $($Collection.Count) entries."
 
 function Install-SelectedCommonApps {
     param(
