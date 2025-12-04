@@ -812,6 +812,7 @@ function Refresh-InstalledApps {
 # Rescan button
 $BtnScanApps.Add_Click({
     Refresh-InstalledApps
+    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
 })
 
 # Uninstall selected (manual only)
