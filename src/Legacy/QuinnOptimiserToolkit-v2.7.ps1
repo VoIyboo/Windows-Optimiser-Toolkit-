@@ -916,7 +916,6 @@ $BtnUninstallSelected.Add_Click({
         'OK',
         'Information'
     ) | Out-Null
-})
 
 
 # Uninstall selected (manual only)
