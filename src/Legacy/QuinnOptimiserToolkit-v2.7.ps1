@@ -590,15 +590,21 @@ $xaml = @"
                                     <DataGridTextColumn Header="Status"
                                                         Binding="{Binding Status}"
                                                         Width="180"/>
-                                    <DataGridTemplateColumn Header="Install" Width="90">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <Button Content="Install"
-                                                        Padding="4,1"
-                                                        Margin="2"/>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                    </DataGridTemplateColumn>
+<DataGridTemplateColumn Header="Install" Width="110">
+    <DataGridTemplateColumn.CellTemplate>
+        <DataTemplate>
+            <Button Content="{Binding InstallLabel}"
+                    Padding="4,1"
+                    Margin="2"
+                    IsEnabled="{Binding IsInstallable}">
+                <Button.ToolTip>
+                    <TextBlock Text="{Binding InstallTooltip}"/>
+                </Button.ToolTip>
+            </Button>
+        </DataTemplate>
+    </DataGridTemplateColumn.CellTemplate>
+</DataGridTemplateColumn>
+
                                 </DataGrid.Columns>
                             </DataGrid>
                         </GroupBox>
