@@ -258,6 +258,48 @@ function Initialise-InstallAppsList {
     Write-Log "Initialised InstallApps list with $($Collection.Count) entries."
 }
 
+function Install-SelectedCommonApps {
+    param(
+        [System.Collections.ObjectModel.ObservableCollection[object]]$Collection,
+        [System.Windows.Controls.DataGrid]$Grid
+    )
+
+    # Find all ticked rows in the bottom grid
+    $selected = $Collection | Where-Object { $_.IsSelected }
+
+    if (-not $selected) {
+        [System.Windows.MessageBox]::Show(
+            "No apps ticked in the list.",
+            "Install common apps",
+            'OK',
+            'Information'
+        ) | Out-Null
+        return
+    }
+
+    $names = $selected.Name -join ", "
+    $confirm = [System.Windows.MessageBox]::Show(
+        "Install the following app(s)?`n`n$names",
+        "Confirm install",
+        'YesNo',
+        'Question'
+    )
+
+    if ($confirm -ne 'Yes') { return }
+
+    Set-Status "Installing selected apps..." 0 $true
+    Write-Log "Starting bulk install for common apps: $names"
+
+    foreach ($app in $selected) {
+        Install-AppWithWinget -AppRow $app -InstallGrid $Grid
+    }
+
+    Initialise-InstallAppsList -Collection $Collection
+
+    Set-Status "Idle" 0 $false
+}
+
+
 # ------------------------------
 # WPF XAML
 # ------------------------------
