@@ -229,14 +229,14 @@ function Initialise-InstallAppsList {
     )
 
     $definitions = @(
-        @{ Name = "Google Chrome";      WingetId = "Google.Chrome"               }
-        @{ Name = "Mozilla Firefox";    WingetId = "Mozilla.Firefox"             }
-        @{ Name = "7-Zip";              WingetId = "7zip.7zip"                   }
-        @{ Name = "VLC Media Player";   WingetId = "VideoLAN.VLC"                }
-        @{ Name = "Notepad++";          WingetId = "Notepad++.Notepad++"         }
-        @{ Name = "Discord";            WingetId = "Discord.Discord"             }
-        @{ Name = "Spotify";            WingetId = "Spotify.Spotify"             }
-        @{ Name = "Visual Studio Code"; WingetId = "Microsoft.VisualStudioCode"  }
+        @{ Name = "Google Chrome";      WingetId = "Google.Chrome"              }
+        @{ Name = "Mozilla Firefox";    WingetId = "Mozilla.Firefox"            }
+        @{ Name = "7-Zip";              WingetId = "7zip.7zip"                  }
+        @{ Name = "VLC Media Player";   WingetId = "VideoLAN.VLC"               }
+        @{ Name = "Notepad++";          WingetId = "Notepad++.Notepad++"        }
+        @{ Name = "Discord";            WingetId = "Discord.Discord"            }
+        @{ Name = "Spotify";            WingetId = "Spotify.Spotify"            }
+        @{ Name = "Visual Studio Code"; WingetId = "Microsoft.VisualStudioCode" }
     )
 
     $Collection.Clear()
@@ -255,6 +255,7 @@ function Initialise-InstallAppsList {
         }
         $Collection.Add($obj) | Out-Null
     }
+
     Write-Log "Initialised InstallApps list with $($Collection.Count) entries."
 }
 
@@ -294,11 +295,11 @@ function Install-SelectedCommonApps {
         Install-AppWithWinget -AppRow $app -InstallGrid $Grid
     }
 
+    # Rebuild list so statuses reflect current state
     Initialise-InstallAppsList -Collection $Collection
 
     Set-Status "Idle" 0 $false
 }
-
 
 # ------------------------------
 # WPF XAML
