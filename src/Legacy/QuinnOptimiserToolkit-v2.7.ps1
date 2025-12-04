@@ -810,9 +810,15 @@ function Refresh-InstalledApps {
 }
 
 # Rescan button
-$BtnScanApps.Add_Click({
+    # After all uninstalls, rescan so the grid matches reality
     Refresh-InstalledApps
-    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+
+    [System.Windows.MessageBox]::Show(
+        "Uninstall actions finished. The list has been refreshed. Check the log for details.",
+        "Apps",
+        'OK',
+        'Information'
+    ) | Out-Null
 })
 
 # Uninstall selected (manual only)
