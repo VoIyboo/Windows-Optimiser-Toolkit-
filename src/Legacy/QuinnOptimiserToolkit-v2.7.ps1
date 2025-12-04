@@ -888,12 +888,15 @@ $BtnScanApps.Add_Click({
 })
 
 # Uninstall selected (manual only)
-$BtnUninstallSelected.Add_Click({
-    $selected = $Global:AppsCollection | Where-Object { $_.IsSelected -and $_.IsSelectable -and $_.Uninstall }
 
-    if (-not $selected) {
+# Uninstall selected (with proper whitelist + refresh + logging)
+$BtnUninstallSelected.Add_Click({
+    # 1. Grab everything the user actually ticked
+    $chosen = $Global:AppsCollection | Where-Object { $_.IsSelected }
+
+    if (-not $chosen) {
         [System.Windows.MessageBox]::Show(
-            "No apps selected or all selected apps are protected.",
+            "No apps selected.",
             "Apps",
             'OK',
             'Information'
@@ -901,7 +904,37 @@ $BtnUninstallSelected.Add_Click({
         return
     }
 
-    $names = ($selected.Name -join ", ")
+    # 2. Work out what is protected vs uninstallable
+    #    Protected = on whitelist OR Risk = Red OR no uninstall string
+    $protected = $chosen | Where-Object {
+        $_.IsWhitelisted -or
+        $_.Risk -eq "Red" -or
+        -not $_.Uninstall
+    }
+
+    $toRemove = $chosen | Where-Object {
+        -not ($_.IsWhitelisted -or $_.Risk -eq "Red" -or -not $_.Uninstall)
+    }
+
+    # 3. If *everything* selected is protected, bail with a clear message
+    if (-not $toRemove) {
+        [System.Windows.MessageBox]::Show(
+            "All selected apps are on the protection whitelist or are system components.`n`nNothing will be uninstalled.",
+            "Apps",
+            'OK',
+            'Information'
+        ) | Out-Null
+        return
+    }
+
+    # Optional: tell the user which ones are protected but won’t be touched
+    if ($protected) {
+        $protNames = ($protected.Name -join ", ")
+        Write-Log "Protected apps in selection (skipped): $protNames"
+    }
+
+    $names = ($toRemove.Name -join ", ")
+
     $confirm = [System.Windows.MessageBox]::Show(
         "Uninstall the following apps?`n`n$names",
         "Confirm uninstall",
@@ -910,13 +943,16 @@ $BtnUninstallSelected.Add_Click({
     )
     if ($confirm -ne 'Yes') { return }
 
+    # 4. Status + logging
     Set-Status "Uninstalling selected apps..." 0 $true
     Write-Log "Starting uninstall of selected apps: $names"
 
-    $count = $selected.Count
+    $count = $toRemove.Count
+    if ($count -lt 1) { $count = 1 }   # safety against divide-by-zero
     $i = 0
+    $failures = @()
 
-    foreach ($app in $selected) {
+    foreach ($app in $toRemove) {
         $i++
         $pct = [int](($i / $count) * 100)
         Set-Status ("Uninstalling {0} ({1}/{2})" -f $app.Name, $i, $count) $pct $true
@@ -926,12 +962,11 @@ $BtnUninstallSelected.Add_Click({
             $cmd = $app.Uninstall
             if (-not $cmd) {
                 Write-Log "No UninstallString for $($app.Name), skipping." "WARN"
+                $failures += $app.Name
                 continue
             }
 
-            $cmd = $cmd.Trim()
-
-            # Default exe/args
+            $cmd  = $cmd.Trim()
             $exe  = $null
             $args = ""
 
@@ -952,21 +987,19 @@ $BtnUninstallSelected.Add_Click({
             }
 
             if (-not (Test-Path $exe)) {
-                # Last resort: run via cmd exactly as stored
+                # Last resort: run exactly as stored via cmd
                 Write-Log "Exe path '$exe' not found for $($app.Name), running raw command via cmd." "WARN"
                 Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
-                continue
             }
-
-            if ($exe -match "msiexec\.exe") {
-                # MSI: force quiet if not already specified
+            elseif ($exe -match "msiexec\.exe") {
+                # MSI: make sure it is quiet
                 if ($args -notmatch "/quiet" -and $args -notmatch "/qn") {
                     $args = "$args /quiet /norestart"
                 }
                 Start-Process -FilePath $exe -ArgumentList $args -Wait -WindowStyle Hidden
             }
             else {
-                # Non-MSI: try to make it silent if it doesn't already look silent
+                # Non-MSI: try to make silent if not already
                 if ($args -notmatch "/S" -and
                     $args -notmatch "/silent" -and
                     $args -notmatch "/verysilent" -and
@@ -977,11 +1010,35 @@ $BtnUninstallSelected.Add_Click({
 
                 Start-Process -FilePath $exe -ArgumentList $args -Wait -WindowStyle Hidden
             }
+
+            Write-Log "Uninstall completed for $($app.Name)"
         }
         catch {
-            Write-Log "Uninstall failed for $($app.Name): $($_.Exception.Message)" "WARN"
+            $msg = $_.Exception.Message
+            Write-Log "Uninstall failed for $($app.Name): $msg" "ERROR"
+            $failures += $app.Name
         }
     }
+
+    # 5. Refresh both lists after uninstall
+    Refresh-InstalledApps
+    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+
+    Set-Status "Idle" 0 $false
+
+    # 6. Only show a popup if there were actual failures
+    if ($failures.Count -gt 0) {
+        $failedNames = ($failures -join ", ")
+        [System.Windows.MessageBox]::Show(
+            "Some apps could not be uninstalled:`n`n$failedNames`n`nCheck the log at $LogFile for details.",
+            "Apps",
+            'OK',
+            'Warning'
+        ) | Out-Null
+    }
+})
+
+
 
     Set-Status "Idle" 0 $false
     Refresh-InstalledApps
