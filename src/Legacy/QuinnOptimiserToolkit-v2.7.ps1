@@ -904,7 +904,7 @@ $BtnUninstallSelected.Add_Click({
     [System.Windows.MessageBox]::Show("Uninstall actions finished. Check log for details.", "Apps", 'OK', 'Information') | Out-Null
 })
 
-# Install grid: per row Install button with bulk support
+# Install grid: per-row Install button with bulk support
 $InstallGrid.AddHandler(
     [System.Windows.Controls.Button]::ClickEvent,
     [System.Windows.RoutedEventHandler]{
@@ -916,11 +916,11 @@ $InstallGrid.AddHandler(
         $row = $button.DataContext
         if (-not $row) { return }
 
-        # Check if any rows are ticked in the bottom grid
+        # Look for ticked rows in the bottom grid
         $ticked = $Global:InstallAppsCollection | Where-Object { $_.IsSelected }
 
         if ($ticked -and $ticked.Count -gt 0) {
-            # If we are in bulk mode and this row is not ticked yet, tick it too
+            # Ensure the clicked row is also included in bulk if not already
             if (-not $row.IsSelected) {
                 $row.IsSelected = $true
             }
@@ -928,12 +928,11 @@ $InstallGrid.AddHandler(
             Install-SelectedCommonApps -Collection $Global:InstallAppsCollection -Grid $InstallGrid
         }
         else {
-            # No ticks at all, behave as a single row install
+            # No ticks: single app install
             Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
         }
     }
 )
-
 
 # Initialise install list and auto-scan apps when the window loads
 Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
@@ -1047,7 +1046,8 @@ $RunButton.Add_Click({
         Set-Status "Finished" 100 $false
         $SummaryText.Text = Get-SystemSummaryText
         [System.Windows.MessageBox]::Show("All selected actions have finished. Check $LogFile for details.", "Quinn Optimiser Toolkit", 'OK', 'Information') | Out-Null
-    } catch {
+    }
+    catch {
         Write-Log "Error during run: $($_.Exception.Message)" "ERROR"
         Set-Status "Error: $($_.Exception.Message)" 0 $false
         [System.Windows.MessageBox]::Show("Something went wrong, check the log for details.", "Error", 'OK', 'Error') | Out-Null
