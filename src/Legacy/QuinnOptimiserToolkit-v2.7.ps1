@@ -265,7 +265,7 @@ foreach ($def in $definitions) {
 }
 
 Write-Log "Initialised InstallApps list with $($Collection.Count) entries."
-
+}
 function Install-SelectedCommonApps {
     param(
         [System.Collections.ObjectModel.ObservableCollection[object]]$Collection,
