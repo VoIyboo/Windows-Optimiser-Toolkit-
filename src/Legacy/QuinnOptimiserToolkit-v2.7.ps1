@@ -916,51 +916,6 @@ $BtnUninstallSelected.Add_Click({
         'OK',
         'Information'
     ) | Out-Null
-
-
-# Uninstall selected (manual only)
-$BtnUninstallSelected.Add_Click({
-    $selected = ...
-
-
-# Uninstall selected (manual only)
-$BtnUninstallSelected.Add_Click({
-    $selected = $Global:AppsCollection | Where-Object { $_.IsSelected -and $_.IsSelectable -and $_.Uninstall }
-
-    if (-not $selected) {
-        [System.Windows.MessageBox]::Show("No apps selected or all selected apps are protected.", "Apps", 'OK', 'Information') | Out-Null
-        return
-    }
-
-    $names   = ($selected.Name -join ", ")
-    $confirm = [System.Windows.MessageBox]::Show("Uninstall the following apps?`n`n$names", "Confirm uninstall", 'YesNo', 'Warning')
-    if ($confirm -ne 'Yes') { return }
-
-    Set-Status "Uninstalling selected apps..." 0 $true
-    Write-Log "Starting uninstall of selected apps: $names"
-
-    $count = $selected.Count
-    $i = 0
-    foreach ($app in $selected) {
-        $i++
-        $pct = [int](($i / $count) * 100)
-        Set-Status ("Uninstalling {0} ({1}/{2})" -f $app.Name, $i, $count) $pct $true
-        Write-Log "Attempting uninstall: $($app.Name)"
-
-        try {
-            $cmd = $app.Uninstall
-            if ($cmd -match "msiexec\.exe") {
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd /quiet /norestart" -Wait -WindowStyle Hidden
-            } else {
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
-            }
-        } catch {
-            Write-Log "Uninstall failed for $($app.Name): $($_.Exception.Message)" "WARN"
-        }
-    }
-
-    Set-Status "Idle" 0 $false
-    [System.Windows.MessageBox]::Show("Uninstall actions finished. Check log for details.", "Apps", 'OK', 'Information') | Out-Null
 })
 
 # Install grid: per-row Install button with bulk support
