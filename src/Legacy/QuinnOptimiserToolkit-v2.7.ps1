@@ -212,8 +212,19 @@ function Install-AppWithWinget {
         $cmd = "winget install --id `"$($AppRow.WingetId)`" -h --accept-source-agreements --accept-package-agreements"
         Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
 
-        $AppRow.Status = "Installed this session"
-        Write-Log "Install completed: $($AppRow.Name)"
+# Update fields instantly for the UI
+$AppRow.Status         = "Installed this session"
+$AppRow.InstallLabel   = "Installed"
+$AppRow.IsInstallable  = $false
+$AppRow.InstallTooltip = "Already installed"
+
+Write-Log "Install completed: $($AppRow.Name)"
+
+# Refresh UI row (safe dispatcher call)
+$InstallGrid.Dispatcher.Invoke({
+    $InstallGrid.Items.Refresh()
+})
+
     } catch {
         $AppRow.Status = "Install failed"
         Write-Log "Install failed for $($AppRow.Name): $($_.Exception.Message)" "ERROR"
