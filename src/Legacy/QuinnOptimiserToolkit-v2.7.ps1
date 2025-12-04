@@ -905,19 +905,66 @@ $BtnUninstallSelected.Add_Click({
         Set-Status ("Uninstalling {0} ({1}/{2})" -f $app.Name, $i, $count) $pct $true
         Write-Log "Attempting uninstall: $($app.Name)"
 
-        try {
-            $cmd = $app.Uninstall
-            if ($cmd -match "msiexec\.exe") {
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd /quiet /norestart" -Wait -WindowStyle Hidden
-            }
-            else {
-                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
-            }
-        }
-        catch {
-            Write-Log "Uninstall failed for $($app.Name): $($_.Exception.Message)" "WARN"
+try {
+    $cmd = $app.Uninstall
+    if (-not $cmd) {
+        Write-Log "No UninstallString for $($app.Name), skipping." "WARN"
+        continue
+    }
+
+    $cmd = $cmd.Trim()
+
+    # Default exe/args
+    $exe  = $null
+    $args = ""
+
+    # If it starts with a quoted path: "C:\Path\uninstall.exe" /foo
+    if ($cmd.StartsWith('"')) {
+        $secondQuote = $cmd.IndexOf('"', 1)
+        if ($secondQuote -gt 0) {
+            $exe  = $cmd.Substring(1, $secondQuote - 1)
+            $args = $cmd.Substring($secondQuote + 1).Trim()
         }
     }
+
+    # Fallback: split on first space
+    if (-not $exe) {
+        $parts = $cmd.Split(" ", 2, [System.StringSplitOptions]::RemoveEmptyEntries)
+        $exe   = $parts[0]
+        if ($parts.Count -gt 1) { $args = $parts[1] }
+    }
+
+    if (-not (Test-Path $exe)) {
+        # Last resort: run via cmd exactly as stored
+        Write-Log "Exe path '$exe' not found for $($app.Name), running raw command via cmd." "WARN"
+        Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
+        return
+    }
+
+    if ($exe -match "msiexec\.exe") {
+        # MSI: force quiet if not already specified
+        if ($args -notmatch "/quiet" -and $args -notmatch "/qn") {
+            $args = "$args /quiet /norestart"
+        }
+        Start-Process -FilePath $exe -ArgumentList $args -Wait -WindowStyle Hidden
+    }
+    else {
+        # Non-MSI: try to make it silent if it doesn't already look silent
+        if ($args -notmatch "/S" -and
+            $args -notmatch "/silent" -and
+            $args -notmatch "/verysilent" -and
+            $args -notmatch "/quiet")
+        {
+            $args = ($args + " /S").Trim()
+        }
+
+        Start-Process -FilePath $exe -ArgumentList $args -Wait -WindowStyle Hidden
+    }
+}
+catch {
+    Write-Log "Uninstall failed for $($app.Name): $($_.Exception.Message)" "WARN"
+}
+
 
     Set-Status "Idle" 0 $false
 
