@@ -860,9 +860,12 @@ $BtnScanApps.Add_Click({
 
 # Uninstall selected (manual only)
 $BtnUninstallSelected.Add_Click({
-    $selected = $Global:AppsCollection | Where-Object { $_.IsSelected -and $_.IsSelectable -and $_.Uninstall }
+    # Get all selected, uninstallable apps
+    $selectedRaw = $Global:AppsCollection | Where-Object {
+        $_.IsSelected -and $_.IsSelectable -and $_.Uninstall
+    }
 
-    if (-not $selected) {
+    if (-not $selectedRaw) {
         [System.Windows.MessageBox]::Show(
             "No apps selected or all selected apps are protected.",
             "Apps",
@@ -871,6 +874,9 @@ $BtnUninstallSelected.Add_Click({
         ) | Out-Null
         return
     }
+
+    # Force into an array so .Count is always valid
+    $selected = @($selectedRaw)
 
     $names   = ($selected.Name -join ", ")
     $confirm = [System.Windows.MessageBox]::Show(
@@ -885,6 +891,13 @@ $BtnUninstallSelected.Add_Click({
     Write-Log "Starting uninstall of selected apps: $names"
 
     $count = $selected.Count
+    if ($count -lt 1) {
+        # Extra safety guard – should never hit this
+        Write-Log "Uninstall selected: count unexpectedly < 1" "WARN"
+        Set-Status "Idle" 0 $false
+        return
+    }
+
     $i = 0
     foreach ($app in $selected) {
         $i++
