@@ -903,7 +903,7 @@ $BtnUninstallSelected.Add_Click({
     [System.Windows.MessageBox]::Show("Uninstall actions finished. Check log for details.", "Apps", 'OK', 'Information') | Out-Null
 })
 
-# Install grid: per-row Install button using routed event handler
+# Install grid: per row Install button with bulk support
 $InstallGrid.AddHandler(
     [System.Windows.Controls.Button]::ClickEvent,
     [System.Windows.RoutedEventHandler]{
@@ -915,9 +915,24 @@ $InstallGrid.AddHandler(
         $row = $button.DataContext
         if (-not $row) { return }
 
-        Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
+        # Check if any rows are ticked in the bottom grid
+        $ticked = $Global:InstallAppsCollection | Where-Object { $_.IsSelected }
+
+        if ($ticked -and $ticked.Count -gt 0) {
+            # If we are in bulk mode and this row is not ticked yet, tick it too
+            if (-not $row.IsSelected) {
+                $row.IsSelected = $true
+            }
+
+            Install-SelectedCommonApps -Collection $Global:InstallAppsCollection -Grid $InstallGrid
+        }
+        else {
+            # No ticks at all, behave as a single row install
+            Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
+        }
     }
 )
+
 
 # Initialise install list and auto-scan apps when the window loads
 Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
