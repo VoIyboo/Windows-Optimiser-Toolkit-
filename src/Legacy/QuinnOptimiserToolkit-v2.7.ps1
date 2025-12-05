@@ -50,6 +50,27 @@ Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Advanced.psm1") -Force
 Import-Module (Join-Path $srcRoot "Modules\QOT.Apps.psm1")             -Force
 
 # ------------------------------
+# System summary
+# ------------------------------
+function Get-SystemSummaryText {
+    $drive = Get-PSDrive -Name C -ErrorAction SilentlyContinue
+    if (-not $drive) { return "C drive: not found" }
+
+    $totalBytes = $drive.Used + $drive.Free
+    if ($totalBytes -le 0) {
+        return "C: capacity could not be calculated"
+    }
+
+    $usedGB  = [math]::Round($drive.Used  / 1GB, 1)
+    $freeGB  = [math]::Round($drive.Free  / 1GB, 1)
+    $totalGB = [math]::Round($totalBytes  / 1GB, 1)
+    $freePct = [math]::Round(($drive.Free / $totalBytes) * 100, 1)
+
+    "C: {0} GB used / {1} GB free ({2} GB total, {3}% free)" -f $usedGB, $freeGB, $totalGB, $freePct
+}
+
+
+# ------------------------------
 # Install apps (winget) helpers
 # ------------------------------
 function Test-AppInstalledWinget {
