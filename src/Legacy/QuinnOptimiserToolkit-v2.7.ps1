@@ -864,51 +864,46 @@ function Refresh-InstalledApps {
     $Global:AppsCollection.Clear()
     Write-Log "Started scan for installed apps."
 
-    $apps = Get-InstalledApps
-    foreach ($a in $apps) {
-        $risk = Get-AppRisk -App $a
-        $obj = [pscustomobject]@{
-            IsSelected    = $false
-            IsSelectable  = -not $a.IsWhitelisted -and $risk -ne "Red"
-            Name          = $a.Name
-            Publisher     = $a.Publisher
-            SizeMB        = $a.SizeMB
-            InstallDate   = $a.InstallDate
-            Risk          = $risk
-            Uninstall     = $a.UninstallString
-            IsWhitelisted = $a.IsWhitelisted
+    try {
+        $apps = Get-InstalledApps
+
+        foreach ($a in $apps) {
+            try {
+                $risk = Get-AppRisk -App $a
+                $obj = [pscustomobject]@{
+                    IsSelected    = $false
+                    IsSelectable  = -not $a.IsWhitelisted -and $risk -ne "Red"
+                    Name          = $a.Name
+                    Publisher     = $a.Publisher
+                    SizeMB        = $a.SizeMB
+                    InstallDate   = $a.InstallDate
+                    Risk          = $risk
+                    Uninstall     = $a.UninstallString
+                    IsWhitelisted = $a.IsWhitelisted
+                }
+                $Global:AppsCollection.Add($obj) | Out-Null
+            } catch {
+                Write-Log "Failed to add app row for '$($a.Name)': $($_.Exception.Message)" "WARN"
+            }
         }
-        $Global:AppsCollection.Add($obj) | Out-Null
-    }
 
-    $AppsGrid.Items.Refresh()
-    Write-Log "Finished scan for installed apps. Count: $($Global:AppsCollection.Count)"
-    Set-Status "Idle" 0 $false
-}
-
-# Rescan button
-$BtnScanApps.Add_Click({
-    Refresh-InstalledApps
-    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
-})
-
-# Uninstall selected (manual only)
-
-# Uninstall selected (with proper whitelist + refresh + logging)
-$BtnUninstallSelected.Add_Click({
-    # 1. Grab everything the user actually ticked
-    $chosen = $Global:AppsCollection | Where-Object { $_.IsSelected }
-
-    if (-not $chosen) {
+        if ($AppsGrid) {
+            $AppsGrid.Items.Refresh()
+        }
+        Write-Log "Finished scan for installed apps. Count: $($Global:AppsCollection.Count)"
+        Set-Status "Idle" 0 $false
+    } catch {
+        Write-Log "Error in Refresh-InstalledApps: $($_.Exception.Message)" "ERROR"
+        Set-Status "Error scanning apps" 0 $false
         [System.Windows.MessageBox]::Show(
-            "No apps selected.",
-            "Apps",
+            "There was an error while scanning apps:`n`n$($_.Exception.Message)`n`n" +
+            "Check the log at $LogFile for more details.",
+            "Quinn Optimiser Toolkit",
             'OK',
-            'Information'
+            'Error'
         ) | Out-Null
-        return
     }
-
+}
     # 2. Work out what is protected vs uninstallable
     #    Protected = on whitelist OR Risk = Red OR no uninstall string
     $protected = $chosen | Where-Object {
