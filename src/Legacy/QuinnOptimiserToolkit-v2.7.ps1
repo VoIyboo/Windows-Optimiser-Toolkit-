@@ -540,6 +540,11 @@ $Global:InstallAppsCollection = New-Object System.Collections.ObjectModel.Observ
 $AppsGrid.ItemsSource    = $Global:AppsCollection
 $InstallGrid.ItemsSource = $Global:InstallAppsCollection
 
+Initialize-QOTAppsUI -BtnScanApps $BtnScanApps `
+                     -BtnUninstallSelected $BtnUninstallSelected `
+                     -AppsGrid $AppsGrid `
+                     -InstallGrid $InstallGrid
+
 # ------------------------------
 # Mode presets
 # ------------------------------
