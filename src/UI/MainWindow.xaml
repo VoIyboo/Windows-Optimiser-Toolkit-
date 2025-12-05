@@ -1,1 +1,20 @@
+<Window
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Quinn Optimiser Toolkit"
+    Height="480"
+    Width="800"
+    WindowStartupLocation="CenterScreen"
+    Background="#1e1e1e">
+
+    <Grid>
+        <TextBlock Text="Main Window Placeholder"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Foreground="White"
+                   FontSize="20"
+                   Opacity="0.7"/>
+    </Grid>
+
+</Window>
 
