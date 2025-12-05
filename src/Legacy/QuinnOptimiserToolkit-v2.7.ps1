@@ -604,9 +604,14 @@ $xaml = @"
                                 </DataGrid.Resources>
 
                                 <DataGrid.Columns>
-                                    <DataGridCheckBoxColumn Header="Select"
-                                                            Binding="{Binding IsSelected}"
-                                                            Width="60"/>
+<DataGridTemplateColumn Header="Select" Width="60">
+    <DataGridTemplateColumn.CellTemplate>
+        <DataTemplate>
+            <CheckBox IsChecked="{Binding IsSelected}"
+                      HorizontalAlignment="Center"/>
+        </DataTemplate>
+    </DataGridTemplateColumn.CellTemplate>
+</DataGridTemplateColumn>
                                     <DataGridTextColumn Header="Name"
                                                         Binding="{Binding Name}"
                                                         Width="*"/>
