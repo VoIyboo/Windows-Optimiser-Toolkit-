@@ -50,53 +50,6 @@ Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Tweaks.psm1")   -Force
 Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Advanced.psm1") -Force
 Import-Module (Join-Path $srcRoot "Modules\QOT.Apps.psm1")             -Force
 
-
-
-# ------------------------------
-# PLACEHOLDER: ACTION FUNCTIONS
-# (wire your existing logic into these)
-# ------------------------------
-# Cleaning
-function Action-CleanWindowsUpdateCache   { Write-Log "Clean Windows Update cache (TODO: wire in existing logic)" }
-function Action-CleanDeliveryOptimisation { Write-Log "Clean Delivery Optimisation cache (TODO)" }
-function Action-ClearTempFolders          { Write-Log "Clear temp folders (TODO)" }
-function Action-WinSxSSafeCleanup         { Write-Log "WinSxS safe cleanup (TODO)" }
-function Action-RemoveWindowsOld          { Write-Log "Remove Windows.old (TODO)" }
-function Action-RemoveOldRestorePoints    { Write-Log "Remove old restore points (TODO)" }
-function Action-RemoveDumpsAndLogs        { Write-Log "Remove dumps and logs (TODO)" }
-
-# Individual tweaks (safe / debloat)
-function Action-TweakStartMenuRecommendations { Write-Log "Disable Start menu recommendations (TODO)" }
-function Action-TweakSuggestedApps            { Write-Log "Disable suggested apps / promos (TODO)" }
-function Action-TweakWidgets                  { Write-Log "Disable Widgets (TODO)" }
-function Action-TweakNewsInterests            { Write-Log "Disable News & Interests (TODO)" }
-function Action-TweakBackgroundApps           { Write-Log "Limit background apps (TODO)" }
-function Action-TweakAnimations               { Write-Log "Reduce / disable animations (TODO)" }
-function Action-TweakOnlineTips               { Write-Log "Disable online tips (TODO)" }
-function Action-TweakAdvertisingId            { Write-Log "Disable advertising ID (TODO)" }
-function Action-TweakFeedbackHub              { Write-Log "Disable Feedback Hub prompts (TODO)" }
-function Action-TweakTelemetrySafe            { Write-Log "Set telemetry to safe level (TODO)" }
-function Action-TweakMeetNow                  { Write-Log "Turn off Meet Now (TODO)" }
-function Action-TweakCortanaLeftovers         { Write-Log "Disable Cortana leftovers (TODO)" }
-function Action-RemoveStockApps               { Write-Log "Remove unused stock apps (TODO)" }
-function Action-TweakStartupSound             { Write-Log "Turn off startup sound (TODO)" }
-function Action-TweakSnapAssist               { Write-Log "Turn off/customise Snap Assist (TODO)" }
-function Action-TweakMouseAcceleration        { Write-Log "Turn off mouse acceleration (TODO)" }
-function Action-ShowHiddenFiles               { Write-Log "Show hidden files and extensions (TODO)" }
-function Action-VerboseLogon                  { Write-Log "Enable verbose logon messages (TODO)" }
-function Action-DisableGameDVR                { Write-Log "Disable GameDVR (TODO)" }
-function Action-DisableAppReinstall           { Write-Log "Disable auto reinstall of apps after updates (TODO)" }
-
-# Advanced
-function Action-RemoveOldProfiles         { Write-Log "Remove old user profiles (TODO)" }
-function Action-AdvancedRestoreAggressive { Write-Log "Aggressive restore point / log cleanup (TODO)" }
-function Action-AdvancedDeepCache         { Write-Log "Deep cache cleanup (component store etc) (TODO)" }
-function Action-AdvancedNetworkTweaks     { Write-Log "General network tweaks (TODO)" }
-function Action-DisableIPv6               { Write-Log "Disable IPv6 on non tunnel adapters (TODO)" }
-function Action-DisableTeredo             { Write-Log "Disable Teredo / 6to4 (TODO)" }
-function Action-AdvancedServiceOptimise   { Write-Log "Service tuning / disabling non essential services (TODO)" }
-function Action-AdvancedSearchIndex       { Write-Log "Reduce or disable Windows Search indexing (TODO)" }
-
 # ------------------------------
 # App scan and risk logic
 # ------------------------------
