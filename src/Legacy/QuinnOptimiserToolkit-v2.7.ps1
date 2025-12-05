@@ -904,6 +904,28 @@ function Refresh-InstalledApps {
         ) | Out-Null
     }
 }
+
+# Rescan button
+$BtnScanApps.Add_Click({
+    Refresh-InstalledApps
+    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+})
+
+# Uninstall selected (with proper whitelist + refresh + logging)
+$BtnUninstallSelected.Add_Click({
+    # 1. Grab everything the user actually ticked
+    $chosen = $Global:AppsCollection | Where-Object { $_.IsSelected }
+
+    if (-not $chosen) {
+        [System.Windows.MessageBox]::Show(
+            "No apps selected.",
+            "Apps",
+            'OK',
+            'Information'
+        ) | Out-Null
+        return
+    }
+
     # 2. Work out what is protected vs uninstallable
     #    Protected = on whitelist OR Risk = Red OR no uninstall string
     $protected = $chosen | Where-Object {
@@ -1019,6 +1041,7 @@ function Refresh-InstalledApps {
             $failures += $app.Name
         }
     }
+
     # 5. Refresh both lists after uninstall
     Refresh-InstalledApps
     Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
@@ -1036,10 +1059,11 @@ function Refresh-InstalledApps {
         ) | Out-Null
     }
 })
+
 # Install grid: per-row Install button with bulk support
 $InstallGrid.AddHandler(
     [System.Windows.Controls.Button]::ClickEvent,
-    [System.Windows.RoutedEventHandler]{
+    [System.Windows.RoutedEventHandler] {
         param($sender, $e)
 
         $button = $e.OriginalSource
@@ -1059,15 +1083,16 @@ $InstallGrid.AddHandler(
 
             Install-SelectedCommonApps -Collection $Global:InstallAppsCollection -Grid $InstallGrid
         }
-else {
-    # No ticks: single app install
-    Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
+        else {
+            # No ticks: single app install
+            Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
 
-    # Rebuild list so status reflects current state
-    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
-}
+            # Rebuild list so status reflects current state
+            Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+        }
     }
 )
+
 
 # Initialise install list and auto-scan apps when the window loads
 Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
