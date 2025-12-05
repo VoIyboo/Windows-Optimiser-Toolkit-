@@ -57,5 +57,17 @@ Set-QLogRoot -Root $logRoot
 
 Write-QLog "Bootstrap started. Root: $Global:QOT_Root  Version: $Global:QOT_Version"
 
+
+function Write-Log {
+    param(
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
+
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    Write-QLog "[$Level] $Message"
+    Write-Host "[$timestamp] [$Level] $Message"
+}
+
 # Start Version 2.7 (legacy script)
 Start-QOTLegacy -RootPath $Global:QOT_Root
