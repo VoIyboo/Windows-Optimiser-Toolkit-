@@ -121,10 +121,27 @@ function Get-InstalledApps {
             $sizeMB = $null
             if ($_.EstimatedSize) { $sizeMB = [math]::Round($_.EstimatedSize / 1024, 1) }
 
-            $installDate = $null
-            if ($_.InstallDate -and $_.InstallDate -match "^\d{8}$") {
-                $installDate = [datetime]::ParseExact($_.InstallDate, "yyyyMMdd", $null)
-            }
+$installDate = $null
+if ($_.InstallDate -and $_.InstallDate -match "^\d{8}$") {
+    try {
+        $parsed = $null
+        if ([datetime]::TryParseExact(
+                $_.InstallDate,
+                "yyyyMMdd",
+                $null,
+                [System.Globalization.DateTimeStyles]::None,
+                [ref]$parsed
+            )) {
+            $installDate = $parsed
+        }
+        else {
+            Write-Log "Invalid InstallDate '$($_.InstallDate)' for $($_.DisplayName)" "WARN"
+        }
+    } catch {
+        Write-Log "Error parsing InstallDate '$($_.InstallDate)' for $($_.DisplayName): $($_.Exception.Message)" "WARN"
+    }
+}
+
 
             $isWhitelisted = $false
             foreach ($pattern in $Global:AppWhitelistPatterns) {
