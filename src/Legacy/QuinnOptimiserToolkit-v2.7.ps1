@@ -47,18 +47,6 @@ Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Advanced.psm1") -Force
 Import-Module (Join-Path $srcRoot "Modules\QOT.Apps.psm1")      
 
 # ------------------------------
-# Load action / apps modules (v2.7 legacy)
-# ------------------------------
-
-# This script lives in src\Legacy, so parent folder is src
-$srcRoot = Split-Path $PSScriptRoot -Parent
-
-Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Clean.psm1")    -Force
-Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Tweaks.psm1")   -Force
-Import-Module (Join-Path $srcRoot "Modules\QOT.Actions.Advanced.psm1") -Force
-Import-Module (Join-Path $srcRoot "Modules\QOT.Apps.psm1")             -Force
-
-# ------------------------------
 # Install apps (winget) helpers
 # ------------------------------
 function Test-AppInstalledWinget {
