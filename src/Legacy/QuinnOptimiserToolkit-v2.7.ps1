@@ -505,7 +505,7 @@ $InstallGrid   = $window.FindName("InstallGrid")
 # ------------------------------
 # Status helper
 # ------------------------------
-function Set-Status {
+function Global:Set-Status {
     param(
         [string]$Text,
         [int]$Progress = 0,
