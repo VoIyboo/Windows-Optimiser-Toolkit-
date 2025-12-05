@@ -1064,10 +1064,13 @@ $InstallGrid.AddHandler(
 
             Install-SelectedCommonApps -Collection $Global:InstallAppsCollection -Grid $InstallGrid
         }
-        else {
-            # No ticks: single app install
-            Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
-        }
+else {
+    # No ticks: single app install
+    Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
+
+    # Rebuild list so status reflects current state
+    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+}
     }
 )
 
