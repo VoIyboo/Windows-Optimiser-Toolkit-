@@ -60,27 +60,910 @@ function Start-QOTLegacy {
         "C: {0} GB used / {1} GB free ({2} GB total, {3}% free)" -f $usedGB, $freeGB, $totalGB, $freePct
     }
 
-    # ------------------------------
-    # Load XAML from external file
-    # ------------------------------
-    $xamlPath = Join-Path (Join-Path $RootPath "src\Legacy") "QuinnOptimiserToolkit-v2.7.xaml"
-    $xaml     = Get-Content $xamlPath -Raw
+   # ------------------------------
+# WPF XAML
+# ------------------------------
+$xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Quinn Optimiser Toolkit" Height="650" Width="1000" Background="#0F172A"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <SolidColorBrush x:Key="AccentBrush"   Color="#2563EB"/>
+        <SolidColorBrush x:Key="CardBrush"     Color="#020617"/>
+        <SolidColorBrush x:Key="BorderBrush"   Color="#374151"/>
 
-    $window = [Windows.Markup.XamlReader]::Parse($xaml)
+        <SolidColorBrush x:Key="SafeBrush"     Color="#16A34A"/>
+        <SolidColorBrush x:Key="CautionBrush"  Color="#F59E0B"/>
+        <SolidColorBrush x:Key="DangerBrush"   Color="#DC2626"/>
 
-    # From here down:
-    #   - controls lookup ($StatusLabel, $RunButton, etc)
-    #   - Set-Status function
-    #   - collections setup
-    #   - ModeCombo SelectionChanged
-    #   - Apps tab behaviour (Refresh-InstalledApps, button click handlers, Install grid handler)
-    #   - Run button logic
-    #   - ShowDialog / closing log
+        <Style TargetType="GroupBox">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="Background" Value="{StaticResource CardBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HeaderTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" Foreground="{StaticResource AccentBrush}" FontWeight="Bold"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-    # 👉 Take all of those blocks from your current v2.7 file
-    #    and paste them inside this function, *after* $window is created.
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+        </Style>
 
-    # Example tail:
-    # $null = $window.ShowDialog()
-    # Write-Log "===== Quinn Optimiser Toolkit closed ====="
+        <Style TargetType="TabControl">
+            <Setter Property="Margin" Value="10"/>
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#111827"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#FFFFFF"/>
+                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header / mode -->
+        <Border Grid.Row="0" Background="#020617" Padding="10" BorderBrush="#111827" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
+                    <TextBlock Text="Quinn Optimiser Toolkit" FontSize="20" Foreground="White" FontWeight="Bold"/>
+                    <TextBlock x:Name="SummaryText" Text="Loading system summary..." Foreground="#9CA3AF" FontSize="11"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <TextBlock Text="Mode:" Foreground="White" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                    <ComboBox x:Name="ModeCombo" Width="200" SelectedIndex="0">
+                        <ComboBoxItem Content="Custom selection"/>
+                        <ComboBoxItem Content="Clean only"/>
+                        <ComboBoxItem Content="Debloat only"/>
+                        <ComboBoxItem Content="Performance tune"/>
+                        <ComboBoxItem Content="Full optimisation"/>
+                    </ComboBox>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main tabs -->
+        <TabControl Grid.Row="1" x:Name="MainTabs">
+            <!-- Tweaks tab now also includes Cleaning -->
+            <TabItem Header="Tweaks &amp; Cleaning">
+                <!-- push content down so sub headings are not clipped -->
+                <Grid Margin="5,20,5,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Cleaning & Maintenance -->
+                    <GroupBox Header="Cleaning &amp; Maintenance" Grid.Row="0" Grid.Column="0">
+                        <StackPanel>
+                            <CheckBox x:Name="CbCleanWU"    Content="Clean Windows Update cache"                    Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                            <CheckBox x:Name="CbCleanDO"    Content="Clean Delivery Optimisation cache"            Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                            <CheckBox x:Name="CbTemp"       Content="Clear temp folders"                           Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                            <CheckBox x:Name="CbWinSxS"     Content="WinSxS safe cleanup"                          Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                            <CheckBox x:Name="CbWinOld"     Content="Remove Windows.old (if present)"              Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                            <CheckBox x:Name="CbLogs"       Content="Clear logs, dumps and old restore points"     Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Tweaks & Privacy: individual options -->
+                    <GroupBox Header="Tweaks &amp; Privacy" Grid.Row="0" Grid.Column="1">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <CheckBox x:Name="CbT_StartMenuRec"   Content="Disable Start menu recommendations"                         Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_SuggestedApps"  Content="Disable suggested apps and Microsoft promotional content"   Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                                <CheckBox x:Name="CbT_Widgets"        Content="Disable Widgets"                                           Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                                <CheckBox x:Name="CbT_News"           Content="Disable News &amp; Interests"                              Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                                <CheckBox x:Name="CbT_BackgroundApps" Content="Limit or disable background apps"                          Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_Animations"     Content="Reduce or disable Windows animations"                      Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_Tips"           Content="Turn off online tips and suggestions"                      Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_AdId"           Content="Disable advertising ID"                                    Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_Feedback"       Content="Disable Feedback Hub prompts"                              Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_Telemetry"      Content="Set telemetry to a safe / minimal level"                   Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                                <CheckBox x:Name="CbT_MeetNow"        Content="Turn off Meet Now"                                        Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_Cortana"        Content="Turn off Cortana leftovers"                               Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_StockApps"      Content="Remove unused stock apps (3D Viewer, Mixed Reality Portal…)" Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                                <CheckBox x:Name="CbT_StartupSound"   Content="Turn off startup sound"                                   Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_SnapAssist"     Content="Turn off or customise Snap Assist"                         Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_MouseAccel"     Content="Turn off mouse acceleration"                               Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_HiddenFiles"    Content="Show hidden files and file extensions"                     Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_VerboseLogon"   Content="Enable verbose logon messages"                             Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_GameDVR"        Content="Disable GameDVR"                                          Foreground="{StaticResource SafeBrush}"    Margin="3"/>
+                                <CheckBox x:Name="CbT_AppReinstall"   Content="Disable auto reinstall of apps after updates"              Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </GroupBox>
+
+                    <!-- Notes -->
+                    <GroupBox Header="Notes" Grid.Row="1" Grid.ColumnSpan="2">
+                        <TextBlock TextWrapping="Wrap" Foreground="#9CA3AF">
+                            Green items are safe and reversible. Amber items should be used with a restore point and basic understanding of the impact.
+                            Advanced and expert tweaks live under the Advanced tab.
+                        </TextBlock>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+
+            <!-- Apps tab with scan + install -->
+            <TabItem Header="Apps">
+                <Grid Margin="5,20,5,5">
+                    <Grid.RowDefinitions>
+                        <!-- Row 0 = buttons, Row 1 = content -->
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Top bar: scan + uninstall -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,5">
+                        <Button x:Name="BtnScanApps"
+                                Content="Rescan installed apps"
+                                Width="170"
+                                MinWidth="170"
+                                Padding="10,4"
+                                HorizontalContentAlignment="Center"/>
+                        <Button x:Name="BtnUninstallSelected"
+                                Content="Uninstall selected"
+                                Width="170"
+                                MinWidth="170"
+                                Padding="10,4"
+                                Margin="5,0,0,0"
+                                HorizontalContentAlignment="Center"/>
+                        <TextBlock Text="  Green = safe, Amber = caution, Red = system/experts only. Whitelisted apps cannot be selected."
+                                   Foreground="#9CA3AF"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Two evenly sized boxes underneath -->
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Installed apps (uninstall) -->
+                        <GroupBox Header="Installed apps"
+                                  Grid.Row="0"
+                                  Margin="0,0,0,5">
+                            <DataGrid x:Name="AppsGrid"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      GridLinesVisibility="Horizontal"
+                                      HeadersVisibility="Column"
+                                      Background="{StaticResource CardBrush}"
+                                      Foreground="White"
+                                      BorderBrush="{StaticResource BorderBrush}"
+                                      RowBackground="#0B1120"
+                                      AlternatingRowBackground="#020617">
+                                <DataGrid.Resources>
+                                    <Style TargetType="DataGridColumnHeader">
+                                        <Setter Property="Background" Value="#020617"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                    </Style>
+                                    <Style TargetType="DataGridCell">
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                    </Style>
+                                    <Style TargetType="DataGridRow">
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Risk}" Value="Green">
+                                                <Setter Property="BorderBrush" Value="{StaticResource SafeBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Risk}" Value="Amber">
+                                                <Setter Property="BorderBrush" Value="{StaticResource CautionBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Risk}" Value="Red">
+                                                <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Risk}" Value="Protected">
+                                                <Setter Property="Opacity" Value="0.7"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.Resources>
+
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="Select" Width="60">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <CheckBox IsChecked="{Binding IsSelected}"
+                                                          IsEnabled="{Binding IsSelectable}"
+                                                          HorizontalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Name"      Binding="{Binding Name}"       Width="*"/>
+                                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}"  Width="200"/>
+                                    <DataGridTextColumn Header="Size (MB)" Binding="{Binding SizeMB}"     Width="90"/>
+                                    <DataGridTextColumn Header="Installed" Binding="{Binding InstallDate, StringFormat=d}" Width="100"/>
+                                    <DataGridTextColumn Header="Risk"      Binding="{Binding Risk}"       Width="90"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+
+                        <!-- Install common apps -->
+                        <GroupBox Header="Install common apps (winget)"
+                                  Grid.Row="1"
+                                  Margin="0,5,0,0">
+                            <DataGrid x:Name="InstallGrid"
+                                      AutoGenerateColumns="False"
+                                      CanUserAddRows="False"
+                                      GridLinesVisibility="Horizontal"
+                                      HeadersVisibility="Column"
+                                      Background="{StaticResource CardBrush}"
+                                      Foreground="White"
+                                      BorderBrush="{StaticResource BorderBrush}"
+                                      RowBackground="#0B1120"
+                                      AlternatingRowBackground="#020617">
+                                <DataGrid.Resources>
+                                    <Style TargetType="DataGridColumnHeader">
+                                        <Setter Property="Background" Value="#020617"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                    </Style>
+                                    <Style TargetType="DataGridCell">
+                                        <Setter Property="Foreground" Value="White"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                    </Style>
+                                </DataGrid.Resources>
+
+                                <DataGrid.Columns>
+<DataGridTemplateColumn Header="Select" Width="60">
+    <DataGridTemplateColumn.CellTemplate>
+        <DataTemplate>
+            <CheckBox IsChecked="{Binding IsSelected}"
+                      HorizontalAlignment="Center"/>
+        </DataTemplate>
+    </DataGridTemplateColumn.CellTemplate>
+</DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Name"
+                                                        Binding="{Binding Name}"
+                                                        Width="*"/>
+                                    <DataGridTextColumn Header="Status"
+                                                        Binding="{Binding Status}"
+                                                        Width="180"/>
+<DataGridTemplateColumn Header="Install" Width="110">
+    <DataGridTemplateColumn.CellTemplate>
+        <DataTemplate>
+            <Button Content="{Binding InstallLabel}"
+                    Padding="4,1"
+                    Margin="2"
+                    IsEnabled="{Binding IsInstallable}">
+                <Button.ToolTip>
+                    <TextBlock Text="{Binding InstallTooltip}"/>
+                </Button.ToolTip>
+            </Button>
+        </DataTemplate>
+    </DataGridTemplateColumn.CellTemplate>
+</DataGridTemplateColumn>
+
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </GroupBox>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- Advanced tab -->
+            <TabItem Header="Advanced">
+                <!-- push content down so headings don't sit under the tab strip -->
+                <Grid Margin="5,20,5,5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <GroupBox Header="Advanced cleaning &amp; profiles" Grid.Row="0" Grid.Column="0">
+                        <StackPanel>
+                            <CheckBox x:Name="CbAdvProfiles"   Content="Remove old user profiles (keeping current + admin accounts)"   Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                            <CheckBox x:Name="CbAdvRestore"    Content="Aggressive restore point / log clean"                          Foreground="{StaticResource DangerBrush}"  Margin="3"/>
+                            <CheckBox x:Name="CbAdvDeepCache"  Content="Deep cache cleanup (WinSxS / component store - experts only)"  Foreground="{StaticResource DangerBrush}"  Margin="3"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Network &amp; services" Grid.Row="0" Grid.Column="1">
+                        <StackPanel>
+                            <CheckBox x:Name="CbAdvNet"        Content="General network tweaks (DNS / MTU / offloads)"                 Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                            <CheckBox x:Name="CbAdvIPv6"       Content="Disable IPv6 on non-tunnel adapters"                            Foreground="{StaticResource DangerBrush}"  Margin="3"/>
+                            <CheckBox x:Name="CbAdvTeredo"     Content="Disable Teredo and 6to4 tunnels"                               Foreground="{StaticResource DangerBrush}"  Margin="3"/>
+                            <CheckBox x:Name="CbAdvServices"   Content="Service optimisation (disabling non-essential services)"        Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                            <CheckBox x:Name="CbAdvSearchIndex" Content="Reduce or disable Windows Search indexing"                     Foreground="{StaticResource CautionBrush}" Margin="3"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Warnings" Grid.Row="1" Grid.ColumnSpan="2">
+                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource DangerBrush}">
+                            All advanced options are higher risk and aimed at experienced users. 
+                            A backup and restore point are strongly recommended before enabling these.
+                        </TextBlock>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <!-- Status bar -->
+        <Border Grid.Row="2" Background="#020617" Padding="6" BorderBrush="#111827" BorderThickness="1,1,1,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <TextBlock Text="Status: " Foreground="#9CA3AF"/>
+                    <TextBlock x:Name="StatusLabel" Text="Idle" Foreground="White"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="RunButton" Content="Run selected actions" Margin="0,0,10,0" Width="160"/>
+                    <ProgressBar x:Name="MainProgress" Width="200" Height="16" Minimum="0" Maximum="100" Value="0"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
+"@
+
+# ------------------------------
+# Load WPF window
+# ------------------------------
+$window = [Windows.Markup.XamlReader]::Parse($xaml)
+
+# Controls
+$StatusLabel   = $window.FindName("StatusLabel")
+$SummaryText   = $window.FindName("SummaryText")
+$MainProgress  = $window.FindName("MainProgress")
+$RunButton     = $window.FindName("RunButton")
+$ModeCombo     = $window.FindName("ModeCombo")
+
+$CbCleanWU     = $window.FindName("CbCleanWU")
+$CbCleanDO     = $window.FindName("CbCleanDO")
+$CbTemp        = $window.FindName("CbTemp")
+$CbWinSxS      = $window.FindName("CbWinSxS")
+$CbWinOld      = $window.FindName("CbWinOld")
+$CbLogs        = $window.FindName("CbLogs")
+
+# tweak checkboxes
+$CbT_StartMenuRec   = $window.FindName("CbT_StartMenuRec")
+$CbT_SuggestedApps  = $window.FindName("CbT_SuggestedApps")
+$CbT_Widgets        = $window.FindName("CbT_Widgets")
+$CbT_News           = $window.FindName("CbT_News")
+$CbT_BackgroundApps = $window.FindName("CbT_BackgroundApps")
+$CbT_Animations     = $window.FindName("CbT_Animations")
+$CbT_Tips           = $window.FindName("CbT_Tips")
+$CbT_AdId           = $window.FindName("CbT_AdId")
+$CbT_Feedback       = $window.FindName("CbT_Feedback")
+$CbT_Telemetry      = $window.FindName("CbT_Telemetry")
+$CbT_MeetNow        = $window.FindName("CbT_MeetNow")
+$CbT_Cortana        = $window.FindName("CbT_Cortana")
+$CbT_StockApps      = $window.FindName("CbT_StockApps")
+$CbT_StartupSound   = $window.FindName("CbT_StartupSound")
+$CbT_SnapAssist     = $window.FindName("CbT_SnapAssist")
+$CbT_MouseAccel     = $window.FindName("CbT_MouseAccel")
+$CbT_HiddenFiles    = $window.FindName("CbT_HiddenFiles")
+$CbT_VerboseLogon   = $window.FindName("CbT_VerboseLogon")
+$CbT_GameDVR        = $window.FindName("CbT_GameDVR")
+$CbT_AppReinstall   = $window.FindName("CbT_AppReinstall")
+
+# advanced
+$CbAdvProfiles     = $window.FindName("CbAdvProfiles")
+$CbAdvRestore      = $window.FindName("CbAdvRestore")
+$CbAdvDeepCache    = $window.FindName("CbAdvDeepCache")
+$CbAdvNet          = $window.FindName("CbAdvNet")
+$CbAdvIPv6         = $window.FindName("CbAdvIPv6")
+$CbAdvTeredo       = $window.FindName("CbAdvTeredo")
+$CbAdvServices     = $window.FindName("CbAdvServices")
+$CbAdvSearchIndex  = $window.FindName("CbAdvSearchIndex")
+
+# apps tab
+$AppsGrid      = $window.FindName("AppsGrid")
+$BtnScanApps   = $window.FindName("BtnScanApps")
+$BtnUninstallSelected = $window.FindName("BtnUninstallSelected")
+$InstallGrid   = $window.FindName("InstallGrid")
+
+# ------------------------------
+# Status helper
+# ------------------------------
+function Set-Status {
+    param(
+        [string]$Text,
+        [int]$Progress = 0,
+        [bool]$Busy = $false
+    )
+
+    if ($StatusLabel) { $StatusLabel.Text = $Text }
+    if ($MainProgress) {
+        $MainProgress.Value = $Progress
+        $MainProgress.IsIndeterminate = $Busy
+    }
+
+    if ($Busy) {
+        if ($RunButton)            { $RunButton.IsEnabled = $false }
+        if ($BtnScanApps)          { $BtnScanApps.IsEnabled = $false }
+        if ($BtnUninstallSelected) { $BtnUninstallSelected.IsEnabled = $false }
+    } else {
+        if ($RunButton)            { $RunButton.IsEnabled = $true }
+        if ($BtnScanApps)          { $BtnScanApps.IsEnabled = $true }
+        if ($BtnUninstallSelected) { $BtnUninstallSelected.IsEnabled = $true }
+    }
 }
+
+$SummaryText.Text = Get-SystemSummaryText
+
+# ------------------------------
+# Collections for grids
+# ------------------------------
+$Global:AppsCollection        = New-Object System.Collections.ObjectModel.ObservableCollection[object]
+$Global:InstallAppsCollection = New-Object System.Collections.ObjectModel.ObservableCollection[object]
+
+$AppsGrid.ItemsSource    = $Global:AppsCollection
+$InstallGrid.ItemsSource = $Global:InstallAppsCollection
+
+# ------------------------------
+# Mode presets
+# ------------------------------
+$allCheckboxes = @(
+    $CbCleanWU,$CbCleanDO,$CbTemp,$CbWinSxS,$CbWinOld,$CbLogs,
+    $CbT_StartMenuRec,$CbT_SuggestedApps,$CbT_Widgets,$CbT_News,
+    $CbT_BackgroundApps,$CbT_Animations,$CbT_Tips,$CbT_AdId,$CbT_Feedback,
+    $CbT_Telemetry,$CbT_MeetNow,$CbT_Cortana,$CbT_StockApps,$CbT_StartupSound,
+    $CbT_SnapAssist,$CbT_MouseAccel,$CbT_HiddenFiles,$CbT_VerboseLogon,
+    $CbT_GameDVR,$CbT_AppReinstall,
+    $CbAdvProfiles,$CbAdvRestore,$CbAdvDeepCache,$CbAdvNet,$CbAdvIPv6,$CbAdvTeredo,$CbAdvServices,$CbAdvSearchIndex
+)
+
+$ModeCombo.Add_SelectionChanged({
+    foreach ($cb in $allCheckboxes) {
+        if ($cb) { $cb.IsChecked = $false }
+    }
+
+    $mode = ($ModeCombo.SelectedItem.Content)
+    switch ($mode) {
+        "Clean only" {
+            $CbCleanWU.IsChecked  = $true
+            $CbCleanDO.IsChecked  = $true
+            $CbTemp.IsChecked     = $true
+            $CbWinSxS.IsChecked   = $true
+            $CbWinOld.IsChecked   = $true
+            $CbLogs.IsChecked     = $true
+        }
+        "Debloat only" {
+            $CbT_SuggestedApps.IsChecked = $true
+            $CbT_Widgets.IsChecked       = $true
+            $CbT_News.IsChecked          = $true
+            $CbT_StockApps.IsChecked     = $true
+            $CbT_AppReinstall.IsChecked  = $true
+        }
+        "Performance tune" {
+            $CbT_BackgroundApps.IsChecked = $true
+            $CbT_Animations.IsChecked     = $true
+            $CbT_Tips.IsChecked           = $true
+            $CbT_AdId.IsChecked           = $true
+            $CbT_Feedback.IsChecked       = $true
+            $CbT_MeetNow.IsChecked        = $true
+            $CbT_StartupSound.IsChecked   = $true
+            $CbT_SnapAssist.IsChecked     = $true
+            $CbT_MouseAccel.IsChecked     = $true
+            $CbT_HiddenFiles.IsChecked    = $true
+            $CbT_VerboseLogon.IsChecked   = $true
+            $CbT_GameDVR.IsChecked        = $true
+        }
+        "Full optimisation" {
+            foreach ($cb in @(
+                $CbCleanWU,$CbCleanDO,$CbTemp,$CbWinSxS,$CbWinOld,$CbLogs,
+                $CbT_StartMenuRec,$CbT_SuggestedApps,$CbT_Widgets,$CbT_News,
+                $CbT_BackgroundApps,$CbT_Animations,$CbT_Tips,$CbT_AdId,$CbT_Feedback,
+                $CbT_Telemetry,$CbT_MeetNow,$CbT_Cortana,$CbT_StockApps,$CbT_StartupSound,
+                $CbT_SnapAssist,$CbT_MouseAccel,$CbT_HiddenFiles,$CbT_VerboseLogon,
+                $CbT_GameDVR,$CbT_AppReinstall
+            )) { $cb.IsChecked = $true }
+        }
+        default { }
+    }
+})
+
+# ------------------------------
+# Apps tab behaviour
+# ------------------------------
+function Refresh-InstalledApps {
+    Set-Status "Scanning apps..." 0 $true
+    $Global:AppsCollection.Clear()
+    Write-Log "Started scan for installed apps."
+
+    try {
+        $apps = Get-InstalledApps
+
+        foreach ($a in $apps) {
+            try {
+                $risk = Get-AppRisk -App $a
+                $obj = [pscustomobject]@{
+                    IsSelected    = $false
+                    IsSelectable  = -not $a.IsWhitelisted -and $risk -ne "Red"
+                    Name          = $a.Name
+                    Publisher     = $a.Publisher
+                    SizeMB        = $a.SizeMB
+                    InstallDate   = $a.InstallDate
+                    Risk          = $risk
+                    Uninstall     = $a.UninstallString
+                    IsWhitelisted = $a.IsWhitelisted
+                }
+                $Global:AppsCollection.Add($obj) | Out-Null
+            } catch {
+                Write-Log "Failed to add app row for '$($a.Name)': $($_.Exception.Message)" "WARN"
+            }
+        }
+
+        if ($AppsGrid) {
+            $AppsGrid.Items.Refresh()
+        }
+        Write-Log "Finished scan for installed apps. Count: $($Global:AppsCollection.Count)"
+        Set-Status "Idle" 0 $false
+    } catch {
+        Write-Log "Error in Refresh-InstalledApps: $($_.Exception.Message)" "ERROR"
+        Set-Status "Error scanning apps" 0 $false
+        [System.Windows.MessageBox]::Show(
+            "There was an error while scanning apps:`n`n$($_.Exception.Message)`n`n" +
+            "Check the log at $LogFile for more details.",
+            "Quinn Optimiser Toolkit",
+            'OK',
+            'Error'
+        ) | Out-Null
+    }
+}
+
+# Rescan button
+$BtnScanApps.Add_Click({
+    Refresh-InstalledApps
+    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+})
+
+# Uninstall selected (with proper whitelist + refresh + logging)
+$BtnUninstallSelected.Add_Click({
+    # 1. Grab everything the user actually ticked
+    $chosen = $Global:AppsCollection | Where-Object { $_.IsSelected }
+
+    if (-not $chosen) {
+        [System.Windows.MessageBox]::Show(
+            "No apps selected.",
+            "Apps",
+            'OK',
+            'Information'
+        ) | Out-Null
+        return
+    }
+
+    # 2. Work out what is protected vs uninstallable
+    #    Protected = on whitelist OR Risk = Red OR no uninstall string
+    $protected = $chosen | Where-Object {
+        $_.IsWhitelisted -or
+        $_.Risk -eq "Red" -or
+        -not $_.Uninstall
+    }
+
+    $toRemove = $chosen | Where-Object {
+        -not ($_.IsWhitelisted -or $_.Risk -eq "Red" -or -not $_.Uninstall)
+    }
+
+    # 3. If *everything* selected is protected, bail with a clear message
+    if (-not $toRemove) {
+        [System.Windows.MessageBox]::Show(
+            "All selected apps are on the protection whitelist or are system components.`n`nNothing will be uninstalled.",
+            "Apps",
+            'OK',
+            'Information'
+        ) | Out-Null
+        return
+    }
+
+    # Optional: tell the user which ones are protected but won’t be touched
+    if ($protected) {
+        $protNames = ($protected.Name -join ", ")
+        Write-Log "Protected apps in selection (skipped): $protNames"
+    }
+
+    $names = ($toRemove.Name -join ", ")
+
+    $confirm = [System.Windows.MessageBox]::Show(
+        "Uninstall the following apps?`n`n$names",
+        "Confirm uninstall",
+        'YesNo',
+        'Warning'
+    )
+    if ($confirm -ne 'Yes') { return }
+
+    # 4. Status + logging
+    Set-Status "Uninstalling selected apps..." 0 $true
+    Write-Log "Starting uninstall of selected apps: $names"
+
+    $count = $toRemove.Count
+    if ($count -lt 1) { $count = 1 }   # safety against divide-by-zero
+    $i = 0
+    $failures = @()
+
+    foreach ($app in $toRemove) {
+        $i++
+        $pct = [int](($i / $count) * 100)
+        Set-Status ("Uninstalling {0} ({1}/{2})" -f $app.Name, $i, $count) $pct $true
+        Write-Log "Attempting uninstall: $($app.Name)"
+
+        try {
+            $cmd = $app.Uninstall
+            if (-not $cmd) {
+                Write-Log "No UninstallString for $($app.Name), skipping." "WARN"
+                $failures += $app.Name
+                continue
+            }
+
+            $cmd  = $cmd.Trim()
+            $exe  = $null
+            $args = ""
+
+            # If it starts with a quoted path: "C:\Path\uninstall.exe" /foo
+            if ($cmd.StartsWith('"')) {
+                $secondQuote = $cmd.IndexOf('"', 1)
+                if ($secondQuote -gt 0) {
+                    $exe  = $cmd.Substring(1, $secondQuote - 1)
+                    $args = $cmd.Substring($secondQuote + 1).Trim()
+                }
+            }
+
+            # Fallback: split on first space
+            if (-not $exe) {
+                $parts = $cmd.Split(" ", 2, [System.StringSplitOptions]::RemoveEmptyEntries)
+                $exe   = $parts[0]
+                if ($parts.Count -gt 1) { $args = $parts[1] }
+            }
+
+            if (-not (Test-Path $exe)) {
+                # Last resort: run exactly as stored via cmd
+                Write-Log "Exe path '$exe' not found for $($app.Name), running raw command via cmd." "WARN"
+                Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
+            }
+            elseif ($exe -match "msiexec\.exe") {
+                # MSI: make sure it is quiet
+                if ($args -notmatch "/quiet" -and $args -notmatch "/qn") {
+                    $args = "$args /quiet /norestart"
+                }
+                Start-Process -FilePath $exe -ArgumentList $args -Wait -WindowStyle Hidden
+            }
+            else {
+                # Non-MSI: try to make silent if not already
+                if ($args -notmatch "/S" -and
+                    $args -notmatch "/silent" -and
+                    $args -notmatch "/verysilent" -and
+                    $args -notmatch "/quiet")
+                {
+                    $args = ($args + " /S").Trim()
+                }
+
+                Start-Process -FilePath $exe -ArgumentList $args -Wait -WindowStyle Hidden
+            }
+
+            Write-Log "Uninstall completed for $($app.Name)"
+        }
+        catch {
+            $msg = $_.Exception.Message
+            Write-Log "Uninstall failed for $($app.Name): $msg" "ERROR"
+            $failures += $app.Name
+        }
+    }
+
+    # 5. Refresh both lists after uninstall
+    Refresh-InstalledApps
+    Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+
+    Set-Status "Idle" 0 $false
+
+    # 6. Only show a popup if there were actual failures
+    if ($failures.Count -gt 0) {
+        $failedNames = ($failures -join ", ")
+        [System.Windows.MessageBox]::Show(
+            "Some apps could not be uninstalled:`n`n$failedNames`n`nCheck the log at $LogFile for details.",
+            "Apps",
+            'OK',
+            'Warning'
+        ) | Out-Null
+    }
+})
+
+# Install grid: per-row Install button with bulk support
+$InstallGrid.AddHandler(
+    [System.Windows.Controls.Button]::ClickEvent,
+    [System.Windows.RoutedEventHandler] {
+        param($sender, $e)
+
+        $button = $e.OriginalSource
+        if (-not ($button -is [System.Windows.Controls.Button])) { return }
+
+        $row = $button.DataContext
+        if (-not $row) { return }
+
+        # Look for ticked rows in the bottom grid
+        $ticked = $Global:InstallAppsCollection | Where-Object { $_.IsSelected }
+
+        if ($ticked -and $ticked.Count -gt 0) {
+            # Ensure the clicked row is also included in bulk if not already
+            if (-not $row.IsSelected) {
+                $row.IsSelected = $true
+            }
+
+            Install-SelectedCommonApps -Collection $Global:InstallAppsCollection -Grid $InstallGrid
+        }
+        else {
+            # No ticks: single app install
+            Install-AppWithWinget -AppRow $row -InstallGrid $InstallGrid
+
+            # Rebuild list so status reflects current state
+            Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+        }
+    }
+)
+
+
+# Initialise install list and auto-scan apps when the window loads
+Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
+
+$window.Add_Loaded({
+    try {
+        Refresh-InstalledApps
+    } catch {
+        Write-Log "Error during initial app scan: $($_.Exception.Message)" "ERROR"
+        Set-Status "Error during initial app scan" 0 $false
+        [System.Windows.MessageBox]::Show(
+            "There was an error while scanning installed apps on load:`n`n$($_.Exception.Message)`n`n" +
+            "Check the log at $LogFile for more details.",
+            "Quinn Optimiser Toolkit",
+            'OK',
+            'Error'
+        ) | Out-Null
+    }
+})
+
+# ------------------------------
+# Run selected actions
+# ------------------------------
+$RunButton.Add_Click({
+    $advancedFlags = @()
+    if ($CbAdvProfiles.IsChecked)    { $advancedFlags += "Old profile removal" }
+    if ($CbAdvRestore.IsChecked)     { $advancedFlags += "Aggressive restore/log clean" }
+    if ($CbAdvDeepCache.IsChecked)   { $advancedFlags += "Deep cache cleanup" }
+    if ($CbAdvNet.IsChecked)         { $advancedFlags += "Network tweaks" }
+    if ($CbAdvIPv6.IsChecked)        { $advancedFlags += "Disable IPv6" }
+    if ($CbAdvTeredo.IsChecked)      { $advancedFlags += "Disable Teredo / 6to4" }
+    if ($CbAdvServices.IsChecked)    { $advancedFlags += "Service optimisation" }
+    if ($CbAdvSearchIndex.IsChecked) { $advancedFlags += "Search indexing changes" }
+
+    if ($advancedFlags.Count -gt 0) {
+        $msg = "You have enabled advanced options:`n`n- " + ($advancedFlags -join "`n- ") + "`n`nThese are higher risk. Continue?"
+        $res = [System.Windows.MessageBox]::Show($msg, "Advanced options", 'YesNo', 'Warning')
+        if ($res -ne 'Yes') { return }
+    }
+
+    Set-Status "Running selected actions..." 0 $true
+    Write-Log "Run button pressed."
+
+    try {
+        $step = 0
+        $bools = @(
+            $CbCleanWU,$CbCleanDO,$CbTemp,$CbWinSxS,$CbWinOld,$CbLogs,
+            $CbT_StartMenuRec,$CbT_SuggestedApps,$CbT_Widgets,$CbT_News,
+            $CbT_BackgroundApps,$CbT_Animations,$CbT_Tips,$CbT_AdId,$CbT_Feedback,
+            $CbT_Telemetry,$CbT_MeetNow,$CbT_Cortana,$CbT_StockApps,$CbT_StartupSound,
+            $CbT_SnapAssist,$CbT_MouseAccel,$CbT_HiddenFiles,$CbT_VerboseLogon,
+            $CbT_GameDVR,$CbT_AppReinstall,
+            $CbAdvProfiles,$CbAdvRestore,$CbAdvDeepCache,$CbAdvNet,$CbAdvIPv6,$CbAdvTeredo,$CbAdvServices,$CbAdvSearchIndex
+        )
+
+        $maxSteps = ($bools | Where-Object { $_.IsChecked }).Count
+        if ($maxSteps -lt 1) { $maxSteps = 1 }
+
+        # Cleaning
+        if ($CbCleanWU.IsChecked)   { $step++; Set-Status "Cleaning Windows Update cache..." ([int](($step/$maxSteps)*100)) $true; Action-CleanWindowsUpdateCache }
+        if ($CbCleanDO.IsChecked)   { $step++; Set-Status "Cleaning Delivery Optimisation cache..." ([int](($step/$maxSteps)*100)) $true; Action-CleanDeliveryOptimisation }
+        if ($CbTemp.IsChecked)      { $step++; Set-Status "Clearing temp folders..." ([int](($step/$maxSteps)*100)) $true; Action-ClearTempFolders }
+        if ($CbWinSxS.IsChecked)    { $step++; Set-Status "Running WinSxS safe cleanup..." ([int](($step/$maxSteps)*100)) $true; Action-WinSxSSafeCleanup }
+        if ($CbWinOld.IsChecked)    { $step++; Set-Status "Removing Windows.old (if present)..." ([int](($step/$maxSteps)*100)) $true; Action-RemoveWindowsOld }
+        if ($CbLogs.IsChecked)      { $step++; Set-Status "Clearing logs, dumps and old restore points..." ([int](($step/$maxSteps)*100)) $true; Action-RemoveDumpsAndLogs }
+
+        # Tweaks
+        if ($CbT_StartMenuRec.IsChecked)   { $step++; Set-Status "Tweaking Start menu recommendations..." ([int](($step/$maxSteps)*100)) $true; Action-TweakStartMenuRecommendations }
+        if ($CbT_SuggestedApps.IsChecked)  { $step++; Set-Status "Disabling suggested apps and promos..." ([int](($step/$maxSteps)*100)) $true; Action-TweakSuggestedApps }
+        if ($CbT_Widgets.IsChecked)        { $step++; Set-Status "Disabling Widgets..." ([int](($step/$maxSteps)*100)) $true; Action-TweakWidgets }
+        if ($CbT_News.IsChecked)           { $step++; Set-Status "Disabling News & Interests..." ([int](($step/$maxSteps)*100)) $true; Action-TweakNewsInterests }
+        if ($CbT_BackgroundApps.IsChecked) { $step++; Set-Status "Limiting background apps..." ([int](($step/$maxSteps)*100)) $true; Action-TweakBackgroundApps }
+        if ($CbT_Animations.IsChecked)     { $step++; Set-Status "Adjusting animations..." ([int](($step/$maxSteps)*100)) $true; Action-TweakAnimations }
+        if ($CbT_Tips.IsChecked)           { $step++; Set-Status "Disabling tips and suggestions..." ([int](($step/$maxSteps)*100)) $true; Action-TweakOnlineTips }
+        if ($CbT_AdId.IsChecked)           { $step++; Set-Status "Disabling advertising ID..." ([int](($step/$maxSteps)*100)) $true; Action-TweakAdvertisingId }
+        if ($CbT_Feedback.IsChecked)       { $step++; Set-Status "Disabling Feedback Hub prompts..." ([int](($step/$maxSteps)*100)) $true; Action-TweakFeedbackHub }
+        if ($CbT_Telemetry.IsChecked)      { $step++; Set-Status "Setting telemetry to safe level..." ([int](($step/$maxSteps)*100)) $true; Action-TweakTelemetrySafe }
+        if ($CbT_MeetNow.IsChecked)        { $step++; Set-Status "Turning off Meet Now..." ([int](($step/$maxSteps)*100)) $true; Action-TweakMeetNow }
+        if ($CbT_Cortana.IsChecked)        { $step++; Set-Status "Turning off Cortana leftovers..." ([int](($step/$maxSteps)*100)) $true; Action-TweakCortanaLeftovers }
+        if ($CbT_StockApps.IsChecked)      { $step++; Set-Status "Removing unused stock apps..." ([int](($step/$maxSteps)*100)) $true; Action-RemoveStockApps }
+        if ($CbT_StartupSound.IsChecked)   { $step++; Set-Status "Turning off startup sound..." ([int](($step/$maxSteps)*100)) $true; Action-TweakStartupSound }
+        if ($CbT_SnapAssist.IsChecked)     { $step++; Set-Status "Tweaking Snap Assist..." ([int](($step/$maxSteps)*100)) $true; Action-TweakSnapAssist }
+        if ($CbT_MouseAccel.IsChecked)     { $step++; Set-Status "Disabling mouse acceleration..." ([int](($step/$maxSteps)*100)) $true; Action-TweakMouseAcceleration }
+        if ($CbT_HiddenFiles.IsChecked)    { $step++; Set-Status "Showing hidden files and extensions..." ([int](($step/$maxSteps)*100)) $true; Action-ShowHiddenFiles }
+        if ($CbT_VerboseLogon.IsChecked)   { $step++; Set-Status "Enabling verbose logon messages..." ([int](($step/$maxSteps)*100)) $true; Action-VerboseLogon }
+        if ($CbT_GameDVR.IsChecked)        { $step++; Set-Status "Disabling GameDVR..." ([int](($step/$maxSteps)*100)) $true; Action-DisableGameDVR }
+        if ($CbT_AppReinstall.IsChecked)   { $step++; Set-Status "Disabling auto reinstall of apps..." ([int](($step/$maxSteps)*100)) $true; Action-DisableAppReinstall }
+
+        # Advanced
+        if ($CbAdvProfiles.IsChecked) {
+            $step++; Set-Status "Removing old user profiles..." ([int](($step/$maxSteps)*100)) $true
+            Action-RemoveOldProfiles
+        }
+        if ($CbAdvRestore.IsChecked) {
+            $step++; Set-Status "Aggressive restore/log clean..." ([int](($step/$maxSteps)*100)) $true
+            Action-AdvancedRestoreAggressive
+        }
+        if ($CbAdvDeepCache.IsChecked) {
+            $step++; Set-Status "Deep cache cleanup..." ([int](($step/$maxSteps)*100)) $true
+            Action-AdvancedDeepCache
+        }
+        if ($CbAdvNet.IsChecked) {
+            $step++; Set-Status "Applying network tweaks..." ([int](($step/$maxSteps)*100)) $true
+            Action-AdvancedNetworkTweaks
+        }
+        if ($CbAdvIPv6.IsChecked) {
+            $step++; Set-Status "Disabling IPv6..." ([int](($step/$maxSteps)*100)) $true
+            Action-DisableIPv6
+        }
+        if ($CbAdvTeredo.IsChecked) {
+            $step++; Set-Status "Disabling Teredo / 6to4..." ([int](($step/$maxSteps)*100)) $true
+            Action-DisableTeredo
+        }
+        if ($CbAdvServices.IsChecked) {
+            $step++; Set-Status "Optimising services..." ([int](($step/$maxSteps)*100)) $true
+            Action-AdvancedServiceOptimise
+        }
+        if ($CbAdvSearchIndex.IsChecked) {
+            $step++; Set-Status "Adjusting search indexing..." ([int](($step/$maxSteps)*100)) $true
+            Action-AdvancedSearchIndex
+        }
+
+        Set-Status "Finished" 100 $false
+        $SummaryText.Text = Get-SystemSummaryText
+        [System.Windows.MessageBox]::Show("All selected actions have finished. Check $LogFile for details.", "Quinn Optimiser Toolkit", 'OK', 'Information') | Out-Null
+    }
+    catch {
+        Write-Log "Error during run: $($_.Exception.Message)" "ERROR"
+        Set-Status "Error: $($_.Exception.Message)" 0 $false
+        [System.Windows.MessageBox]::Show("Something went wrong, check the log for details.", "Error", 'OK', 'Error') | Out-Null
+    }
+})
+
+# ------------------------------
+# Show window
+# ------------------------------
+$null = $window.ShowDialog()
+Write-Log "===== Quinn Optimiser Toolkit closed ====="
