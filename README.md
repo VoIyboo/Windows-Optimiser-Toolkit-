@@ -1,133 +1,96 @@
 Quinn Optimiser Toolkit
 
-A modular Windows optimisation and IT utility suite built in PowerShell + WPF.
+A modular Windows optimisation and IT utility suite built in PowerShell and WPF.
 
 ⚠️ Project Status
 
-The toolkit is actively in development.
-V1 and V2 are complete, and V3 is currently being built.
-The GitHub repository does not yet contain all features, and many modules are placeholders or under construction.
+The toolkit is actively in development. V1 and V2 are complete, and V3 began rolling out, however a recent update pushed the UI and app engine a bit too far. V3 broke harder than expected, so the project has been rolled back to the stable V2.7 codebase.
 
-Please treat the project as an evolving tool rather than a finished product.
+Work is currently underway to restore the GitHub structure, fix the app load and crash behaviour, and rebuild the V3 features more safely and modularly.
+
+Treat the project as evolving and experimental while these repairs are in progress.
 
 🧩 Project Overview
 
-The Quinn Optimiser Toolkit started as a simple Windows cleanup script and has grown into a multi module, UI based optimisation suite designed for IT professionals.
-It focuses on:
+The Quinn Optimiser Toolkit started as a simple Windows cleanup script and has grown into a multi module, UI driven optimisation suite designed for IT professionals. It focuses on:
 
 • System cleanups
 • Debloating
-• App installation & removal
+• App installation and removal
 • Windows performance tweaks
 • System health dashboards
-• Safe/Advanced modes
+• Safe and Advanced modes
 • Logging
-• Modular design for future features
+• Modular design for future enhancements
 
-Long-term, the goal is to create an all in one IT support utility.
+Long term, the goal is to create an all in one IT support utility.
 
 ✅ Version Breakdown
-V1 Core Script (Completed)
 
-The first version was a single PowerShell script that performed the basics:
+V1
+Core Script (Completed)
 
-• Clean Windows Update cache
-• Clean Delivery Optimisation cache
-• Clear temp folders
+The first version was a single PowerShell script focused on safe cleanups:
+
+• Windows Update cache
+• Delivery Optimisation cache
+• Temp folders
 • WinSxS safe cleanup
-• Remove Windows.old (if present)
-• Remove crash dumps, memory dumps and logs
-• Clean old restore points
+• Windows.old removal
+• Dump and log removal
+• Old restore point cleanup
 
-V1 had no UI, no modules and no app intelligence.
-It was the foundation that proved the idea worked.
+V1 had no UI, no modules and no app logic. It proved the concept worked.
 
-V2 UI + Modular System (Completed)
+V2
+UI and Modular System (Completed)
 
-V2 introduced a full WPF-powered UI and broke the logic into separate modules.
-This release focused on usability and structure.
+V2 introduced a full WPF UI and separated logic into modules. This made the toolkit a proper application.
 
-Main changes:
+Key features:
 
 • Tabs for Cleaning, Tweaks, Apps and Advanced
-• Checkbox-driven UI
+• Checkbox UI
 • Logging system
-• Risk colour coding (green, amber, red)
-• App scanning and uninstall logic
+• Risk colour coding
+• App scan and uninstall logic
 • Basic Windows tweaks
-• Loading indicators and better UX
-• Modular file layout in preparation for GitHub expansion
+• Loading indicators
+• Cleaner structure for GitHub
 
-V2 is the point where the toolkit became a real application rather than a script.
+V3
+Smart Toolkit Upgrade (Rolled Back – Under Repair)
 
-V3 Smart Toolkit Upgrade (In Development)
+V3 is where the toolkit attempted a major leap: dashboards, health analytics, preset modes, deeper app intelligence and theming.
 
-This is the current work in progress.
+The ideas stay, but the build became unstable and caused app crashes. Because of this:
 
-Key goals for V3:
+• V3 has been rolled back to stable V2.7
+• The GitHub repository is being restored
+• The app structure is being fixed
+• V3 modules will be rebuilt more safely and piece by piece
 
-System Health Dashboard
+V4
+Imaging and Deployment Module (Planning Stage)
 
-• CPU, RAM and disk usage
-• Largest apps and folders
-• Temp size
-• Recommended actions
+A future concept focusing on IT admin imaging features:
 
-Preset Optimisation Modes
+• Sysprep preparation
+• Capture to WIM
+• Export to USB or external media
+• Optional WinPE workflows
+• Heavy safeguards
 
-• Safe
-• Performance
-• Privacy
-• Full debloat (Advanced only)
-
-App Intelligence Improvements
-
-• Sort and filter apps
-• Last used detection
-• Disk impact
-• Smarter uninstall recommendations
-
-Theme Support
-
-• Light/dark modes
-• Accent colours
-
-Advanced Features
-
-• Startup program optimiser
-• Quick action utilities (flush DNS, restart explorer, etc)
-• Admin rights checker
-• Undo/restore panel
-• Optional scheduled maintenance
-
-V3 is focused on making the toolkit smarter, more visual, and closer to a professional IT management tool.
-
-V4 Imaging & Deployment Module (Planning Stage)
-
-This is a future concept, not yet started.
-
-V4 aims to introduce an advanced IT deployment feature, including:
-
-• Safe Sysprep preparation for reference images
-• Capturing Windows installs into WIMs
-• Exporting to USB or external media
-• Optional deployment guidance using WinPE
-• Heavy warnings, admin checks and safe-guards
-
-This module will be explicitly for IT admins, not casual users.
+This is not started yet.
 
 🚧 Important Notes
 
-• The GitHub repo is not complete yet
-• Many modules are missing or empty (on purpose)
-• UI, structure and folder layout may change
-• V3 features are being added gradually
-• V4 is future-planned only nothing implemented yet
-
-Expect breakage, experimental code and ongoing changes.
+• V3 is temporarily disabled while repairs happen
+• V2.7 is the stable and current live version
+• GitHub is being rebuilt
+• Expect breakage, rewrites and placeholders during restoration
+• V4 is future planning only
 
 💡 Contribution / Feedback
 
-This project is currently a solo build.
-Feature requests, issues and ideas are welcome once the repo stabilises.
-Right now, the priority is completing the V3 foundations.
+This is a solo build for now. Real contributions and feature requests will open once V3 stabilises again.
