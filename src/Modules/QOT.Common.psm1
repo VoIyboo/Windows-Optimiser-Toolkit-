@@ -1,22 +1,32 @@
 # QOT.Common.psm1
 
+# Reuse the existing core logging module
+Using module ..\Core\Logging.psm1
+
+# Where QOT should store logs etc
 $script:ToolkitRoot = "C:\IT"
-if (-not (Test-Path $script:ToolkitRoot)) {
-    New-Item -Path $script:ToolkitRoot -ItemType Directory -Force | Out-Null
-}
-$script:LogFile = Join-Path $script:ToolkitRoot "QuinnOptimiserToolkit.log"
 
-function Get-QOTLogPath {
-    $script:LogFile
+function Initialize-QOTCommon {
+    if (-not (Test-Path $script:ToolkitRoot)) {
+        New-Item -Path $script:ToolkitRoot -ItemType Directory -Force | Out-Null
+    }
+
+    # Point the core logger at the same root
+    Set-QLogRoot -Root $script:ToolkitRoot
 }
 
+# Thin wrapper so V3 code can still call Write-Log
 function Write-Log {
     param(
         [string]$Message,
         [string]$Level = "INFO"
     )
-    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    Add-Content -Path $script:LogFile -Value ("[{0}] [{1}] {2}" -f $timestamp, $Level, $Message)
+    Write-QLog -Message $Message -Level $Level
+}
+
+function Get-QOTLogPath {
+    if (-not $Global:QOT_LogRoot) { return $null }
+    Join-Path $Global:QOT_LogRoot "QuinnOptimiserToolkit.log"
 }
 
 function Set-Status {
@@ -56,5 +66,8 @@ function Get-SystemSummaryText {
     "C: $usedGB GB used / $freeGB GB free ($totalGB GB total, $freePct% free)"
 }
 
-Export-ModuleMember -Function Write-Log, Set-Status, Get-SystemSummaryText, Get-QOTLogPath
-
+Export-ModuleMember -Function Initialize-QOTCommon,
+                               Write-Log,
+                               Set-Status,
+                               Get-SystemSummaryText,
+                               Get-QOTLogPath
