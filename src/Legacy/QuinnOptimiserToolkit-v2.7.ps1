@@ -110,7 +110,7 @@ function Get-InstalledApps {
     )
     $apps = foreach ($path in $paths) {
         Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
-            if (-not $_.DisplayName) { return }
+            if (-not $_.DisplayName) { continue }
 
             $isSystem = $false
             if ($_.SystemComponent -eq 1) { $isSystem = $true }
