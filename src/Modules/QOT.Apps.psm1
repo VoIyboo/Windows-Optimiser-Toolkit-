@@ -23,6 +23,7 @@ function Get-InstalledApps {
         "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
         "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
     )
+
     $apps = foreach ($path in $paths) {
         Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
             if (-not $_.DisplayName) { continue }
@@ -34,29 +35,31 @@ function Get-InstalledApps {
             if ($_.Publisher -match "Microsoft|Intel|NVIDIA|Realtek|AMD") { $isSystem = $true }
 
             $sizeMB = $null
-            if ($_.EstimatedSize) { $sizeMB = [math]::Round($_.EstimatedSize / 1024, 1) }
+            if ($_.EstimatedSize) {
+                $sizeMB = [math]::Round($_.EstimatedSize / 1024, 1)
+            }
 
-$installDate = $null
-if ($_.InstallDate -and $_.InstallDate -match "^\d{8}$") {
-    try {
-        $parsed = $null
-        if ([datetime]::TryParseExact(
-                $_.InstallDate,
-                "yyyyMMdd",
-                $null,
-                [System.Globalization.DateTimeStyles]::None,
-                [ref]$parsed
-            )) {
-            $installDate = $parsed
-        }
-        else {
-            Write-Log "Invalid InstallDate '$($_.InstallDate)' for $($_.DisplayName)" "WARN"
-        }
-    } catch {
-        Write-Log "Error parsing InstallDate '$($_.InstallDate)' for $($_.DisplayName): $($_.Exception.Message)" "WARN"
-    }
-}
-
+            $installDate = $null
+            if ($_.InstallDate -and $_.InstallDate -match "^\d{8}$") {
+                try {
+                    $parsed = $null
+                    if ([datetime]::TryParseExact(
+                            $_.InstallDate,
+                            "yyyyMMdd",
+                            $null,
+                            [System.Globalization.DateTimeStyles]::None,
+                            [ref]$parsed
+                        )) {
+                        $installDate = $parsed
+                    }
+                    else {
+                        Write-Log "Invalid InstallDate '$($_.InstallDate)' for $($_.DisplayName)" "WARN"
+                    }
+                }
+                catch {
+                    Write-Log "Error parsing InstallDate '$($_.InstallDate)' for $($_.DisplayName): $($_.Exception.Message)" "WARN"
+                }
+            }
 
             $isWhitelisted = $false
             foreach ($pattern in $Global:AppWhitelistPatterns) {
@@ -64,17 +67,18 @@ if ($_.InstallDate -and $_.InstallDate -match "^\d{8}$") {
             }
 
             [PSCustomObject]@{
-                Name           = $_.DisplayName
-                Publisher      = $_.Publisher
-                SizeMB         = $sizeMB
-                InstallDate    = $installDate
-                IsSystem       = $isSystem
-                IsWhitelisted  = $isWhitelisted
-                UninstallString= $_.UninstallString
-                LastUsed       = $installDate
+                Name            = $_.DisplayName
+                Publisher       = $_.Publisher
+                SizeMB          = $sizeMB
+                InstallDate     = $installDate
+                IsSystem        = $isSystem
+                IsWhitelisted   = $isWhitelisted
+                UninstallString = $_.UninstallString
+                LastUsed        = $installDate
             }
         }
     }
+
     $apps | Sort-Object Name -Unique
 }
 
