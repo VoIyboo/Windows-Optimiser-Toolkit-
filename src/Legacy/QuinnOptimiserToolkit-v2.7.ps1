@@ -1078,7 +1078,19 @@ else {
 Initialise-InstallAppsList -Collection $Global:InstallAppsCollection
 
 $window.Add_Loaded({
-    Refresh-InstalledApps
+    try {
+        Refresh-InstalledApps
+    } catch {
+        Write-Log "Error during initial app scan: $($_.Exception.Message)" "ERROR"
+        Set-Status "Error during initial app scan" 0 $false
+        [System.Windows.MessageBox]::Show(
+            "There was an error while scanning installed apps on load:`n`n$($_.Exception.Message)`n`n" +
+            "Check the log at $LogFile for more details.",
+            "Quinn Optimiser Toolkit",
+            'OK',
+            'Error'
+        ) | Out-Null
+    }
 })
 
 # ------------------------------
