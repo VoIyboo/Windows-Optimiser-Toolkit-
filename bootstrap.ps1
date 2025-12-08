@@ -3,16 +3,16 @@
 
 $ErrorActionPreference = "Stop"
 
-# Import Config first (so we know all paths)
-Import-Module "src\Core\Config.psm1" -Force # Quinn said we'll change this line later
+# Import Config first so paths are available
+Import-Module "src\Core\Config.psm1" -Force
 
-# Prepare folders
+# Prepare folders and base paths
 Initialize-QOTConfig
 
 # Import Logging now that folders exist
 Import-Module "src\Core\Logging.psm1" -Force
 
-# Configure logging root
+# Configure logging root under ProgramData
 $logRoot = Get-QOTPath -Name Logs
 Set-QLogRoot -Root $logRoot
 
@@ -21,9 +21,18 @@ Start-QLogSession
 Write-QLog "Bootstrap initialised. Version: $(Get-QOTVersion)"
 Write-QLog "Toolkit root resolved as: $(Get-QOTRoot)"
 
-# ------------------------------------------------
-# PLACEHOLDER:
-# Later this will call the Intro splash loader
-# ------------------------------------------------
+# ------------------------------------------
+# Hand off to Intro.ps1
+# ------------------------------------------
+$root      = Get-QOTRoot
+$introPath = Join-Path $root "src\Intro\Intro.ps1"
 
-Write-QLog "Bootstrap complete. (Intro screen will load once ready)"
+if (-not (Test-Path $introPath)) {
+    Write-QLog "Intro.ps1 not found at path: $introPath" "ERROR"
+    throw "Intro.ps1 not found at path: $introPath"
+}
+
+Write-QLog "Launching Intro.ps1 at: $introPath"
+& $introPath
+
+Write-QLog "Intro.ps1 completed. Bootstrap exiting."
