@@ -4,13 +4,13 @@
 $ErrorActionPreference = "Stop"
 
 # Import Config first so paths are available
-Import-Module "src\Core\Config.psm1" -Force
+Import-Module "src\Core\Config\Config.psm1"  -Force
 
 # Prepare folders and base paths
 Initialize-QOTConfig
 
 # Import Logging now that folders exist
-Import-Module "src\Core\Logging.psm1" -Force
+Import-Module "src\Core\Logging\Logging.psm1" -Force
 
 # Configure logging root under ProgramData
 $logRoot = Get-QOTPath -Name Logs
