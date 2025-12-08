@@ -1,49 +1,47 @@
 # Intro.ps1
-# Minimal splash startup for the Quinn Optimiser Toolkit
+# Entry point used after bootstrap to start the Quinn Optimiser Toolkit
+
+param(
+    [string]$Mode = "Normal"
+)
 
 $ErrorActionPreference = "Stop"
 
-# Make sure WPF assemblies are available
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+# ------------------------------
+# Load core modules
+# ------------------------------
+Import-Module "$PSScriptRoot\..\Core\Config.psm1"  -Force
+Import-Module "$PSScriptRoot\..\Core\Logging.psm1" -Force
+Import-Module "$PSScriptRoot\..\Core\Engine.psm1"  -Force
+# Later we will also import the splash UI here
+# Import-Module "$PSScriptRoot\Splash.UI.psm1" -Force
 
-# Import core helpers
-Import-Module "src\Core\Config.psm1"   -Force
-Import-Module "src\Core\Logging.psm1" -Force
-Import-Module "src\Intro\Splash.UI.psm1" -Force
+# ------------------------------
+# Ensure config + logging are ready
+# ------------------------------
+Initialize-QOTConfig
 
-# Resolve paths
-$rootPath    = Get-QOTRoot
-$splashXaml  = Join-Path $rootPath "src\Intro\Splash.xaml"
+$logRoot = Get-QOTPath -Name Logs
+Set-QLogRoot -Root $logRoot
+Start-QLogSession
 
-Write-QLog "Intro starting. Splash XAML at: $splashXaml"
+Write-QLog "Intro started. Mode: $Mode"
 
-# Create the splash window
-$splash = New-QOTSplashWindow -Path $splashXaml
+# ------------------------------
+# Hand off to the engine
+# ------------------------------
+try {
+    Write-QLog "Initialising engine from Intro."
+    Initialize-QOTEngine
 
-# Set initial status and show it
-Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
-Update-QOTSplashProgress -Window $splash -Value 10
+    # Later: show splash + main WPF window here.
+    # For now we just call Start-QOTMain so the wiring is in place.
+    Write-QLog "Calling Start-QOTMain from Intro."
+    Start-QOTMain -Mode $Mode
 
-# ShowDialog keeps this script in control until the window is closed
-# but we will drive a few updates first
-[void]$splash.Show()
-
-Start-Sleep -Milliseconds 400
-Update-QOTSplashStatus   -Window $splash -Text "Preparing core modules..."
-Update-QOTSplashProgress -Window $splash -Value 40
-
-Start-Sleep -Milliseconds 400
-Update-QOTSplashStatus   -Window $splash -Text "Getting things ready..."
-Update-QOTSplashProgress -Window $splash -Value 75
-
-Start-Sleep -Milliseconds 400
-Update-QOTSplashStatus   -Window $splash -Text "Almost there..."
-Update-QOTSplashProgress -Window $splash -Value 100
-
-Start-Sleep -Milliseconds 300
-
-# Later this is where we will open the main window
-Write-QLog "Intro finished. (Main window hook will go here later)"
-
-$splash.Close()
-
+    Write-QLog "Intro completed successfully."
+}
+catch {
+    Write-QLog "Intro failed: $($_.Exception.Message)" "ERROR"
+    throw
+}
