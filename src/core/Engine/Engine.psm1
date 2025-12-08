@@ -166,18 +166,41 @@ Export-ModuleMember -Function `
     Invoke-QOTTweaksRun, `
     Invoke-QOTAdvancedRun
 
-
-    # Import feature modules so the engine knows about them
-Import-Module "$PSScriptRoot\..\TweaksAndCleaning\CleaningAndMain\CleaningAndMain.psm1" -Force
-Import-Module "$PSScriptRoot\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
-Import-Module "$PSScriptRoot\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"       -Force
-Import-Module "$PSScriptRoot\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"   -Force
-
 # Import feature modules so the engine knows about them
 Import-Module "$PSScriptRoot\..\TweaksAndCleaning\CleaningAndMain\CleaningAndMain.psm1" -Force
 Import-Module "$PSScriptRoot\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
 Import-Module "$PSScriptRoot\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"       -Force
 Import-Module "$PSScriptRoot\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"   -Force
 Import-Module "$PSScriptRoot\..\UI\MainWindow.UI.psm1"                                  -Force
+
+function Start-QOTMain {
+    param(
+        [string]$Mode = 'Normal'
+    )
+
+    Write-QLog "Start-QOTMain called. Mode: $Mode"
+
+    # Make sure engine is ready
+    Initialize-QOTEngine
+
+    # Try to update the status text in the UI (if loaded)
+    try {
+        Set-QOTSummary "System ready. Engine initialised."
+    } catch { }
+
+    # Open the main window
+    try {
+        Show-QOTMainWindow
+    } catch {
+        Write-QLog "Failed to open main window: $($_.Exception.Message)" "ERROR"
+        [System.Windows.MessageBox]::Show(
+            "Quinn Optimiser Toolkit could not open the main window.`n`n" +
+            "Check the log for more details.",
+            "Quinn Optimiser Toolkit",
+            'OK',
+            'Error'
+        ) | Out-Null
+    }
+}
 
 
