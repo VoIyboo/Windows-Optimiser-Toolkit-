@@ -68,9 +68,12 @@ function Start-QOTMain {
     # Make sure engine is ready
     Initialize-QOTEngine
 
-    # Placeholder for now
-    # Intro will later call this and then hand off to the WPF main window
+    # Hand off to the main WPF window
+    Write-QLog "Launching main WPF window..."
+    Start-QOTMainWindow
+    Write-QLog "Main WPF window closed."
 }
+
 
 Export-ModuleMember -Function `
     Get-QOTModuleRoot, `
