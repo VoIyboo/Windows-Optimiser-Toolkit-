@@ -1,40 +1,74 @@
 # MainWindow.UI.psm1
-# Minimal stub for building the main application window
+# WPF main window loader for the Quinn Optimiser Toolkit
+
+# Keep references to the window and key controls inside this module
+$script:MainWindow   = $null
+$script:StatusLabel  = $null
+$script:SummaryText  = $null
+$script:MainProgress = $null
+$script:RunButton    = $null
 
 function New-QOTMainWindow {
     param(
-        [string]$Path
+        [string]$XamlPath
     )
 
-    if (-not (Test-Path $Path)) {
-        throw "Main window XAML not found at: $Path"
+    if (-not (Test-Path $XamlPath)) {
+        throw "Main window XAML not found at path: $XamlPath"
     }
 
-    # Load WPF assemblies
-    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+    Write-Verbose "Loading main window XAML from $XamlPath"
 
-    # Read the XAML file
-    $xaml = Get-Content $Path -Raw
+    $xamlText = Get-Content -Path $XamlPath -Raw
+    $xml      = [xml]$xamlText
+    $reader   = New-Object System.Xml.XmlNodeReader $xml
+    $window   = [Windows.Markup.XamlReader]::Load($reader)
 
-    try {
-        $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
-        $window = [Windows.Markup.XamlReader]::Load($reader)
-        return $window
-    } catch {
-        throw "Failed to load MainWindow.xaml: $($_.Exception.Message)"
-    }
+    return $window
 }
 
 function Initialize-QOTMainWindow {
-    param(
-        [System.Windows.Window]$Window
-    )
+    # XAML lives in the same folder as this module
+    $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
 
-    # For now this does nothing.
-    # Later this will bind buttons, grids, status bars, etc.
+    $window = New-QOTMainWindow -XamlPath $xamlPath
 
-    Write-Output "Main window initialised (placeholder)."
+    # Cache controls we care about
+    $script:MainWindow   = $window
+    $script:StatusLabel  = $window.FindName("StatusLabel")
+    $script:SummaryText  = $window.FindName("SummaryText")
+    $script:MainProgress = $window.FindName("MainProgress")
+    $script:RunButton    = $window.FindName("RunButton")
+
+    # Simple initial state
+    if ($script:StatusLabel) {
+        $script:StatusLabel.Text = "Idle"
+    }
+
+    if ($script:MainProgress) {
+        $script:MainProgress.Minimum = 0
+        $script:MainProgress.Maximum = 100
+        $script:MainProgress.Value   = 0
+    }
+
+    # For now the Run button just updates the status text.
+    # Later we will wire this into the engine.
+    if ($script:RunButton -and $script:StatusLabel) {
+        $script:RunButton.Add_Click({
+            $script:StatusLabel.Text = "Run clicked (engine wiring coming soon)"
+        })
+    }
+
+    return $script:MainWindow
 }
 
-Export-ModuleMember -Function New-QOTMainWindow, Initialize-QOTMainWindow
+function Start-QOTMainWindow {
+    # Ensure the window is initialised, then show it modally
+    $window = Initialize-QOTMainWindow
+    [void]$window.ShowDialog()
+}
 
+Export-ModuleMember -Function `
+    New-QOTMainWindow, `
+    Initialize-QOTMainWindow, `
+    Start-QOTMainWindow
