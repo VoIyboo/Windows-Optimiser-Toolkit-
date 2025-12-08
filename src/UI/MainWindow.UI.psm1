@@ -68,7 +68,30 @@ function Start-QOTMainWindow {
     [void]$window.ShowDialog()
 }
 
+function Set-QOTStatus {
+    param([string]$Text)
+
+    if ($script:StatusLabel) {
+        $script:StatusLabel.Dispatcher.Invoke({
+            $script:StatusLabel.Text = $Text
+        })
+    }
+}
+
+function Set-QOTSummary {
+    param([string]$Text)
+
+    if ($script:SummaryText) {
+        $script:SummaryText.Dispatcher.Invoke({
+            $script:SummaryText.Text = $Text
+        })
+    }
+}
+
 Export-ModuleMember -Function `
     New-QOTMainWindow, `
     Initialize-QOTMainWindow, `
-    Start-QOTMainWindow
+    Start-QOTMainWindow, `
+    Set-QOTStatus, `
+    Set-QOTSummary
+
