@@ -42,6 +42,20 @@ function Initialize-QOTMainWindow {
     $script:MainProgress = $window.FindName("MainProgress")
     $script:RunButton    = $window.FindName("RunButton")
 
+    # Apps tab controls
+    $BtnScanApps      = $window.FindName("BtnScanApps")
+    $BtnUninstallApps = $window.FindName("BtnUninstallSelected")
+    $AppsGrid         = $window.FindName("AppsGrid")
+    $InstallGrid      = $window.FindName("InstallGrid")
+
+    if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
+        Initialize-QOTAppsUI -BtnScanApps $BtnScanApps `
+                             -BtnUninstallSelected $BtnUninstallApps `
+                             -AppsGrid $AppsGrid `
+                             -InstallGrid $InstallGrid
+    }
+
+
     # Simple initial state
     if ($script:StatusLabel) {
         $script:StatusLabel.Text = "Idle"
