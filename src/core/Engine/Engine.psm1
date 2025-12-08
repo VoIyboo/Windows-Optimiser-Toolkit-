@@ -162,3 +162,19 @@ Export-ModuleMember -Function `
     Invoke-QOTCleaningRun, `
     Invoke-QOTTweaksRun, `
     Invoke-QOTAdvancedRun
+
+
+    # Import feature modules so the engine knows about them
+Import-Module "$PSScriptRoot\..\TweaksAndCleaning\CleaningAndMain\CleaningAndMain.psm1" -Force
+Import-Module "$PSScriptRoot\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
+Import-Module "$PSScriptRoot\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"       -Force
+Import-Module "$PSScriptRoot\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"   -Force
+
+# Import feature modules so the engine knows about them
+Import-Module "$PSScriptRoot\..\TweaksAndCleaning\CleaningAndMain\CleaningAndMain.psm1" -Force
+Import-Module "$PSScriptRoot\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
+Import-Module "$PSScriptRoot\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"       -Force
+Import-Module "$PSScriptRoot\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"   -Force
+Import-Module "$PSScriptRoot\..\UI\MainWindow.UI.psm1"                                  -Force
+
+
