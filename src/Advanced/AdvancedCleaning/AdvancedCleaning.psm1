@@ -5,7 +5,7 @@
 # ------------------------------
 # Import core logging
 # ------------------------------
-Import-Module "$PSScriptRoot\..\..\Core\Logging.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force
 
 # ------------------------------
 # Old user profiles
