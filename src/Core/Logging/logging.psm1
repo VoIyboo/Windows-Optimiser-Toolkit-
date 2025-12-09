@@ -1,68 +1,69 @@
 # Logging.psm1
-# Centralised logging utility for the Quinn Optimiser Toolkit
+# Simple logging utilities for Quinn Optimiser Toolkit
 
-# Module-level variables
-$script:QLogRoot = $null
+# Module-scoped variables
+$script:QLogRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
 $script:QLogFile = $null
-$script:QLogSessionActive = $false
 
-# Set the root folder where logs will be written
 function Set-QLogRoot {
-    param (
+    param(
         [string]$Root
     )
+
+    if (-not $Root) {
+        throw "Set-QLogRoot: Root path cannot be empty."
+    }
 
     if (-not (Test-Path $Root)) {
         New-Item -Path $Root -ItemType Directory -Force | Out-Null
     }
 
     $script:QLogRoot = $Root
-    $script:QLogFile = Join-Path $script:QLogRoot "QuinnOptimiserToolkit.log"
 }
 
-# Start a new logging session
 function Start-QLogSession {
-    if (-not $script:QLogFile) {
-        throw "QLog root not set. Call Set-QLogRoot first."
+    param(
+        [string]$Prefix = "QuinnOptimiserToolkit"
+    )
+
+    if (-not $script:QLogRoot) {
+        $script:QLogRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
+        if (-not (Test-Path $script:QLogRoot)) {
+            New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
+        }
     }
 
-    $script:QLogSessionActive = $true
-    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    Add-Content -Path $script:QLogFile -Value "===== Logging session started at $timestamp ====="
+    $timestamp = (Get-Date).ToString("yyyyMMdd_HHmmss")
+    $fileName  = "{0}_{1}.log" -f $Prefix, $timestamp
+    $script:QLogFile = Join-Path $script:QLogRoot $fileName
+
+    "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [INFO] Log session started." |
+        Out-File -FilePath $script:QLogFile -Encoding UTF8 -Force
 }
 
-# Core logging function
 function Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
     )
 
-    if (-not $script:QLogSessionActive) {
-        return
-    }
+    $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $line = "[{0}] [{1}] {2}" -f $ts, $Level, $Message
 
-    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    $line = "[{0}] [{1}] {2}" -f $timestamp, $Level, $Message
+    # Write to console (useful during dev)
+    Write-Host $line
 
-    Add-Content -Path $script:QLogFile -Value $line
-}
-
-# Allow other modules to query where logs are stored
-function Get-QLogPath {
-    param (
-        [string]$Name
-    )
-
-    switch ($Name) {
-        "Root" { return $script:QLogRoot }
-        "File" { return $script:QLogFile }
-        default { return $script:QLogRoot }
+    if ($script:QLogFile) {
+        Add-Content -Path $script:QLogFile -Value $line
     }
 }
 
-Export-ModuleMember -Function `
-    Set-QLogRoot, `
-    Start-QLogSession, `
-    Write-QLog, `
-    Get-QLogPath
+function Stop-QLogSession {
+    if ($script:QLogFile) {
+        $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        Add-Content -Path $script:QLogFile -Value "[$ts] [INFO] Log session ended."
+        $script:QLogFile = $null
+    }
+}
+
+Export-ModuleMember -Function Set-QLogRoot, Start-QLogSession, Write-QLog, Stop-QLogSession
