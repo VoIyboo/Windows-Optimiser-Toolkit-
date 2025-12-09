@@ -9,48 +9,118 @@
         Background="Transparent"
         AllowsTransparency="True"
         ShowInTaskbar="False"
-        Topmost="True">
+        Topmost="True"
+        Opacity="0">
 
-    <Border CornerRadius="20"
+    <Window.Resources>
+
+        <!-- Drop shadow for the card -->
+        <DropShadowEffect x:Key="CardShadow"
+                          Color="#000000"
+                          BlurRadius="24"
+                          ShadowDepth="0"
+                          Opacity="0.7" />
+
+        <!-- Soft glow behind the fox -->
+        <DropShadowEffect x:Key="LogoGlow"
+                          Color="#4ADE80"
+                          BlurRadius="40"
+                          ShadowDepth="0"
+                          Opacity="0.6" />
+
+        <!-- Fade-in storyboard for the whole window -->
+        <Storyboard x:Key="WindowFadeInStoryboard">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                             From="0"
+                             To="1"
+                             Duration="0:0:0.6"
+                             FillBehavior="HoldEnd" />
+        </Storyboard>
+
+        <!-- Gentle pulse for the logo -->
+        <Storyboard x:Key="LogoPulseStoryboard"
+                    RepeatBehavior="Forever"
+                    AutoReverse="True">
+            <DoubleAnimation Storyboard.TargetName="LogoImage"
+                             Storyboard.TargetProperty="RenderTransform.ScaleX"
+                             From="1.0"
+                             To="1.04"
+                             Duration="0:0:1.4"/>
+            <DoubleAnimation Storyboard.TargetName="LogoImage"
+                             Storyboard.TargetProperty="RenderTransform.ScaleY"
+                             From="1.0"
+                             To="1.04"
+                             Duration="0:0:1.4"/>
+        </Storyboard>
+
+    </Window.Resources>
+
+    <Window.Triggers>
+        <!-- Start fade-in + logo pulse when the window loads -->
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource WindowFadeInStoryboard}" />
+        </EventTrigger>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard Storyboard="{StaticResource LogoPulseStoryboard}" />
+        </EventTrigger>
+    </Window.Triggers>
+
+    <Border CornerRadius="18"
             Background="#020617"
             BorderBrush="#111827"
             BorderThickness="1"
-            Padding="24">
+            Padding="24"
+            Effect="{StaticResource CardShadow}">
+
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>      <!-- Logo area -->
+                <RowDefinition Height="Auto"/>   <!-- Status text -->
+                <RowDefinition Height="Auto"/>   <!-- Progress bar -->
+                <RowDefinition Height="16"/>     <!-- Bottom margin -->
             </Grid.RowDefinitions>
 
-            <!-- Studio Voly fox logo -->
-            <Image x:Name="FoxLogoImage"
-                   Grid.Row="0"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   Width="260"
-                   Height="260"
-                   Stretch="Uniform" />
+            <!-- Centre logo with glow -->
+            <Grid Grid.Row="0"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
 
-            <!-- Status + progress at the bottom -->
-            <StackPanel Grid.Row="1"
-                        Orientation="Vertical"
-                        Margin="0,12,0,0">
-                <TextBlock x:Name="SplashStatusText"
-                           Text="Starting Quinn Optimiser Toolkit..."
-                           Foreground="White"
-                           FontSize="14"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,4" />
+                <!-- Glow ellipse behind logo -->
+                <Ellipse Width="220"
+                         Height="220"
+                         Fill="#00000000"
+                         Effect="{StaticResource LogoGlow}" />
 
-                <ProgressBar x:Name="SplashProgressBar"
-                             Minimum="0"
-                             Maximum="100"
-                             Height="16"
-                             Width="420"
-                             HorizontalAlignment="Center"
-                             Value="10" />
-            </StackPanel>
+                <!-- Logo image -->
+                <Image x:Name="LogoImage"
+                       Width="220"
+                       Height="220"
+                       Source="pack://siteoforigin:,,,/assets/splash/studio_voly_splash.png"
+                       RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform>
+                        <ScaleTransform ScaleX="1" ScaleY="1" />
+                    </Image.RenderTransform>
+                </Image>
+            </Grid>
+
+            <!-- Status text just above the bar -->
+            <TextBlock Grid.Row="1"
+                       x:Name="SplashStatusText"
+                       Text="Starting Quinn Optimiser Toolkit..."
+                       Foreground="White"
+                       FontSize="14"
+                       HorizontalAlignment="Center"
+                       Margin="0,8,0,4" />
+
+            <!-- Progress bar at the bottom -->
+            <ProgressBar Grid.Row="2"
+                         x:Name="SplashProgressBar"
+                         Minimum="0"
+                         Maximum="100"
+                         Height="18"
+                         Width="420"
+                         HorizontalAlignment="Center"
+                         Margin="0,0,0,8" />
         </Grid>
     </Border>
 </Window>
-
