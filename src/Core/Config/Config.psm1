@@ -1,60 +1,40 @@
-# Intro.ps1
-# Entry point after bootstrap downloads the toolkit.
-# Responsible for:
-#   - Loading core modules (Config, Logging, Engine)
-#   - Initialising config + logging
-#   - Showing the splash screen, then the main window
+# Config.psm1
+# Basic configuration for Quinn Optimiser Toolkit
 
-param()
+$script:QOTConfig = $null
 
-# Make sure WPF assemblies are available
-Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase
+function Initialize-QOTConfig {
+    param(
+        [string]$RootPath
+    )
 
-# ------------------------------
-# Import core modules
-# ------------------------------
-Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
-Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
-Import-Module "$PSScriptRoot\..\Core\Engine\Engine.psm1"   -Force
+    if (-not $RootPath) {
+        # Auto-detect: go two levels up from Core\Config to the repo root
+        $RootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    }
 
-# ------------------------------
-# Initialise config
-# ------------------------------
-# bootstrap.ps1 sets $Global:QOT_Root to the extracted repo root.
-# If it exists, pass it in. Otherwise let Config auto-detect.
-if ($Global:QOT_Root) {
-    $config = Initialize-QOTConfig -RootPath $Global:QOT_Root
-}
-else {
-    $config = Initialize-QOTConfig
-}
+    $srcRoot  = Join-Path $RootPath "src"
+    $logsRoot = Join-Path $RootPath "Logs"
 
-# Point logging at the configured logs root
-if ($config -and $config.LogsRoot) {
-    Set-QLogRoot -Root $config.LogsRoot
+    # Ensure Logs folder exists
+    if (-not (Test-Path $logsRoot)) {
+        New-Item -Path $logsRoot -ItemType Directory -Force | Out-Null
+    }
+
+    $script:QOTConfig = [pscustomobject]@{
+        RootPath = $RootPath
+        SrcRoot  = $srcRoot
+        LogsRoot = $logsRoot
+    }
+
+    return $script:QOTConfig
 }
 
-Write-QLog "Intro.ps1 started. RootPath = $($config.RootPath)"
-
-# ------------------------------
-# Import splash + main window UI modules
-# ------------------------------
-Import-Module "$PSScriptRoot\Splash\Splash.UI.psm1"        -Force
-Import-Module "$PSScriptRoot\..\UI\MainWindow.UI.psm1"     -Force
-
-# ------------------------------
-# Start the app flow
-# ------------------------------
-try {
-    # Show splash, let it hand off to the main window when ready
-    Show-QOTSplash
+function Get-QOTConfig {
+    if (-not $script:QOTConfig) {
+        throw "QOT config has not been initialised. Call Initialize-QOTConfig first."
+    }
+    return $script:QOTConfig
 }
-catch {
-    Write-QLog "Error in Intro.ps1: $($_.Exception.Message)" "ERROR"
-    [System.Windows.MessageBox]::Show(
-        "Quinn Optimiser Toolkit failed to start:`n`n$($_.Exception.Message)",
-        "Quinn Optimiser Toolkit",
-        'OK',
-        'Error'
-    ) | Out-Null
-}
+
+Export-ModuleMember -Function Initialize-QOTConfig, Get-QOTConfig
