@@ -7,93 +7,108 @@ A modular Windows optimisation and IT utility suite built in PowerShell and WPF.
 
 ⚠️ Project Status
 
-The toolkit is actively in development. V1 and V2 are complete, and V3 began rolling out, however a recent update pushed the UI and app engine a bit too far. V3 broke harder than expected, so the project has been rolled back to the stable V2.7 codebase.
+The toolkit is actively in development. V1 and V2 are complete. V3 is now focused on rebuilding the UI safely, improving structure and introducing Studio Voly branding. The previous experimental V3 (dashboards, analytics etc.) pushed the codebase too far too fast, so it has been retired and moved to a future version.
 
-Work is currently underway to restore the GitHub structure, fix the app load and crash behaviour, and rebuild the V3 features more safely and modularly.
+The project has been rolled back to the stable V2.7 base while the new V3 UI and GitHub structure are rebuilt properly.
 
-Treat the project as evolving and experimental while these repairs are in progress.
+Treat the toolkit as evolving and experimental during this transition.
 
 🧩 Project Overview
 
-The Quinn Optimiser Toolkit started as a simple Windows cleanup script and has grown into a multi module, UI driven optimisation suite designed for IT professionals. It focuses on:
+The Quinn Optimiser Toolkit started as a simple Windows cleanup script and has grown into a multi module, UI driven optimisation suite for IT professionals. It focuses on:
 
 • System cleanups
 • Debloating
 • App installation and removal
 • Windows performance tweaks
-• System health dashboards
+• System health utilities
 • Safe and Advanced modes
 • Logging
-• Modular design for future enhancements
+• Modular design for future expansion
 
-Long term, the goal is to create an all in one IT support utility.
+The long term vision is an all in one IT support utility.
 
 ✅ Version Breakdown
 
-V1
-Core Script (Completed)
+V1 Core Script (Completed)
 
-The first version was a single PowerShell script focused on safe cleanups:
+The original single script that proved the concept.
 
-• Windows Update cache
-• Delivery Optimisation cache
+Included:
+
+• Windows Update cache cleanup
+• Delivery Optimisation cleanup
 • Temp folders
 • WinSxS safe cleanup
 • Windows.old removal
 • Dump and log removal
 • Old restore point cleanup
 
-V1 had no UI, no modules and no app logic. It proved the concept worked.
+No UI and no modules yet, just raw optimisation.
 
-V2
-UI and Modular System (Completed)
+V2 UI and Modular System (Completed)
 
-V2 introduced a full WPF UI and separated logic into modules. This made the toolkit a proper application.
+V2 introduced the full WPF UI and a proper modular design.
 
 Key features:
 
 • Tabs for Cleaning, Tweaks, Apps and Advanced
-• Checkbox UI
+• Checkbox based UI
 • Logging system
-• Risk colour coding
 • App scan and uninstall logic
 • Basic Windows tweaks
 • Loading indicators
-• Cleaner structure for GitHub
+• GitHub friendly layout
 
-V3
-Smart Toolkit Upgrade (Rolled Back – Under Repair)
+Stable foundation. V2.7 is the current reliable release.
 
-V3 is where the toolkit attempted a major leap: dashboards, health analytics, preset modes, deeper app intelligence and theming.
+V3 UI Rebuild and GitHub Migration (In Progress – Active Development)
 
-The ideas stay, but the build became unstable and caused app crashes. Because of this:
+The new V3 is all about strengthening the project’s structure:
 
-• V3 has been rolled back to stable V2.7
-• The GitHub repository is being restored
-• The app structure is being fixed
-• V3 modules will be rebuilt more safely and piece by piece
+• Moving all logic into a clean GitHub repository
+• Rebuilding the WPF UI to be more stable and readable
+• Introducing Studio Voly branding, style and animations
+• Improved window loading behaviour
+• Better intro screen handling
+• A cleaner file and engine layout
 
-V4
-Imaging and Deployment Module (Planning Stage)
+No new advanced logic is being added in this version.
+V3 is strictly UI, structure and branding.
 
-A future concept focusing on IT admin imaging features:
+Advanced features previously planned for V3 have been moved to V4 and beyond.
+
+V4 Smart Toolkit Upgrade (Planning Stage)
+
+This version will reintroduce the ambitious features:
+
+• Dashboard and system health analytics
+• App intelligence and scoring
+• Preset modes such as Safe, Balanced and Expert
+• Deeper Windows optimisation logic
+• More automation and background processing
+
+These features will only be built once the V3 foundation is solid.
+
+V5 Imaging and Deployment Module (Concept Stage)
+
+Future large scale capability:
 
 • Sysprep preparation
 • Capture to WIM
 • Export to USB or external media
 • Optional WinPE workflows
-• Heavy safeguards
-
-This is not started yet.
+• High level safeguards for IT admins
 
 🚧 Important Notes
 
-• V3 is temporarily disabled while repairs happen
-• V2.7 is the stable and current live version
-• GitHub is being rebuilt
-• Expect breakage, rewrites and placeholders during restoration
-• V4 is future planning only
+• Current stable version: V2.7
+• V3 is actively being rebuilt for UI, structure and branding
+• Previous V3 experimental features are postponed
+• GitHub migration is ongoing
+• Expect placeholders and rapid changes while the rebuild continues
+• V4 and V5 are future development stages
 
 💡 Contribution / Feedback
 
-This is a solo build for now. Real contributions and feature requests will open once V3 stabilises again.
+This is currently a solo build, but contribution, ideas and feature requests will open once the new V3 stabilises.
