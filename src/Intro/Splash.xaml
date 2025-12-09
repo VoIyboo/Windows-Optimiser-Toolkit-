@@ -52,14 +52,14 @@
                 </Ellipse>
 
                 <!-- Studio Voly logo -->
-<Image Source="StudioVolySplash.png"
-       Width="190"
-       Stretch="Uniform"
-       RenderOptions.BitmapScalingMode="HighQuality"
-       HorizontalAlignment="Center"
-       VerticalAlignment="Center"
-       Panel.ZIndex="1" />
-
+                <Image Source="StudioVolySplash.png"
+                       Width="190"
+                       Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Panel.ZIndex="1" />
+            </Grid>
 
             <!-- Status + progress -->
             <StackPanel Grid.Row="1"
