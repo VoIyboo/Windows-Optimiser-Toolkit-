@@ -1,178 +1,162 @@
 # InstallCommonApps.psm1
-# Winget-based helpers for installing common applications
+# Handles the catalogue and winget-based install of common apps
 
-param()
+# Import core modules (relative to src\Apps)
+Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
+Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
 
-# Make sure logging is available if module is loaded directly
-try {
-    if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
-        Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
-        Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
-
-    }
-} catch { }
-
-function Get-QOTCommonAppDefinitions {
+function Get-QOTCommonAppsCatalogue {
     <#
-        .SYNOPSIS
-            Returns the static list of common apps and their winget IDs.
+        Returns a list of common apps the toolkit can install via winget.
+
+        Each object:
+        - Name     : Display name
+        - WingetId : winget package ID
+        - Category : Optional grouping (Browser, Utility, etc.)
     #>
 
-    @(
-        @{ Name = "Google Chrome";      WingetId = "Google.Chrome"              }
-        @{ Name = "Mozilla Firefox";    WingetId = "Mozilla.Firefox"            }
-        @{ Name = "7-Zip";              WingetId = "7zip.7zip"                  }
-        @{ Name = "VLC Media Player";   WingetId = "VideoLAN.VLC"               }
-        @{ Name = "Notepad++";          WingetId = "Notepad++.Notepad++"        }
-        @{ Name = "Discord";            WingetId = "Discord.Discord"            }
-        @{ Name = "Spotify";            WingetId = "Spotify.Spotify"            }
-        @{ Name = "Visual Studio Code"; WingetId = "Microsoft.VisualStudioCode" }
+    $apps = @(
+        [pscustomobject]@{
+            Name     = "Google Chrome"
+            WingetId = "Google.Chrome"
+            Category = "Browser"
+        }
+        [pscustomobject]@{
+            Name     = "Mozilla Firefox"
+            WingetId = "Mozilla.Firefox"
+            Category = "Browser"
+        }
+        [pscustomobject]@{
+            Name     = "7-Zip"
+            WingetId = "7zip.7zip"
+            Category = "Utility"
+        }
+        [pscustomobject]@{
+            Name     = "VLC Media Player"
+            WingetId = "VideoLAN.VLC"
+            Category = "Media"
+        }
+        [pscustomobject]@{
+            Name     = "Notepad++"
+            WingetId = "Notepad++.Notepad++"
+            Category = "Editor"
+        }
+        [pscustomobject]@{
+            Name     = "Discord"
+            WingetId = "Discord.Discord"
+            Category = "Social"
+        }
+        [pscustomobject]@{
+            Name     = "Spotify"
+            WingetId = "Spotify.Spotify"
+            Category = "Media"
+        }
+        [pscustomobject]@{
+            Name     = "Visual Studio Code"
+            WingetId = "Microsoft.VisualStudioCode"
+            Category = "Editor"
+        }
     )
+
+    return $apps
 }
 
 function Test-QOTWingetAvailable {
     <#
-        .SYNOPSIS
-            Checks whether winget is available on this system.
+        Quick check to see if winget is available on this system.
     #>
     try {
-        winget --version 2>$null | Out-Null
-        return ($LASTEXITCODE -eq 0)
-    } catch {
-        try { Write-QLog "winget not available: $($_.Exception.Message)" "WARN" } catch { }
-        return $false
-    }
-}
-
-function Test-QOTCommonAppInstalled {
-    <#
-        .SYNOPSIS
-            Uses winget list to see whether the given ID is already installed.
-    #>
-    param(
-        [Parameter(Mandatory)]
-        [string]$WingetId
-    )
-
-    if (-not (Test-QOTWingetAvailable)) { return $false }
-
-    try {
-        $result = winget list --id $WingetId --source winget 2>$null
-        if ($LASTEXITCODE -eq 0 -and $result -match [regex]::Escape($WingetId)) {
+        $null = winget --version 2>$null
+        if ($LASTEXITCODE -eq 0) {
             return $true
         }
-    } catch {
-        try { Write-QLog "winget list failed for $($WingetId): $($_.Exception.Message)" "WARN" }
+    }
+    catch {
+        Write-QLog ("winget --version failed: {0}" -f $_.Exception.Message) "WARN"
     }
 
     return $false
 }
 
-function Get-QOTCommonApps {
-    <#
-        .SYNOPSIS
-            Returns common apps with basic install status for the UI.
-    #>
-
-    $definitions = Get-QOTCommonAppDefinitions
-    $list = @()
-
-    $wingetAvailable = Test-QOTWingetAvailable
-    if (-not $wingetAvailable) {
-        try { Write-QLog "Get-QOTCommonApps: winget not available; marking all as not installable." "WARN" } catch { }
-    }
-
-    foreach ($def in $definitions) {
-        $installed = $false
-        if ($wingetAvailable) {
-            $installed = Test-QOTCommonAppInstalled -WingetId $def.WingetId
-        }
-
-        $status = if ($installed) { "Installed" } else { "Not installed" }
-
-        $obj = [pscustomobject]@{
-            Name           = $def.Name
-            WingetId       = $def.WingetId
-            Status         = $status
-            IsInstalled    = $installed
-            IsInstallable  = $wingetAvailable -and -not $installed
-            InstallLabel   = if ($installed) { "Installed" } else { "Install" }
-            InstallTooltip = if (-not $wingetAvailable) {
-                                "winget not available on this system"
-                             }
-                             elseif ($installed) {
-                                "Already installed"
-                             }
-                             else {
-                                "Click to install"
-                             }
-        }
-
-        $list += $obj
-    }
-
-    return $list
-}
-
-function Install-QOTCommonApp {
-    <#
-        .SYNOPSIS
-            Installs a single common app by winget ID.
-        .OUTPUTS
-            [bool] - $true on success, $false on failure.
-    #>
+function Test-QOTWingetAppInstalled {
     param(
-        [Parameter(Mandatory)]
-        [string]$WingetId,
-
-        [Parameter(Mandatory)]
-        [string]$Name
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId
     )
 
     if (-not (Test-QOTWingetAvailable)) {
-        try { Write-QLog "Install-QOTCommonApp: winget not available; cannot install $Name." "ERROR" } catch { }
+        Write-QLog "Test-QOTWingetAppInstalled: winget is not available on this system." "WARN"
         return $false
     }
 
     try {
-        Write-QLog "Starting install for common app: $Name [$WingetId]"
-        $cmd = "winget install --id `"$WingetId`" -h --accept-source-agreements --accept-package-agreements"
-        Start-Process -FilePath "cmd.exe" -ArgumentList "/c $cmd" -Wait -WindowStyle Hidden
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-QLog "Install-QOTCommonApp: winget returned exit code $LASTEXITCODE for $Name." "WARN"
-        } else {
-            Write-QLog "Install-QOTCommonApp: install completed for $Name."
+        # Use winget list to check for the ID
+        $result = winget list --id $WingetId --source winget 2>$null
+        if ($LASTEXITCODE -eq 0 -and $result -match [regex]::Escape($WingetId)) {
+            return $true
         }
-
-        return $true
-    } catch {
-        try { Write-QLog "Install-QOTCommonApp failed for $Name: $($_.Exception.Message)" "ERROR" } catch { }
-        return $false
     }
+    catch {
+        Write-QLog ("winget list failed for {0}: {1}" -f $WingetId, $_.Exception.Message) "WARN"
+    }
+
+    return $false
 }
 
-function Install-QOTCommonAppsBulk {
-    <#
-        .SYNOPSIS
-            Installs multiple common apps (array of objects with Name + WingetId).
-    #>
+function Install-QOTCommonApp {
     param(
-        [Parameter(Mandatory)]
-        [array]$Apps
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WingetId
     )
 
-    foreach ($app in $Apps) {
-        if (-not $app.WingetId) { continue }
-        Install-QOTCommonApp -WingetId $app.WingetId -Name $app.Name | Out-Null
+    if (-not (Test-QOTWingetAvailable)) {
+        $msg = "Install-QOTCommonApp: winget is not available; cannot install {0} [{1}]." -f $Name, $WingetId
+        Write-QLog $msg "ERROR"
+        throw $msg
+    }
+
+    $cmd = "winget install --id `"$WingetId`" -h --accept-source-agreements --accept-package-agreements"
+    Write-QLog ("Starting install for {0} [{1}] with command: {2}" -f $Name, $WingetId, $cmd)
+
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName               = "cmd.exe"
+        $psi.Arguments              = "/c $cmd"
+        $psi.CreateNoWindow         = $true
+        $psi.UseShellExecute        = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError  = $true
+
+        $proc = New-Object System.Diagnostics.Process
+        $proc.StartInfo = $psi
+
+        [void]$proc.Start()
+        $stdout = $proc.StandardOutput.ReadToEnd()
+        $stderr = $proc.StandardError.ReadToEnd()
+        $proc.WaitForExit()
+
+        if ($proc.ExitCode -eq 0) {
+            Write-QLog ("Install-QOTCommonApp succeeded for {0} [{1}]." -f $Name, $WingetId)
+            if ($stdout) { Write-QLog ("winget output: {0}" -f $stdout.Trim()) "DEBUG" }
+        }
+        else {
+            Write-QLog ("Install-QOTCommonApp FAILED for {0} [{1}] ExitCode={2}" -f $Name, $WingetId, $proc.ExitCode) "ERROR"
+            if ($stderr) { Write-QLog ("winget error: {0}" -f $stderr.Trim()) "ERROR" }
+            $errMsg = "winget returned exit code {0} while installing {1} [{2}]." -f $proc.ExitCode, $Name, $WingetId
+            throw $errMsg
+        }
+    }
+    catch {
+        Write-QLog ("Install-QOTCommonApp exception for {0} [{1}]: {2}" -f $Name, $WingetId, $_.Exception.Message) "ERROR"
+        throw
     }
 }
 
 Export-ModuleMember -Function `
-    Get-QOTCommonAppDefinitions, `
+    Get-QOTCommonAppsCatalogue, `
     Test-QOTWingetAvailable, `
-    Test-QOTCommonAppInstalled, `
-    Get-QOTCommonApps, `
-    Install-QOTCommonApp, `
-    Install-QOTCommonAppsBulk
-
+    Test-QOTWingetAppInstalled, `
+    Install-QOTCommonApp
