@@ -1,7 +1,7 @@
 # Splash.UI.psm1
 # Handles displaying and updating the splash/loading window
 
-# Load XAML from file and return the WPF window, with logo wired up
+# Loads XAML from file and returns the WPF window
 function New-QOTSplashWindow {
     param(
         [string]$Path
@@ -11,28 +11,31 @@ function New-QOTSplashWindow {
         throw "Splash XAML not found at: $Path"
     }
 
+    # Load XAML
     $xamlContent = Get-Content $Path -Raw
     $window      = [Windows.Markup.XamlReader]::Parse($xamlContent)
 
-    # After the window is created, attach the Studio Voly logo
+    # Try to wire up the Studio Voly logo image manually
     try {
-        $imageControl = $window.FindName("FoxLogoImage")
-        if ($imageControl) {
-            $pngPath = Join-Path $PSScriptRoot "StudioVolySplash.png"
+        $logoControl = $window.FindName("LogoImage")
+        if ($logoControl -and $logoControl -is [System.Windows.Controls.Image]) {
 
-            if (Test-Path $pngPath) {
+            # Image lives next to Splash.xaml
+            $xamlFolder = Split-Path $Path -Parent
+            $logoPath   = Join-Path $xamlFolder "StudioVolySplash.png"
+
+            if (Test-Path $logoPath) {
                 $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
                 $bitmap.BeginInit()
-                $bitmap.UriSource   = New-Object System.Uri($pngPath, [System.UriKind]::Absolute)
+                $bitmap.UriSource   = New-Object System.Uri($logoPath, [System.UriKind]::Absolute)
                 $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
                 $bitmap.EndInit()
 
-                $imageControl.Source = $bitmap
+                $logoControl.Source = $bitmap
             }
         }
-    }
-    catch {
-        # If anything goes wrong, just continue without the image
+    } catch {
+        # If anything fails, we just skip the logo rather than crashing the splash
     }
 
     return $window
@@ -48,8 +51,7 @@ function Update-QOTSplashStatus {
     try {
         $label = $Window.FindName("SplashStatusText")
         if ($label) { $label.Text = $Text }
-    }
-    catch { }
+    } catch { }
 }
 
 # Updates progress bar value
@@ -62,8 +64,7 @@ function Update-QOTSplashProgress {
     try {
         $bar = $Window.FindName("SplashProgressBar")
         if ($bar) { $bar.Value = $Value }
-    }
-    catch { }
+    } catch { }
 }
 
 Export-ModuleMember -Function `
