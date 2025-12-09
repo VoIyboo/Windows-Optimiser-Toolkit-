@@ -95,7 +95,7 @@
                 <Image x:Name="LogoImage"
                        Width="220"
                        Height="220"
-                       Source="pack://siteoforigin:,,,/assets/splash/studio_voly_splash.png"
+                       ource="assets/splash/studio_voly_splash.png"
                        RenderTransformOrigin="0.5,0.5">
                     <Image.RenderTransform>
                         <ScaleTransform ScaleX="1" ScaleY="1" />
