@@ -52,6 +52,7 @@
                 </Ellipse>
 
                 <!-- Studio Voly logo -->
+<!-- Studio Voly logo -->
 <Image Width="190"
        Stretch="Uniform"
        RenderOptions.BitmapScalingMode="HighQuality"
@@ -62,8 +63,6 @@
         <BitmapImage UriSource="pack://siteoforigin:,,,/src/Intro/StudioVolySplash.png" />
     </Image.Source>
 </Image>
-
-            </Grid>
 
             <!-- Status + progress -->
             <StackPanel Grid.Row="1"
