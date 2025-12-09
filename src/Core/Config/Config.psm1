@@ -1,104 +1,58 @@
 # Config.psm1
-# Core configuration and path helpers for the Quinn Optimiser Toolkit
+# Basic configuration for Quinn Optimiser Toolkit
 
-# These live only inside this module
-$script:QOTRoot    = $null
-$script:QOTVersion = "2.7.0"
+# We keep a single config object in script scope
+$script:QOTConfig = $null
 
-# -----------------------------
-# Root handling
-# -----------------------------
-
-function Set-QOTRoot {
+function Initialize-QOTConfig {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
+        [string]$RootPath
     )
 
-    $script:QOTRoot = $Path
+    # If no root path is supplied, assume:
+    # this file = src\Core\Config
+    # parent    = src\Core
+    # parent    = src
+    if (-not $RootPath) {
+        $coreFolder = Split-Path $PSScriptRoot -Parent
+        $RootPath   = Split-Path $coreFolder -Parent
+    }
+
+    # Default logs root under ProgramData
+    $logsRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
+    if (-not (Test-Path $logsRoot)) {
+        New-Item -Path $logsRoot -ItemType Directory -Force | Out-Null
+    }
+
+    $script:QOTConfig = [PSCustomObject]@{
+        RootPath = $RootPath
+        LogsRoot = $logsRoot
+        Version  = "2.7"
+    }
+
+    return $script:QOTConfig
 }
 
-function Get-QOTRoot {
-
-    if ($script:QOTRoot) {
-        return $script:QOTRoot
+function Get-QOTConfig {
+    if (-not $script:QOTConfig) {
+        Initialize-QOTConfig | Out-Null
     }
+    return $script:QOTConfig
+}
 
-    # If bootstrap set a global root, prefer that
-    if ($Global:QOT_Root) {
-        $script:QOTRoot = $Global:QOT_Root
-        return $script:QOTRoot
+function Get-QOTPaths {
+    # For now this is just an alias-style helper that returns the same object
+    if (-not $script:QOTConfig) {
+        Initialize-QOTConfig | Out-Null
     }
-
-    # Fallback: walk up from src\Core\Config
-    $configDir = $PSScriptRoot                     # ...\src\Core\Config
-    $coreDir   = Split-Path $configDir -Parent     # ...\src\Core
-    $srcDir    = Split-Path $coreDir   -Parent     # ...\src
-    $rootDir   = Split-Path $srcDir    -Parent     # repo root
-
-    $script:QOTRoot = $rootDir
-    return $script:QOTRoot
+    return $script:QOTConfig
 }
 
 function Get-QOTVersion {
-    return $script:QOTVersion
-}
-
-# -----------------------------
-# Path helper
-# -----------------------------
-
-function Get-QOTPath {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-
-    $root = Get-QOTRoot
-
-    switch ($Name.ToLowerInvariant()) {
-        'root'        { return $root }
-        'logs'        { return (Join-Path $root "Logs") }
-        'src'         { return (Join-Path $root "src") }
-        'core'        { return (Join-Path $root "src\Core") }
-        'intro'       { return (Join-Path $root "src\Intro") }
-        'ui'          { return (Join-Path $root "src\UI") }
-        'cleaning'    { return (Join-Path $root "src\TweaksAndCleaning\CleaningAndMain") }
-        'tweaks'      { return (Join-Path $root "src\TweaksAndCleaning\TweaksAndPrivacy") }
-        'apps'        { return (Join-Path $root "src\Apps") }
-        'advanced'    { return (Join-Path $root "src\Advanced") }
-        default       { return (Join-Path $root $Name) }
+    if ($script:QOTConfig -and $script:QOTConfig.Version) {
+        return $script:QOTConfig.Version
     }
+    return "2.7"
 }
 
-# -----------------------------
-# Initialisation
-# -----------------------------
-
-function Initialize-QOTConfig {
-
-    # Make sure root is resolved
-    [void](Get-QOTRoot)
-
-    # Ensure key folders exist
-    $paths = @(
-        Get-QOTPath -Name 'Logs'
-    )
-
-    foreach ($p in $paths) {
-        if (-not (Test-Path $p)) {
-            New-Item -Path $p -ItemType Directory -Force | Out-Null
-        }
-    }
-}
-
-# -----------------------------
-# Exports
-# -----------------------------
-
-Export-ModuleMember -Function `
-    Set-QOTRoot, `
-    Get-QOTRoot, `
-    Get-QOTVersion, `
-    Get-QOTPath, `
-    Initialize-QOTConfig
+Export-ModuleMember -Function Initialize-QOTConfig, Get-QOTConfig, Get-QOTPaths, Get-QOTVersion
