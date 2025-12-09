@@ -76,8 +76,6 @@ The new V3 is all about strengthening the project’s structure:
 No new advanced logic is being added in this version.
 V3 is strictly UI, structure and branding.
 
-Advanced features previously planned for V3 have been moved to V4 and beyond.
-
 V4 Smart Toolkit Upgrade (Planning Stage)
 
 This version will reintroduce the ambitious features:
