@@ -37,26 +37,30 @@
             </Grid.RowDefinitions>
 
             <!-- Centre content: glow + logo -->
-            <Grid Grid.Row="0"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center">
-                <!-- Soft glow behind the logo -->
-                <Ellipse Width="260"
-                         Height="260"
-                         Fill="{StaticResource GlowBrush}"
-                         Opacity="0.9" />
+<Grid Grid.Row="0"
+      HorizontalAlignment="Center"
+      VerticalAlignment="Center">
 
-                <!-- Studio Voly logo -->
-                <Image x:Name="LogoImage"
-                       Source="StudioVolySplash.png"
-                       Width="220"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       Stretch="Uniform">
-                    <Image.RenderTransform>
-                        <TranslateTransform Y="8" />
-                    </Image.RenderTransform>
-                </Image>
-            </Grid>
+    <!-- Soft glow behind the logo -->
+    <Ellipse Width="260"
+             Height="260"
+             Fill="{StaticResource GlowBrush}"
+             Opacity="0.9"
+             Panel.ZIndex="1" />
+
+    <!-- Studio Voly logo -->
+    <Image x:Name="LogoImage"
+           Source="StudioVolySplash.png"
+           Width="220"
+           Stretch="Uniform"
+           RenderOptions.BitmapScalingMode="HighQuality"
+           Panel.ZIndex="2">
+        <Image.RenderTransform>
+            <TranslateTransform Y="8" />
+        </Image.RenderTransform>
+    </Image>
+</Grid>
+
 
             <!-- Bottom: status text + progress bar -->
             <StackPanel Grid.Row="1"
