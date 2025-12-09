@@ -102,12 +102,43 @@ $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
 $splash     = New-QOTSplashWindow -Path $splashXaml
 
 Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
-Update-QOTSplashProgress -Window $splash -Value 10
+Update-QOTSplashProgress -Window $splash -Value 0
 
+# Show the splash (non-modal so the script can keep running)
 [void]$splash.Show()
 
-# Hand off to engine (this will open the main window)
-Write-QLog "Calling Start-QOTMain from Intro."
+# -----------------------------------------------------------------
+# Drive the progress bar for up to ~10 seconds
+# -----------------------------------------------------------------
+$maxDurationMs = 10000          # 10 seconds
+$steps         = 40             # number of progress updates
+$stepDelayMs   = [int]($maxDurationMs / $steps)
+
+for ($i = 1; $i -le $steps; $i++) {
+
+    $percent = [int](($i / $steps) * 100)
+    Update-QOTSplashProgress -Window $splash -Value $percent
+
+    # Let the WPF dispatcher process animations / redraws
+    try {
+        $splash.Dispatcher.Invoke(
+            { },
+            [System.Windows.Threading.DispatcherPriority]::Background
+        )
+    } catch { }
+
+    Start-Sleep -Milliseconds $stepDelayMs
+}
+
+# Ensure bar ends at 100%
+Update-QOTSplashProgress -Window $splash -Value 100
+Update-QOTSplashStatus   -Window $splash -Text "Ready."
+
+Write-QLog "Splash finished. Closing splash and starting main window."
+
+# Close the splash, then start the main window
+$splash.Close()
+
 Start-QOTMain -Mode "Normal"
 
 Write-QLog "Intro completed."
