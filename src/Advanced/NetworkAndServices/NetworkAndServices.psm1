@@ -1,5 +1,5 @@
 # NetworkAndServices.psm1
-# Advanced network repair & service tuning (safe placeholders)
+# Advanced network repair and service tuning (safe placeholders)
 
 # ------------------------------------------------------------
 # Import core logging
@@ -11,18 +11,18 @@ Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force
 # ------------------------------------------------------------
 
 function Invoke-QNetworkReset {
-    Write-QLog "Advanced: Running network reset (placeholder – no changes made)"
-    
-    # Placeholder: Real commands disabled for safety
+    Write-QLog "Advanced: network reset placeholder - no changes made"
+
+    # Real commands will go here later, for example:
     # ipconfig /flushdns
     # netsh winsock reset
     # netsh int ip reset
 }
 
 function Invoke-QRepairAdapter {
-    Write-QLog "Advanced: Repairing network adapter (placeholder – no changes made)"
-    
-    # Placeholder: Real logic would query adapters and reset them
+    Write-QLog "Advanced: repair network adapter placeholder - no changes made"
+
+    # Real logic would inspect adapters and reset or disable/enable them
 }
 
 # ------------------------------------------------------------
@@ -30,20 +30,17 @@ function Invoke-QRepairAdapter {
 # ------------------------------------------------------------
 
 function Invoke-QServiceTune {
-    Write-QLog "Advanced: Service tuning (placeholder – no changes made)"
-    
-    # Placeholder: Here we would safely adjust non critical services
+    Write-QLog "Advanced: service tuning placeholder - no changes made"
+
+    # Real logic would safely adjust non-critical services
 }
 
 # ------------------------------------------------------------
-# Combined dispatcher (Engine will call this)
+# Combined dispatcher (called by the engine)
 # ------------------------------------------------------------
 
 function Invoke-QOTNetworkAndServices {
     Write-QLog "Invoke-QOTNetworkAndServices called."
-
-    # Future selectable operations will be handled here
-    # For now, we run all placeholder actions in sequence
 
     Invoke-QNetworkReset
     Invoke-QRepairAdapter
@@ -55,6 +52,7 @@ function Invoke-QOTNetworkAndServices {
 # ------------------------------------------------------------
 # Exported members
 # ------------------------------------------------------------
+
 Export-ModuleMember -Function `
     Invoke-QNetworkReset, `
     Invoke-QRepairAdapter, `
