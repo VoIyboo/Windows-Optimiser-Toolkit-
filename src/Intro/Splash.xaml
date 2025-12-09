@@ -62,6 +62,7 @@
 </Grid>
 
 
+
             <!-- Bottom: status text + progress bar -->
             <StackPanel Grid.Row="1"
                         Orientation="Vertical"
