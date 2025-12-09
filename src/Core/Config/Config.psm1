@@ -1,100 +1,104 @@
 # Config.psm1
-# Core configuration for Quinn Optimiser Toolkit
+# Core configuration and path helpers for the Quinn Optimiser Toolkit
 
-# ------------------------------
-# Static values
-# ------------------------------
+# These live only inside this module
+$script:QOTRoot    = $null
+$script:QOTVersion = "2.7.0"
 
-# Version of the toolkit
-$script:QOT_Version = "2.7.0-core-rebuild"
+# -----------------------------
+# Root handling
+# -----------------------------
 
-# Determine repository root based on this file location:
-# this file lives in:  <repo>\src\Core\Config.psm1
-# we want:             <repo>\
-$script:QOT_Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-
-# Base data folder under ProgramData
-$script:QOT_DataRoot   = Join-Path $env:ProgramData "QuinnOptimiserToolkit"
-$script:QOT_LogRoot    = Join-Path $script:QOT_DataRoot "Logs"
-$script:QOT_ConfigRoot = Join-Path $script:QOT_DataRoot "Config"
-$script:QOT_TempRoot   = Join-Path $env:TEMP "QuinnOptimiserToolkit"
-
-
-# ------------------------------
-# Internal helper
-# ------------------------------
-function New-QOTDirectoryIfMissing {
+function Set-QOTRoot {
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $true)]
         [string]$Path
     )
 
-    if (-not [string]::IsNullOrWhiteSpace($Path) -and -not (Test-Path $Path)) {
-        New-Item -Path $Path -ItemType Directory -Force | Out-Null
-    }
-}
-
-
-# ------------------------------
-# Public functions
-# ------------------------------
-
-function Initialize-QOTConfig {
-    <#
-        .SYNOPSIS
-        Ensures all required folders exist.
-
-        .DESCRIPTION
-        Creates the ProgramData data, log and config folders plus
-        a temp folder if they do not already exist.
-    #>
-
-    New-QOTDirectoryIfMissing -Path $script:QOT_DataRoot
-    New-QOTDirectoryIfMissing -Path $script:QOT_LogRoot
-    New-QOTDirectoryIfMissing -Path $script:QOT_ConfigRoot
-    New-QOTDirectoryIfMissing -Path $script:QOT_TempRoot
-}
-
-function Get-QOTVersion {
-    <#
-        .SYNOPSIS
-        Returns the current toolkit version string.
-    #>
-    return $script:QOT_Version
+    $script:QOTRoot = $Path
 }
 
 function Get-QOTRoot {
-    <#
-        .SYNOPSIS
-        Returns the root folder of the toolkit repository.
-    #>
-    return $script:QOT_Root
+
+    if ($script:QOTRoot) {
+        return $script:QOTRoot
+    }
+
+    # If bootstrap set a global root, prefer that
+    if ($Global:QOT_Root) {
+        $script:QOTRoot = $Global:QOT_Root
+        return $script:QOTRoot
+    }
+
+    # Fallback: walk up from src\Core\Config
+    $configDir = $PSScriptRoot                     # ...\src\Core\Config
+    $coreDir   = Split-Path $configDir -Parent     # ...\src\Core
+    $srcDir    = Split-Path $coreDir   -Parent     # ...\src
+    $rootDir   = Split-Path $srcDir    -Parent     # repo root
+
+    $script:QOTRoot = $rootDir
+    return $script:QOTRoot
 }
 
+function Get-QOTVersion {
+    return $script:QOTVersion
+}
+
+# -----------------------------
+# Path helper
+# -----------------------------
+
 function Get-QOTPath {
-    <#
-        .SYNOPSIS
-        Returns a key path used by the toolkit.
-
-        .PARAMETER Name
-        One of: Data, Logs, Config, Temp
-    #>
-
     param(
-        [Parameter(Mandatory)]
-        [ValidateSet("Data", "Logs", "Config", "Temp")]
+        [Parameter(Mandatory = $true)]
         [string]$Name
     )
 
-    switch ($Name) {
-        "Data"   { return $script:QOT_DataRoot   }
-        "Logs"   { return $script:QOT_LogRoot    }
-        "Config" { return $script:QOT_ConfigRoot }
-        "Temp"   { return $script:QOT_TempRoot   }
+    $root = Get-QOTRoot
+
+    switch ($Name.ToLowerInvariant()) {
+        'root'        { return $root }
+        'logs'        { return (Join-Path $root "Logs") }
+        'src'         { return (Join-Path $root "src") }
+        'core'        { return (Join-Path $root "src\Core") }
+        'intro'       { return (Join-Path $root "src\Intro") }
+        'ui'          { return (Join-Path $root "src\UI") }
+        'cleaning'    { return (Join-Path $root "src\TweaksAndCleaning\CleaningAndMain") }
+        'tweaks'      { return (Join-Path $root "src\TweaksAndCleaning\TweaksAndPrivacy") }
+        'apps'        { return (Join-Path $root "src\Apps") }
+        'advanced'    { return (Join-Path $root "src\Advanced") }
+        default       { return (Join-Path $root $Name) }
     }
 }
 
-# ------------------------------
-# Exported members
-# ------------------------------
-Export-ModuleMember -Function Initialize-QOTConfig, Get-QOTVersion, Get-QOTRoot, Get-QOTPath
+# -----------------------------
+# Initialisation
+# -----------------------------
+
+function Initialize-QOTConfig {
+
+    # Make sure root is resolved
+    [void](Get-QOTRoot)
+
+    # Ensure key folders exist
+    $paths = @(
+        Get-QOTPath -Name 'Logs'
+    )
+
+    foreach ($p in $paths) {
+        if (-not (Test-Path $p)) {
+            New-Item -Path $p -ItemType Directory -Force | Out-Null
+        }
+    }
+}
+
+# -----------------------------
+# Exports
+# -----------------------------
+
+Export-ModuleMember -Function `
+    Set-QOTRoot, `
+    Get-QOTRoot, `
+    Get-QOTVersion, `
+    Get-QOTPath, `
+    Initialize-QOTConfig
