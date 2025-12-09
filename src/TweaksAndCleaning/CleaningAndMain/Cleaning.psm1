@@ -5,7 +5,8 @@
 # ------------------------------
 # Import core logging
 # ------------------------------
-Import-Module "$PSScriptRoot\..\..\..\Core\Logging\Logging.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\..\Core\Config\Config.psm1"    -Force
+Import-Module "$PSScriptRoot\..\..\..\Core\Logging\Logging.psm1"  -Force
 
 # ------------------------------
 # Public: Clean Windows Update cache
