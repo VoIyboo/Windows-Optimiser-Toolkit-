@@ -94,7 +94,7 @@
                          Maximum="100"
                          Height="16"
                          Width="520"
-                         Value="8" />
+                         Value="10" />
         </StackPanel>
     </Grid>
 </Window>
