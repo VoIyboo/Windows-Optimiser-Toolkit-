@@ -11,14 +11,26 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 # src        -> parent = repo root
 $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
-# Import core modules using absolute paths from the repo root
-Import-Module (Join-Path $rootPath "src\Core\Config\Config.psm1")   -Force
-Import-Module (Join-Path $rootPath "src\Core\Logging\Logging.psm1") -Force
-Import-Module (Join-Path $rootPath "src\Core\Engine\Engine.psm1")   -Force
+# Paths to core modules
+$configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
+$loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
+$engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
+
+# Import Config module
+Import-Module $configModule -Force
+
+# Safety shim: if Initialize-QOTConfig is still not visible, dot-source the file
+if (-not (Get-Command Initialize-QOTConfig -ErrorAction SilentlyContinue)) {
+    . $configModule
+}
+
+# Import Logging and Engine
+Import-Module $loggingModule -Force
+Import-Module $engineModule  -Force
 
 # Import UI helpers
-Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")      -Force
-Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1")     -Force
+Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force
+Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force
 
 # Initialise config and logging
 $cfg = Initialize-QOTConfig -RootPath $rootPath
