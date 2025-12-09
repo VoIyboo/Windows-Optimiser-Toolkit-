@@ -62,7 +62,7 @@ function Test-QOTCommonAppInstalled {
             return $true
         }
     } catch {
-        try { Write-QLog "winget list failed for $WingetId: $($_.Exception.Message)" "WARN" } catch { }
+        try { Write-QLog "winget list failed for $($WingetId): $($_.Exception.Message)" "WARN" }
     }
 
     return $false
