@@ -1,8 +1,8 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Quinn Optimiser Toolkit - Loading"
-        Height="340"
-        Width="620"
+        Height="320"
+        Width="640"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="NoResize"
@@ -12,106 +12,57 @@
         Topmost="True"
         Opacity="0">
 
-    <!-- Animations and resources -->
     <Window.Resources>
-
-        <!-- Fade the whole window in -->
-        <Storyboard x:Key="FadeInStoryboard">
-            <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                             To="1"
-                             Duration="0:0:0.40" />
-        </Storyboard>
-
-        <!-- Gentle bob and tiny scale pulse on the logo -->
-        <Storyboard x:Key="LogoBobStoryboard"
-                    RepeatBehavior="Forever"
-                    AutoReverse="True">
-            <DoubleAnimation Storyboard.TargetName="LogoTranslate"
-                             Storyboard.TargetProperty="Y"
-                             From="0"
-                             To="-6"
-                             Duration="0:0:1.2" />
-            <DoubleAnimation Storyboard.TargetName="LogoScale"
-                             Storyboard.TargetProperty="ScaleY"
-                             From="1.0"
-                             To="1.03"
-                             Duration="0:0:1.2" />
-            <DoubleAnimation Storyboard.TargetName="LogoScale"
-                             Storyboard.TargetProperty="ScaleX"
-                             From="1.0"
-                             To="1.03"
-                             Duration="0:0:1.2" />
-        </Storyboard>
-
+        <!-- Soft glow brush -->
+        <RadialGradientBrush x:Key="GlowBrush"
+                             GradientOrigin="0.5,0.35"
+                             Center="0.5,0.35"
+                             RadiusX="0.55"
+                             RadiusY="0.55">
+            <GradientStop Color="#003B82" Offset="0.0" />
+            <GradientStop Color="#133B82" Offset="0.25" />
+            <GradientStop Color="#020617" Offset="1.0" />
+        </RadialGradientBrush>
     </Window.Resources>
 
-    <!-- Start animations when the window loads -->
-    <Window.Triggers>
-        <EventTrigger RoutedEvent="Window.Loaded">
-            <BeginStoryboard Storyboard="{StaticResource FadeInStoryboard}" />
-            <BeginStoryboard Storyboard="{StaticResource LogoBobStoryboard}" />
-        </EventTrigger>
-    </Window.Triggers>
-
-    <!-- Main rounded card -->
-    <Border CornerRadius="20"
+    <Border CornerRadius="18"
             Background="#020617"
-            BorderBrush="#111827"
+            BorderBrush="#1F2937"
             BorderThickness="1"
-            Padding="24"
-            SnapsToDevicePixels="True">
+            Padding="0">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
+                <RowDefinition Height="80" />
             </Grid.RowDefinitions>
 
-            <!-- Centre content: logo -->
-            <Grid Grid.Row="0">
-                <!-- Soft glow behind the fox -->
+            <!-- Centre content: glow + logo -->
+            <Grid Grid.Row="0"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+                <!-- Soft glow behind the logo -->
                 <Ellipse Width="260"
                          Height="260"
-                         HorizontalAlignment="Center"
-                         VerticalAlignment="Center">
-                    <Ellipse.Fill>
-                        <RadialGradientBrush GradientOrigin="0.5,0.4" Center="0.5,0.5" RadiusX="0.7" RadiusY="0.7">
-                            <GradientStop Color="#2238FF" Offset="0.0" />
-                            <GradientStop Color="#00000000" Offset="1.0" />
-                        </RadialGradientBrush>
-                    </Ellipse.Fill>
-                    <Ellipse.Effect>
-                        <BlurEffect Radius="30" />
-                    </Ellipse.Effect>
-                </Ellipse>
+                         Fill="{StaticResource GlowBrush}"
+                         Opacity="0.9" />
 
-                <!-- Logo image -->
+                <!-- Studio Voly logo -->
                 <Image x:Name="LogoImage"
+                       Source="StudioVolySplash.png"
                        Width="220"
-                       Height="220"
-                       Source="studio_voly_splash.png"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       RenderTransformOrigin="0.5,0.5">
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Stretch="Uniform">
                     <Image.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="LogoScale" ScaleX="1" ScaleY="1" />
-                            <TranslateTransform x:Name="LogoTranslate" X="0" Y="0" />
-                        </TransformGroup>
+                        <TranslateTransform Y="8" />
                     </Image.RenderTransform>
-                    <Image.Effect>
-                        <DropShadowEffect Color="#000000"
-                                          ShadowDepth="0"
-                                          BlurRadius="24"
-                                          Opacity="0.75" />
-                    </Image.Effect>
                 </Image>
             </Grid>
 
-            <!-- Bottom area: status text + progress bar -->
+            <!-- Bottom: status text + progress bar -->
             <StackPanel Grid.Row="1"
                         Orientation="Vertical"
-                        HorizontalAlignment="Center"
-                        Margin="0,16,0,0">
+                        VerticalAlignment="Center"
+                        Margin="60,0,60,20">
                 <TextBlock x:Name="SplashStatusText"
                            Text="Starting Quinn Optimiser Toolkit..."
                            Foreground="White"
@@ -121,11 +72,33 @@
                 <ProgressBar x:Name="SplashProgressBar"
                              Minimum="0"
                              Maximum="100"
-                             Value="10"
                              Height="18"
-                             Width="430" />
+                             Value="10" />
             </StackPanel>
-
         </Grid>
     </Border>
+
+    <!-- Fade in + gentle bob animation -->
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Window.Loaded">
+            <BeginStoryboard>
+                <Storyboard>
+                    <!-- Fade-in for the whole window -->
+                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                     From="0"
+                                     To="1"
+                                     Duration="0:0:0.5" />
+
+                    <!-- Gentle bob on the fox logo -->
+                    <DoubleAnimation Storyboard.TargetName="LogoImage"
+                                     Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)"
+                                     From="8"
+                                     To="0"
+                                     Duration="0:0:1.2"
+                                     AutoReverse="True"
+                                     RepeatBehavior="Forever" />
+                </Storyboard>
+            </BeginStoryboard>
+        </EventTrigger>
+    </Window.Triggers>
 </Window>
