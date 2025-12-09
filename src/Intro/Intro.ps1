@@ -1,48 +1,43 @@
 # Intro.ps1
-# Entry point used after bootstrap to start the Quinn Optimiser Toolkit
-
-param(
-    [string]$Mode = "Normal"
-)
+# Minimal splash startup for the Quinn Optimiser Toolkit
 
 $ErrorActionPreference = "Stop"
 
-# ------------------------------
-# Load core modules
-# ------------------------------
-Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
-Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
-Import-Module "$PSScriptRoot\..\Core\Engine\Engine.psm1"   -Force
+# Make sure WPF assemblies are available
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-# Later we will also import the splash UI here
-# Import-Module "$PSScriptRoot\Splash.UI.psm1" -Force
+# Work out repo root:
+# src\Intro  -> parent = src
+# src        -> parent = repo root
+$rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
-# ------------------------------
-# Ensure config + logging are ready
-# ------------------------------
-Initialize-QOTConfig
+# Import core modules using absolute paths from root
+Import-Module (Join-Path $rootPath "src\Core\Config\Config.psm1")   -Force
+Import-Module (Join-Path $rootPath "src\Core\Logging\Logging.psm1") -Force
+Import-Module (Join-Path $rootPath "src\Core\Engine\Engine.psm1")   -Force
 
-$logRoot = Get-QOTPath -Name Logs
-Set-QLogRoot -Root $logRoot
+# Import UI helpers
+Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")      -Force
+Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1")     -Force
+
+# Initialise config and logging
+$cfg = Initialize-QOTConfig -RootPath $rootPath
+Set-QLogRoot -Root $cfg.LogsRoot
 Start-QLogSession
 
-Write-QLog "Intro started. Mode: $Mode"
+Write-QLog "Intro starting. Root path: $rootPath"
 
-# ------------------------------
-# Hand off to the engine
-# ------------------------------
-try {
-    Write-QLog "Initialising engine from Intro."
-    Initialize-QOTEngine
+# Create and show splash window
+$splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
+$splash     = New-QOTSplashWindow -Path $splashXaml
 
-    # Later: show splash + main WPF window here.
-    # For now we just call Start-QOTMain so the wiring is in place.
-    Write-QLog "Calling Start-QOTMain from Intro."
-    Start-QOTMain -Mode $Mode
+Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
+Update-QOTSplashProgress -Window $splash -Value 10
 
-    Write-QLog "Intro completed successfully."
-}
-catch {
-    Write-QLog "Intro failed: $($_.Exception.Message)" "ERROR"
-    throw
-}
+[void]$splash.Show()
+
+# Hand off to engine (this will open the main window)
+Write-QLog "Calling Start-QOTMain from Intro."
+Start-QOTMain -Mode "Normal"
+
+Write-QLog "Intro completed."
