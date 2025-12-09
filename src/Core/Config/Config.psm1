@@ -9,14 +9,13 @@ function Initialize-QOTConfig {
     )
 
     if (-not $RootPath) {
-        # Auto-detect: go two levels up from Core\Config to the repo root
+        # Auto-detect: go two levels up from Core\Config to repo root
         $RootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     }
 
     $srcRoot  = Join-Path $RootPath "src"
     $logsRoot = Join-Path $RootPath "Logs"
 
-    # Ensure Logs folder exists
     if (-not (Test-Path $logsRoot)) {
         New-Item -Path $logsRoot -ItemType Directory -Force | Out-Null
     }
