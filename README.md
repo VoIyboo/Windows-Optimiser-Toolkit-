@@ -1,3 +1,7 @@
+
+[studio_voly_splash.txt](https://github.com/user-attachments/files/24050685/studio_voly_splash.txt
+
+
 Quinn Optimiser Toolkit
 
 A modular Windows optimisation and IT utility suite built in PowerShell and WPF.
