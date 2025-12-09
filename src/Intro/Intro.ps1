@@ -11,7 +11,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 # src        -> parent = repo root
 $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
-# Import core modules using absolute paths from root
+# Import core modules using absolute paths from the repo root
 Import-Module (Join-Path $rootPath "src\Core\Config\Config.psm1")   -Force
 Import-Module (Join-Path $rootPath "src\Core\Logging\Logging.psm1") -Force
 Import-Module (Join-Path $rootPath "src\Core\Engine\Engine.psm1")   -Force
@@ -22,6 +22,7 @@ Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1")     -Force
 
 # Initialise config and logging
 $cfg = Initialize-QOTConfig -RootPath $rootPath
+
 Set-QLogRoot -Root $cfg.LogsRoot
 Start-QLogSession
 
