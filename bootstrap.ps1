@@ -40,15 +40,18 @@ if (-not $rootFolder) {
     throw "Could not locate extracted repo folder under $extractTo"
 }
 
-$Global:QOT_Root = $rootFolder.FullName
-Write-Host "Toolkit root: $Global:QOT_Root"
+$toolkitRoot = $rootFolder.FullName
+Write-Host "Toolkit root: $toolkitRoot"
 
 # Path to Intro.ps1 inside the extracted repo
-$introPath = Join-Path $Global:QOT_Root "src\Intro\Intro.ps1"
+$introPath = Join-Path $toolkitRoot "src\Intro\Intro.ps1"
 
 if (-not (Test-Path $introPath)) {
     throw "Intro.ps1 not found at $introPath"
 }
 
-# Hand off to the Intro script (which loads Config / Logging / Engine)
+# Change location to the toolkit root so relative paths in Intro.ps1 work
+Set-Location $toolkitRoot
+
+# Hand off to the Intro script (Intro handles Config / Logging / Engine)
 & $introPath
