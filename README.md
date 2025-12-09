@@ -1,4 +1,4 @@
-<img width="1024" height="1024" alt="studio_voly_splash" src="https://github.com/user-attachments/assets/c7776a61-25fb-45ec-976b-974b8207a004" />
+![Uploading studio_voly_small (1).png…]()
 
 Quinn Optimiser Toolkit
 
