@@ -1,6 +1,7 @@
 
-[studio_voly_splash.txt](https://github.com/user-attachments/files/24050685/studio_voly_splash.txt
 
+
+<img width="1024" height="1024" alt="studio_voly_splash" src="https://github.com/user-attachments/assets/c7776a61-25fb-45ec-976b-974b8207a004" />
 
 Quinn Optimiser Toolkit
 
