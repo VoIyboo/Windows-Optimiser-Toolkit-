@@ -4,13 +4,15 @@
 Import-Module "$PSScriptRoot\..\Config\Config.psm1"  -Force
 Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force
 
-# Import feature modules
+# Import feature modules (corrected file names + folders)
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1" -Force
-Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\Tweaks.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
+
 Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps\InstalledApps.psm1" -Force
 Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps\InstallCommonApps.psm1" -Force
+
 Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1" -Force
-Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkServices.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1" -Force
 
 
 # ------------------------------------------------------------
