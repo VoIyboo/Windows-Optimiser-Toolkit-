@@ -1,4 +1,5 @@
-![Uploading studio_voly_small (1).png…]()
+
+<img width="400" height="400" alt="studio_voly_small (2)" src="https://github.com/user-attachments/assets/cff95849-ff1d-4e9c-a748-092487d31a51" />
 
 Quinn Optimiser Toolkit
 
