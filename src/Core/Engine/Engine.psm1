@@ -8,8 +8,9 @@ Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1" -Force
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
 
-Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps\InstalledApps.psm1" -Force
-Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps\InstallCommonApps.psm1" -Force
+# Apps
+Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps.psm1"        -Force
+Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps.psm1"    -Force
 
 Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1" -Force
 Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1" -Force
