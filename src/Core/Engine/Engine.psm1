@@ -1,204 +1,113 @@
-<#
-    Engine.psm1
-    Core engine helpers for the Quinn Optimiser Toolkit.
+# Engine.psm1
+# Coordinates major operations by calling the feature modules
 
-    Responsibilities:
-    - Know where feature areas live on disk
-    - Provide helpers to import feature modules
-    - Provide a central entry point for the main app
-#>
+Import-Module "$PSScriptRoot\..\Config\Config.psm1"  -Force
+Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force
 
-Import-Module "$PSScriptRoot\Config\Config.psm1"   -Force
-Import-Module "$PSScriptRoot\Logging\Logging.psm1" -Force
+# Import feature modules
+Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\Tweaks.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps\InstalledApps.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps\InstallCommonApps.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1" -Force
+Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkServices.psm1" -Force
 
-function Get-QOTModuleRoot {
-    param(
-        [Parameter(Mandatory)]
-        [ValidateSet('Intro', 'UI', 'TweaksAndCleaning', 'Apps', 'Advanced')]
-        [string]$Area
-    )
 
-    $root = Get-QOTRoot
+# ------------------------------------------------------------
+# Small helpers used by the UI
+# ------------------------------------------------------------
 
-    switch ($Area) {
-        'Intro'             { return Join-Path $root 'src\Intro' }
-        'UI'                { return Join-Path $root 'src\UI' }
-        'TweaksAndCleaning' { return Join-Path $root 'src\TweaksAndCleaning' }
-        'Apps'              { return Join-Path $root 'src\Apps' }
-        'Advanced'          { return Join-Path $root 'src\Advanced' }
+function Set-QOTStatus {
+    param([string]$Text)
+
+    Write-QLog "STATUS: $Text"
+
+    if (Get-Command Set-QOTSummary -ErrorAction SilentlyContinue) {
+        Set-QOTSummary -Text $Text
     }
 }
 
-function Import-QOTModule {
-    param(
-        [Parameter(Mandatory)]
-        [string]$RelativePath,
+function Set-QOTProgress {
+    param([int]$Percent)
 
-        [string]$Area
-    )
+    Write-QLog "Progress: $Percent%"
+}
 
-    if ($Area) {
-        $folder   = Get-QOTModuleRoot -Area $Area
-        $fullPath = Join-Path $folder $RelativePath
-    } else {
-        $fullPath = Join-Path (Get-QOTRoot) $RelativePath
+# ------------------------------------------------------------
+# Run button logic
+# ------------------------------------------------------------
+
+function Invoke-QOTRun {
+    Write-QLog "Starting full run"
+    Set-QOTStatus "Running…"
+    Set-QOTProgress 0
+
+    try {
+        Start-QOTCleaning
+        Set-QOTProgress 33
+
+        Start-QOTTweaks
+        Set-QOTProgress 66
+
+        # Placeholder for future expansion
+        Write-QLog "Run completed"
+        Set-QOTProgress 100
+        Set-QOTStatus "Completed"
     }
-
-    if (-not (Test-Path $fullPath)) {
-        Write-QLog "Import-QOTModule could not find $fullPath" "WARN"
-        return
+    catch {
+        Write-QLog "Error during run: $($_.Exception.Message)" "ERROR"
+        Set-QOTStatus "Error occurred"
     }
-
-    Write-QLog "Importing feature module $fullPath"
-    Import-Module $fullPath -Force
 }
 
-function Initialize-QOTEngine {
-    Write-QLog "Initialising engine."
-    # Later we can preload modules or run health checks here
-}
-
-function Start-QOTMain {
-    param(
-        [string]$Mode = 'Normal'
-    )
-
-    Write-QLog "Start-QOTMain called. Mode: $Mode"
-
-    # Make sure engine is ready
-    Initialize-QOTEngine
-
-    # Hand off to the main WPF window
-    Write-QLog "Launching main WPF window..."
-    Start-QOTMainWindow
-    Write-QLog "Main WPF window closed."
-}
-
-
-Export-ModuleMember -Function `
-    Get-QOTModuleRoot, `
-    Import-QOTModule, `
-    Initialize-QOTEngine, `
-    Start-QOTMain
-
-
-
-# ==========================================================
-# Tweaks, Cleaning and Advanced – engine dispatch scaffolding
-# ==========================================================
-
-# Import feature modules so the engine knows about them
-Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\CleaningAndMain.psm1"    -Force
-Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1"  -Force
-Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"          -Force
-Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"      -Force
-
-function Invoke-QOTCleaningRun {
-    <#
-        High level entry point for Cleaning & Maintenance.
-
-        Later this will:
-        - Accept options or a profile from the UI
-        - Call into CleaningAndMain.psm1 functions
-        - Update status / progress
-
-        Right now it just logs that it was called.
-    #>
-    param(
-        [string]$Profile = "Basic"
-    )
-
-    Write-QLog "Engine: Cleaning run requested. Profile = '$Profile' (placeholder only, no actions wired yet)"
-}
-
-function Invoke-QOTTweaksRun {
-    <#
-        High level entry point for Tweaks & Privacy.
-
-        Later this will:
-        - Accept flags from the UI (UI tweaks, privacy tweaks, etc)
-        - Call into TweaksAndPrivacy.psm1 functions
-
-        For now it only logs.
-    #>
-    param(
-        [string]$Profile = "Custom"
-    )
-
-    Write-QLog "Engine: Tweaks run requested. Profile = '$Profile' (placeholder only, no actions wired yet)"
-}
+# ------------------------------------------------------------
+# Advanced Run
+# ------------------------------------------------------------
 
 function Invoke-QOTAdvancedRun {
-    <#
-        High level entry point for Advanced tab.
+    Write-QLog "Starting *Advanced* run"
+    Set-QOTStatus "Running Advanced Tasks…"
 
-        Later this will:
-        - Decide which advanced cleaning + network + service actions to run
-        - Call functions from AdvancedCleaning.psm1 and NetworkAndServices.psm1
+    try {
+        Start-QOTAdvancedCleaning
+        Start-QOTNetworkFix
 
-        For now it only logs.
-    #>
-    param(
-        [switch]$DoCleaning,
-        [switch]$DoNetwork,
-        [switch]$DoServices
-    )
-
-    $flags = @()
-    if ($DoCleaning) { $flags += "Cleaning" }
-    if ($DoNetwork)  { $flags += "Network"  }
-    if ($DoServices) { $flags += "Services" }
-
-    if ($flags.Count -eq 0) {
-        Write-QLog "Engine: Advanced run requested with no flags – placeholder, doing nothing"
-    } else {
-        $joined = $flags -join ", "
-        Write-QLog "Engine: Advanced run requested for: $joined (placeholder only, no actions wired yet)"
+        Write-QLog "Advanced run completed"
+        Set-QOTStatus "Advanced Completed"
+    }
+    catch {
+        Write-QLog "Error in advanced run: $($_.Exception.Message)" "ERROR"
+        Set-QOTStatus "Advanced Error"
     }
 }
 
-# If you already have an Export-ModuleMember above, you can either:
-# - add these names to it, OR
-# - use a second Export-ModuleMember like this.
-
-Export-ModuleMember -Function `
-    Invoke-QOTCleaningRun, `
-    Invoke-QOTTweaksRun, `
-    Invoke-QOTAdvancedRun
-
-# Import feature modules so the engine knows about them
-Import-Module "$PSScriptRoot\..\TweaksAndCleaning\CleaningAndMain\CleaningAndMain.psm1" -Force
-Import-Module "$PSScriptRoot\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force
-Import-Module "$PSScriptRoot\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"       -Force
-Import-Module "$PSScriptRoot\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"   -Force
-Import-Module "$PSScriptRoot\..\UI\MainWindow.UI.psm1"                                  -Force
+# ------------------------------------------------------------
+# Start-QOTMain: entry point for main UI
+# ------------------------------------------------------------
 
 function Start-QOTMain {
     param(
-        [string]$Mode = 'Normal'
+        [string]$RootPath
     )
 
-    Write-QLog "Start-QOTMain called. Mode: $Mode"
+    Write-QLog "Start-QOTMain called. Root = $RootPath"
 
-    # Make sure engine is ready
-    Initialize-QOTEngine
+    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+        throw "UI module not loaded: Start-QOTMainWindow not found"
+    }
 
-    # Try to update the status text in the UI (if loaded)
     try {
-        Set-QOTSummary "System ready. Engine initialised."
-    } catch { }
-
-    # Open the main window
-    try {
-        Show-QOTMainWindow
-    } catch {
-        Write-QLog "Failed to open main window: $($_.Exception.Message)" "ERROR"
-        [System.Windows.MessageBox]::Show(
-            "Quinn Optimiser Toolkit could not open the main window.`n`n" +
-            "Check the log for more details.",
-            "Quinn Optimiser Toolkit",
-            'OK',
-            'Error'
-        ) | Out-Null
+        Start-QOTMainWindow
+    }
+    catch {
+        Write-QLog "UI failed to start: $($_.Exception.Message)" "ERROR"
+        throw
     }
 }
+
+Export-ModuleMember -Function `
+    Start-QOTMain, `
+    Invoke-QOTRun, `
+    Invoke-QOTAdvancedRun, `
+    Set-QOTStatus, `
+    Set-QOTProgress
