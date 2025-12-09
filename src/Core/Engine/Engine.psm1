@@ -8,8 +8,8 @@
     - Provide a central entry point for the main app
 #>
 
-Import-Module "$PSScriptRoot\Config.psm1"  -Force
-Import-Module "$PSScriptRoot\Logging.psm1" -Force
+Import-Module "$PSScriptRoot\Config\Config.psm1"   -Force
+Import-Module "$PSScriptRoot\Logging\Logging.psm1" -Force
 
 function Get-QOTModuleRoot {
     param(
