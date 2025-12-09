@@ -1,37 +1,7 @@
 # Splash.UI.psm1
 # Handles displaying and updating the splash/loading window
 
-# Path to Base64-encoded fox image (one long line)
-$script:FoxImagePath = Join-Path $PSScriptRoot "studio_voly_splash.txt"
-
-# Convert Base64 into a WPF ImageSource
-function Get-QOTFoxImage {
-    try {
-        if (-not (Test-Path $script:FoxImagePath)) { return $null }
-
-        $base64 = Get-Content $script:FoxImagePath -Raw
-        if (-not $base64) { return $null }
-
-        $bytes = [Convert]::FromBase64String($base64)
-
-        $ms = New-Object System.IO.MemoryStream
-        $ms.Write($bytes, 0, $bytes.Length)
-        $ms.Position = 0
-
-        $img = New-Object System.Windows.Media.Imaging.BitmapImage
-        $img.BeginInit()
-        $img.StreamSource = $ms
-        $img.CacheOption  = "OnLoad"
-        $img.EndInit()
-
-        return $img
-    }
-    catch {
-        return $null
-    }
-}
-
-# Loads XAML from file and returns the WPF window
+# Load XAML from file and return the WPF window, with logo wired up
 function New-QOTSplashWindow {
     param(
         [string]$Path
@@ -44,16 +14,26 @@ function New-QOTSplashWindow {
     $xamlContent = Get-Content $Path -Raw
     $window      = [Windows.Markup.XamlReader]::Parse($xamlContent)
 
-    # Try to apply the fox logo
+    # After the window is created, attach the Studio Voly logo
     try {
-        $logoCtrl = $window.FindName("LogoImage")
-        if ($logoCtrl) {
-            $img = Get-QOTFoxImage
-            if ($img) {
-                $logoCtrl.Source = $img
+        $imageControl = $window.FindName("FoxLogoImage")
+        if ($imageControl) {
+            $pngPath = Join-Path $PSScriptRoot "StudioVolySplash.png"
+
+            if (Test-Path $pngPath) {
+                $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+                $bitmap.BeginInit()
+                $bitmap.UriSource   = New-Object System.Uri($pngPath, [System.UriKind]::Absolute)
+                $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
+                $bitmap.EndInit()
+
+                $imageControl.Source = $bitmap
             }
         }
-    } catch { }
+    }
+    catch {
+        # If anything goes wrong, just continue without the image
+    }
 
     return $window
 }
@@ -68,7 +48,8 @@ function Update-QOTSplashStatus {
     try {
         $label = $Window.FindName("SplashStatusText")
         if ($label) { $label.Text = $Text }
-    } catch { }
+    }
+    catch { }
 }
 
 # Updates progress bar value
@@ -81,10 +62,10 @@ function Update-QOTSplashProgress {
     try {
         $bar = $Window.FindName("SplashProgressBar")
         if ($bar) { $bar.Value = $Value }
-    } catch { }
+    }
+    catch { }
 }
 
-# Exported functions
 Export-ModuleMember -Function `
     New-QOTSplashWindow, `
     Update-QOTSplashStatus, `
