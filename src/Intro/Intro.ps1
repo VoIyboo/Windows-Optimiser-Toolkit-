@@ -21,10 +21,42 @@ Import-Module $configModule  -Force
 Import-Module $loggingModule -Force
 Import-Module $engineModule  -Force
 
-# -----------------------------------------------------------------------------
+# -------------------------------------------------------------------
+# Safety net: ensure logging functions exist, even if module is older
+# -------------------------------------------------------------------
+if (-not (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue)) {
+    function Set-QLogRoot {
+        param([string]$Root)
+        # Simple fallback: just remember the root in a global variable
+        $Global:QOTLogRoot = $Root
+        Write-Host "[INFO] Set-QLogRoot fallback: $Root"
+    }
+}
+
+if (-not (Get-Command Start-QLogSession -ErrorAction SilentlyContinue)) {
+    function Start-QLogSession {
+        param([string]$Prefix = "QuinnOptimiserToolkit")
+        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Write-Host "[$ts] [INFO] Log session started (fallback in Intro.ps1)."
+    }
+}
+
+if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
+    function Write-QLog {
+        param(
+            [string]$Message,
+            [string]$Level = "INFO"
+        )
+        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        Write-Host "[$ts] [$Level] $Message"
+    }
+}
+
+# -------------------------------------------------------------------
 # Local bootstrap version of Initialize-QOTConfig
-# This guarantees the function exists even if the module doesn't export it yet.
-# -----------------------------------------------------------------------------
+# This guarantees the function exists even if the module doesn't
+# export it yet.
+# -------------------------------------------------------------------
 function Initialize-QOTConfig {
     param(
         [string]$RootPath
@@ -60,6 +92,7 @@ Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force
 # Initialise config and logging
 $cfg = Initialize-QOTConfig -RootPath $rootPath
 
+Set-QLogRoot -Root $cfg.LogsRoot
 Start-QLogSession
 
 Write-QLog "Intro starting. Root path: $rootPath"
