@@ -12,7 +12,7 @@
         Topmost="True">
 
     <Window.Resources>
-        <!-- Softer radial glow for behind the fox -->
+        <!-- Soft radial glow behind the fox -->
         <RadialGradientBrush x:Key="GlowBrush"
                              Center="0.5,0.4"
                              GradientOrigin="0.5,0.4"
@@ -35,31 +35,33 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!-- Logo + glow, centred properly -->
+            <!-- Logo + glow -->
             <Grid Grid.Row="0"
                   HorizontalAlignment="Center"
                   VerticalAlignment="Center">
 
-                <!-- Soft glow behind fox -->
-                <Ellipse Width="260"
-                         Height="260"
+                <!-- Glow circle -->
+                <Ellipse Width="220"
+                         Height="220"
                          Fill="{StaticResource GlowBrush}"
-                         Opacity="0.7">
+                         Opacity="0.85"
+                         Panel.ZIndex="0">
                     <Ellipse.Effect>
-                        <BlurEffect Radius="20" />
+                        <BlurEffect Radius="25" />
                     </Ellipse.Effect>
                 </Ellipse>
 
-                <!-- Studio Voly fox logo -->
+                <!-- Studio Voly logo -->
                 <Image Source="StudioVolySplash.png"
-                       Width="220"
+                       Width="190"
                        Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="HighQuality"
                        HorizontalAlignment="Center"
-                       VerticalAlignment="Center" />
+                       VerticalAlignment="Center"
+                       Panel.ZIndex="1" />
             </Grid>
 
-            <!-- Status text + progress bar at the bottom -->
+            <!-- Status + progress -->
             <StackPanel Grid.Row="1"
                         Margin="40,0,40,24"
                         Orientation="Vertical"
