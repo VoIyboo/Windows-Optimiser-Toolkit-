@@ -288,50 +288,54 @@
             </TabItem>
         </TabControl>
 
-        <!-- Status bar -->
-        <Border Grid.Row="2"
-                Background="#020617"
-                Padding="6"
-                BorderBrush="#111827"
-                BorderThickness="1,1,1,0">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Left"
-                            Orientation="Horizontal">
-                    <TextBlock Text="Status: "
-                               Foreground="{StaticResource TextSubtle}" />
-                    <TextBlock x:Name="StatusLabel"
-                               Text="Idle"
-                               Foreground="White" />
-                </StackPanel>
+       <!-- Status bar -->
+<Border Grid.Row="2"
+        Background="#020617"
+        Padding="6"
+        BorderBrush="#111827"
+        BorderThickness="1,1,1,0">
+    <DockPanel LastChildFill="False">
 
-                <StackPanel DockPanel.Dock="Right"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center">
+        <!-- Left: plain status text -->
+        <StackPanel DockPanel.Dock="Left"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+            <TextBlock Text="Status: "
+                       Foreground="{StaticResource TextSubtle}" />
+            <TextBlock x:Name="StatusLabel"
+                       Text="Idle"
+                       Foreground="White" />
+        </StackPanel>
 
-                    <!-- Summary + Run button -->
-                    <StackPanel Orientation="Vertical"
-                                Margin="0,0,10,0"
-                                VerticalAlignment="Center">
-                        <TextBlock x:Name="SelectedActionsText"
-                                   Text="Selected actions: summary coming soon"
-                                   Foreground="{StaticResource TextSubtle}"
-                                   FontSize="11"
-                                   TextAlignment="Right" />
-                        <Button x:Name="RunButton"
-                                Content="Run selected actions"
-                                Width="190"
-                                Style="{StaticResource PrimaryButton}" />
-                    </StackPanel>
+        <!-- Right: summary + run + progress -->
+        <StackPanel DockPanel.Dock="Right"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
 
-                    <!-- Progress bar -->
-                    <ProgressBar x:Name="MainProgress"
-                                 Width="220"
-                                 Height="16"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 Value="0" />
-                </StackPanel>
-            </DockPanel>
-        </Border>
+            <!-- Summary + Run button -->
+            <StackPanel Orientation="Vertical"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center">
+                <TextBlock x:Name="SelectedActionsText"
+                           Text="Selected actions: summary coming soon"
+                           Foreground="{StaticResource TextSubtle}"
+                           FontSize="11"
+                           TextAlignment="Right" />
+                <Button x:Name="RunButton"
+                        Content="Run selected actions"
+                        Width="190"
+                        Style="{StaticResource PrimaryButton}" />
+            </StackPanel>
+
+            <!-- Progress bar -->
+            <ProgressBar x:Name="MainProgress"
+                         Width="220"
+                         Height="16"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0" />
+        </StackPanel>
+    </DockPanel>
+</Border>
     </Grid>
 </Window>
