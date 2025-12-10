@@ -116,11 +116,39 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <GroupBox Header="Cleaning &amp; Maintenance" Grid.Column="0">
-                        <TextBlock Text="Cleaning actions will live here."
-                                   Foreground="{StaticResource TextSubtle}"
-                                   TextWrapping="Wrap" />
-                    </GroupBox>
+<GroupBox Header="Cleaning &amp; Maintenance" Grid.Column="0">
+    <StackPanel Margin="6">
+        <TextBlock Text="Choose what you want to clean. These are placeholders for now."
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="12"
+                   Margin="0,0,0,8" />
+
+        <CheckBox x:Name="ChkCleanTemp"
+                  Content="Clear temporary files"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,4" />
+
+        <CheckBox x:Name="ChkCleanDeliveryCache"
+                  Content="Clean Delivery Optimisation cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,4" />
+
+        <CheckBox x:Name="ChkCleanWUCache"
+                  Content="Clear Windows Update cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,4" />
+
+        <CheckBox x:Name="ChkCleanRecycleBin"
+                  Content="Empty Recycle Bin"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,4" />
+    </StackPanel>
+</GroupBox>
+
 
                     <GroupBox Header="Tweaks &amp; Privacy" Grid.Column="1">
                         <TextBlock Text="UI and privacy tweaks will live here."
