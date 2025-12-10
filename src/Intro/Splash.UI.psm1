@@ -70,4 +70,3 @@ Export-ModuleMember -Function `
     New-QOTSplashWindow, `
     Update-QOTSplashStatus, `
     Update-QOTSplashProgress
-
