@@ -115,204 +115,210 @@
         <!-- Main tabs -->
         <TabControl Grid.Row="1" x:Name="MainTabs" Margin="10">
             <!-- Tweaks & Cleaning -->
-            <TabItem Header="Tweaks &amp; Cleaning">
+                       <TabItem Header="Tweaks &amp; Cleaning">
                 <Grid Margin="5,10,5,5">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-<GroupBox Header="Cleaning &amp; Maintenance" Grid.Column="0">
-    <StackPanel Margin="8">
+                    <!-- Left: Cleaning & Maintenance -->
+                    <GroupBox Header="Cleaning &amp; Maintenance"
+                              Grid.Column="0"
+                              Margin="0,0,8,0">
+                        <StackPanel Margin="4">
 
-        <!-- Storage cleanup -->
-        <TextBlock Text="Storage cleanup"
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="13"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,4" />
+                            <!-- Storage cleanup -->
+                            <TextBlock Text="Storage cleanup"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,6" />
 
-        <CheckBox x:Name="CbCleanTempFiles"
-                  Content="Clear temporary files"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbCleanTempFiles"
+                                      Content="Clear temporary files"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbEmptyRecycleBin"
-                  Content="Empty Recycle Bin"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbEmptyRecycleBin"
+                                      Content="Empty Recycle Bin"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbCleanDoCache"
-                  Content="Clean Delivery Optimisation cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbCleanDoCache"
+                                      Content="Clean Delivery Optimisation cache"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbCleanWuCache"
-                  Content="Clear Windows Update cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbCleanWuCache"
+                                      Content="Clear Windows Update cache"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbCleanThumbCache"
-                  Content="Clean thumbnail cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,8" />
+                            <CheckBox x:Name="CbCleanThumbCache"
+                                      Content="Clean thumbnail cache"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,8" />
 
-        <Separator Margin="0,4,0,8" />
+                            <Separator Margin="0,10,0,10" />
 
-        <!-- Windows housekeeping -->
-        <TextBlock Text="Windows housekeeping"
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="13"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,4" />
+                            <!-- Windows housekeeping -->
+                            <TextBlock Text="Windows housekeeping"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,6" />
 
-        <CheckBox x:Name="CbCleanErrorLogs"
-                  Content="Clean old error logs and crash dumps"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbCleanErrorLogs"
+                                      Content="Clean old error logs and crash dumps"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbCleanSetupLeftovers"
-                  Content="Remove safe setup / upgrade leftovers"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbCleanSetupLeftovers"
+                                      Content="Remove safe setup / upgrade leftovers"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbClearStoreCache"
-                  Content="Clear Microsoft Store cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,8" />
+                            <CheckBox x:Name="CbClearStoreCache"
+                                      Content="Clear Microsoft Store cache"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,8" />
 
-        <Separator Margin="0,4,0,8" />
+                            <Separator Margin="0,10,0,10" />
 
-        <!-- Browser cleanup (light, non-destructive) -->
-        <TextBlock Text="Browser cleanup (light)"
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="13"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,4" />
+                            <!-- Browser cleanup (light, non-destructive) -->
+                            <TextBlock Text="Browser cleanup (light)"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,6" />
 
-        <CheckBox x:Name="CbEdgeLightCleanup"
-                  Content="Light clean of Microsoft Edge cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbEdgeLightCleanup"
+                                      Content="Light clean of Microsoft Edge cache"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbChromeLightCleanup"
-                  Content="Light clean of Chrome / Chromium cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbChromeLightCleanup"
+                                      Content="Light clean of Chrome / Chromium cache"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-    </StackPanel>
-</GroupBox>
+                        </StackPanel>
+                    </GroupBox>
 
+                    <!-- Right: Tweaks & Privacy -->
+                    <GroupBox Header="Tweaks &amp; Privacy"
+                              Grid.Column="1"
+                              Margin="8,0,0,0">
+                        <StackPanel Margin="4">
 
+                            <!-- Start menu & recommendations -->
+                            <TextBlock Text="Start menu &amp; recommendations"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,6" />
 
-                    <GroupBox Header="Tweaks &amp; Privacy" Grid.Column="1">
-    <StackPanel Margin="8">
+                            <CheckBox x:Name="CbDisableStartRecommended"
+                                      Content="Hide Start menu recommended items"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <!-- Start menu & recommendations -->
-       <TextBlock Text="Start menu &amp; recommendations"
-           Foreground="{StaticResource TextSubtle}"
-           FontSize="13"
-           FontWeight="SemiBold"
-           Margin="0,0,0,4" />
+                            <CheckBox x:Name="CbDisableSuggestedApps"
+                                      Content="Turn off suggested apps and promotions"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-<CheckBox x:Name="CbDisableStartRecommended"
-          Content="Hide Start menu recommended items"
-          Foreground="White"
-          FontSize="14"
-          Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbDisableTipsStart"
+                                      Content="Disable tips and suggestions in Start"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,8" />
 
-<CheckBox x:Name="CbDisableSuggestedApps"
-          Content="Turn off suggested apps and promotions"
-          Foreground="White"
-          FontSize="14"
-          Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbDisableBingSearch"
+                                      Content="Turn off Bing / web results in Start search"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-<CheckBox x:Name="CbDisableTipsStart"
-          Content="Disable tips and suggestions in Start"
-          Foreground="White"
-          FontSize="14"
-          Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbClassicMoreOptions"
+                                      Content="Use classic 'More options' right-click menu"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,10" />
 
-<!-- New: block Bing / web results in Start search -->
-<CheckBox x:Name="CbDisableBingSearch"
-          Content="Turn off Bing / web results in Start search"
-          Foreground="White"
-          FontSize="14"
-          Margin="0,0,0,2" />
+                            <Separator Margin="0,10,0,10" />
 
-<!-- New: default to classic “More options” menu -->
-<CheckBox x:Name="CbEnableClassicContextMenu"
-          Content="Use classic 'More options' right-click menu"
-          Foreground="White"
-          FontSize="14"
-          Margin="0,0,0,8" />
+                            <!-- Taskbar & widgets -->
+                            <TextBlock Text="Taskbar &amp; widgets"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,6" />
 
-<Separator Margin="0,4,0,8" />
+                            <CheckBox x:Name="CbDisableWidgets"
+                                      Content="Turn off Widgets"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <!-- Taskbar & widgets -->
-        <TextBlock Text="Taskbar &amp; widgets"
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="13"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,4" />
+                            <CheckBox x:Name="CbDisableTaskbarNews"
+                                      Content="Turn off News / taskbar content"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbDisableWidgets"
-                  Content="Turn off Widgets"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbDisableMeetNow"
+                                      Content="Hide legacy Meet Now button (if present)"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,8" />
 
-        <CheckBox x:Name="CbDisableTaskbarNews"
-                  Content="Turn off News / taskbar content"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <Separator Margin="0,10,0,10" />
 
-        <CheckBox x:Name="CbDisableMeetNow"
-                  Content="Hide legacy Meet Now button (if present)"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,8" />
+                            <!-- Privacy & telemetry (safe level) -->
+                            <TextBlock Text="Privacy &amp; telemetry (safe level)"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,6" />
 
-        <Separator Margin="0,4,0,8" />
+                            <CheckBox x:Name="CbDisableAdvertisingId"
+                                      Content="Turn off advertising ID"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <!-- Privacy & telemetry (safe level) -->
-        <TextBlock Text="Privacy &amp; telemetry (safe level)"
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="13"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,4" />
+                            <CheckBox x:Name="CbLimitFeedbackPrompts"
+                                      Content="Reduce feedback and survey prompts"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbDisableAdvertisingId"
-                  Content="Turn off advertising ID"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                            <CheckBox x:Name="CbDisableOnlineTips"
+                                      Content="Disable online tips and suggestions"
+                                      Foreground="White"
+                                      FontSize="14"
+                                      Margin="0,0,0,2" />
 
-        <CheckBox x:Name="CbLimitFeedbackPrompts"
-                  Content="Reduce feedback and survey prompts"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                        </StackPanel>
+                    </GroupBox>
 
-        <CheckBox x:Name="CbDisableOnlineTips"
-                  Content="Disable online tips and suggestions"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,2" />
+                </Grid>
+            </TabItem>
 
-    </StackPanel>
-</GroupBox>
 
                 </Grid>
             </TabItem>
