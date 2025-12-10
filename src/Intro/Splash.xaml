@@ -52,7 +52,7 @@
                 </Ellipse>
 
                 <!-- Studio Voly logo -->
-                <Image Source="StudioVolySplash.png"
+                <Image Source="src/Intro/StudioVolySplash.png"
                        Width="190"
                        Stretch="Uniform"
                        RenderOptions.BitmapScalingMode="HighQuality"
