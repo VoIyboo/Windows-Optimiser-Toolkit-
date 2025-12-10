@@ -13,6 +13,7 @@
         <SolidColorBrush x:Key="CardBrush"     Color="#020617" />
         <SolidColorBrush x:Key="BorderBrush"   Color="#374151" />
         <SolidColorBrush x:Key="TextSubtle"    Color="#9CA3AF" />
+        <SolidColorBrush x:Key="SoftSeparator" Color="#4B5563" />
 
         <!-- Simple button style -->
         <Style TargetType="Button">
