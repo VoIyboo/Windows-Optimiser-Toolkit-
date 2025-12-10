@@ -48,7 +48,7 @@
                              Height="16"
                              Width="420"
                              HorizontalAlignment="Center"
-                             Value="10" />
+                             Value="4" />
             </StackPanel>
         </Grid>
     </Border>
