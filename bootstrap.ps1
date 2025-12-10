@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 $originalLocation = Get-Location
 
 # Win32 helper to control the PowerShell window
-Add-Type -Namespace QOT -Name NativeMethods -MemberDefinition @'
+Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 
@@ -16,14 +16,14 @@ public static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
-'@
+"@
 
 # Try to get the current PowerShell host window and minimise it
 $psWindowHandle = [IntPtr](Get-Process -Id $PID).MainWindowHandle
 if ($psWindowHandle -ne [IntPtr]::Zero)
 {
     # 6 = SW_MINIMIZE
-    [QOT.NativeMethods]::ShowWindow($psWindowHandle, 6) | Out-Null
+    [NativeMethods]::ShowWindow($psWindowHandle, 6);
 }
 
 try {
@@ -87,6 +87,6 @@ finally {
     # Restore the PowerShell window if we managed to minimise it
     if ($psWindowHandle -ne [IntPtr]::Zero) {
         # 9 = SW_RESTORE
-        [QOT.NativeMethods]::ShowWindow($psWindowHandle, 9) | Out-Null
+        [NativeMethods]::ShowWindow($psWindowHandle, 9);
     }
 }
