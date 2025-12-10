@@ -213,7 +213,7 @@
     <StackPanel Margin="8">
 
         <!-- Start menu & recommendations -->
-        <TextBlock Text="Start menu & recommendations"
+        <TextBlock Text="Start menu &amp; recommendations"
                    Foreground="{StaticResource TextSubtle}"
                    FontSize="13"
                    FontWeight="SemiBold"
@@ -240,7 +240,7 @@
         <Separator Margin="0,4,0,8" />
 
         <!-- Taskbar & widgets -->
-        <TextBlock Text="Taskbar & widgets"
+        <TextBlock Text="Taskbar &amp; widgets"
                    Foreground="{StaticResource TextSubtle}"
                    FontSize="13"
                    FontWeight="SemiBold"
@@ -267,7 +267,7 @@
         <Separator Margin="0,4,0,8" />
 
         <!-- Privacy & telemetry (safe level) -->
-        <TextBlock Text="Privacy & telemetry (safe level)"
+        <TextBlock Text="Privacy &amp; telemetry (safe level)"
                    Foreground="{StaticResource TextSubtle}"
                    FontSize="13"
                    FontWeight="SemiBold"
