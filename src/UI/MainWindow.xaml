@@ -117,37 +117,96 @@
                     </Grid.ColumnDefinitions>
 
 <GroupBox Header="Cleaning &amp; Maintenance" Grid.Column="0">
-    <StackPanel Margin="6">
-        <TextBlock Text="Choose what you want to clean. These are placeholders for now."
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="12"
-                   Margin="0,0,0,8" />
+    <StackPanel Margin="8">
 
-        <CheckBox x:Name="ChkCleanTemp"
+        <!-- Storage cleanup -->
+        <TextBlock Text="Storage cleanup"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,4" />
+
+        <CheckBox x:Name="CbCleanTempFiles"
                   Content="Clear temporary files"
                   Foreground="White"
                   FontSize="14"
-                  Margin="0,0,0,4" />
+                  Margin="0,0,0,2" />
 
-        <CheckBox x:Name="ChkCleanDeliveryCache"
-                  Content="Clean Delivery Optimisation cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,4" />
-
-        <CheckBox x:Name="ChkCleanWUCache"
-                  Content="Clear Windows Update cache"
-                  Foreground="White"
-                  FontSize="14"
-                  Margin="0,0,0,4" />
-
-        <CheckBox x:Name="ChkCleanRecycleBin"
+        <CheckBox x:Name="CbEmptyRecycleBin"
                   Content="Empty Recycle Bin"
                   Foreground="White"
                   FontSize="14"
-                  Margin="0,0,0,4" />
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbCleanDoCache"
+                  Content="Clean Delivery Optimisation cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbCleanWuCache"
+                  Content="Clear Windows Update cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbCleanThumbCache"
+                  Content="Clean thumbnail cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,8" />
+
+        <Separator Margin="0,4,0,8" />
+
+        <!-- Windows housekeeping -->
+        <TextBlock Text="Windows housekeeping"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,4" />
+
+        <CheckBox x:Name="CbCleanErrorLogs"
+                  Content="Clean old error logs and crash dumps"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbCleanSetupLeftovers"
+                  Content="Remove safe setup / upgrade leftovers"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbClearStoreCache"
+                  Content="Clear Microsoft Store cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,8" />
+
+        <Separator Margin="0,4,0,8" />
+
+        <!-- Browser cleanup (light, non-destructive) -->
+        <TextBlock Text="Browser cleanup (light)"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,4" />
+
+        <CheckBox x:Name="CbEdgeLightCleanup"
+                  Content="Light clean of Microsoft Edge cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbChromeLightCleanup"
+                  Content="Light clean of Chrome / Chromium cache"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
     </StackPanel>
 </GroupBox>
+
 
 
                     <GroupBox Header="Tweaks &amp; Privacy" Grid.Column="1">
