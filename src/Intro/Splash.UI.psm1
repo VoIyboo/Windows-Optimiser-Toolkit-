@@ -1,7 +1,7 @@
 # Splash.UI.psm1
 # Handles displaying and updating the splash/loading window
 
-# Loads XAML from file and returns the WPF window
+# Load XAML from file and return the WPF window, with logo wired up
 function New-QOTSplashWindow {
     param(
         [string]$Path
@@ -12,30 +12,27 @@ function New-QOTSplashWindow {
     }
 
     $xamlContent = Get-Content $Path -Raw
-    $window = [Windows.Markup.XamlReader]::Parse($xamlContent)
+    $window      = [Windows.Markup.XamlReader]::Parse($xamlContent)
 
-    # Try to wire up the Studio Voly logo from disk
+    # After the window is created, attach the Studio Voly logo
     try {
-        $logoControl = $window.FindName("LogoImage")
-        if ($logoControl) {
-            # repo root = parent of parent of this module folder (src\Intro)
-            $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-            $logoPath = Join-Path $rootPath "src\Intro\StudioVolySplash.png"
+        $imageControl = $window.FindName("FoxLogoImage")
+        if ($imageControl) {
+            $pngPath = Join-Path $PSScriptRoot "StudioVolySplash.png"
 
-            if (Test-Path $logoPath) {
+            if (Test-Path $pngPath) {
                 $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
                 $bitmap.BeginInit()
-                $bitmap.UriSource = New-Object System.Uri($logoPath, [System.UriKind]::Absolute)
+                $bitmap.UriSource   = New-Object System.Uri($pngPath, [System.UriKind]::Absolute)
                 $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
                 $bitmap.EndInit()
 
-                $logoControl.Source = $bitmap
-            } else {
-                Write-Host "Splash logo not found at $logoPath" -ForegroundColor Yellow
+                $imageControl.Source = $bitmap
             }
         }
-    } catch {
-        Write-Host "Failed to load splash logo: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    catch {
+        # If anything goes wrong, just continue without the image
     }
 
     return $window
@@ -51,7 +48,8 @@ function Update-QOTSplashStatus {
     try {
         $label = $Window.FindName("SplashStatusText")
         if ($label) { $label.Text = $Text }
-    } catch { }
+    }
+    catch { }
 }
 
 # Updates progress bar value
@@ -64,8 +62,11 @@ function Update-QOTSplashProgress {
     try {
         $bar = $Window.FindName("SplashProgressBar")
         if ($bar) { $bar.Value = $Value }
-    } catch { }
+    }
+    catch { }
 }
 
-# Clean export list
-Export-ModuleMember -Function New-QOTSplashWindow, Update-QOTSplashStatus, Update-QOTSplashProgress
+Export-ModuleMember -Function `
+    New-QOTSplashWindow, `
+    Update-QOTSplashStatus, `
+    Update-QOTSplashProgress
