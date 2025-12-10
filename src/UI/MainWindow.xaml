@@ -15,7 +15,7 @@
         <SolidColorBrush x:Key="TextSubtle"    Color="#9CA3AF" />
         <SolidColorBrush x:Key="SoftSeparator" Color="#4B5563" />
 
-                <!-- Simple button style -->
+        <!-- Simple button style -->
         <Style TargetType="Button">
             <Setter Property="Margin" Value="5" />
             <Setter Property="Padding" Value="6,3" />
@@ -25,7 +25,9 @@
         </Style>
 
         <!-- Primary CTA button (used for Run selected actions) -->
-        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Style x:Key="PrimaryButton"
+               TargetType="Button"
+               BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Padding" Value="12,6" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="HorizontalAlignment" Value="Right" />
@@ -47,28 +49,23 @@
 
         <!-- GroupBox style -->
         <Style TargetType="GroupBox">
-            <!-- Outer spacing between cards -->
             <Setter Property="Margin" Value="10" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="GroupBox">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <!-- Header -->
                                 <RowDefinition Height="Auto" />
-                                <!-- Body -->
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
                             <!-- Header bar -->
                             <Border Grid.Row="0"
                                     Background="{TemplateBinding Background}"
-                                    Margin="0,0,0,0"
                                     Padding="12,4,12,4"
                                     BorderBrush="{StaticResource AccentBrush}"
                                     BorderThickness="0,0,0,2">
@@ -92,7 +89,7 @@
             </Setter>
         </Style>
 
-        <!-- Section heading style (Storage cleanup, Taskbar & widgets, etc.) -->
+        <!-- Section heading style -->
         <Style x:Key="SectionHeading" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextSubtle}" />
             <Setter Property="FontSize" Value="13" />
@@ -100,7 +97,7 @@
             <Setter Property="Margin" Value="0,0,0,6" />
         </Style>
 
-        <!-- Checkbox style for nice alignment -->
+        <!-- Checkbox style -->
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="White" />
             <Setter Property="FontSize" Value="14" />
@@ -167,7 +164,7 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: Cleaning & Maintenance -->
+                    <!-- Cleaning & Maintenance -->
                     <GroupBox Header="Cleaning &amp; Maintenance"
                               Grid.Column="0"
                               Margin="0,0,8,0">
@@ -179,16 +176,12 @@
 
                             <CheckBox x:Name="CbCleanTempFiles"
                                       Content="Clear temporary files" />
-
                             <CheckBox x:Name="CbEmptyRecycleBin"
                                       Content="Empty Recycle Bin" />
-
                             <CheckBox x:Name="CbCleanDoCache"
                                       Content="Clean Delivery Optimisation cache" />
-
                             <CheckBox x:Name="CbCleanWuCache"
                                       Content="Clear Windows Update cache" />
-
                             <CheckBox x:Name="CbCleanThumbCache"
                                       Content="Clean thumbnail cache" />
 
@@ -200,29 +193,26 @@
 
                             <CheckBox x:Name="CbCleanErrorLogs"
                                       Content="Clean old error logs and crash dumps" />
-
                             <CheckBox x:Name="CbCleanSetupLeftovers"
                                       Content="Remove safe setup / upgrade leftovers" />
-
                             <CheckBox x:Name="CbClearStoreCache"
                                       Content="Clear Microsoft Store cache" />
 
                             <Separator />
 
-                            <!-- Browser cleanup (light, non-destructive) -->
+                            <!-- Browser cleanup (light) -->
                             <TextBlock Text="Browser cleanup (light)"
                                        Style="{StaticResource SectionHeading}" />
 
                             <CheckBox x:Name="CbEdgeLightCleanup"
                                       Content="Light clean of Microsoft Edge cache" />
-
                             <CheckBox x:Name="CbChromeLightCleanup"
                                       Content="Light clean of Chrome / Chromium cache" />
 
                         </StackPanel>
                     </GroupBox>
 
-                    <!-- Right: Tweaks & Privacy -->
+                    <!-- Tweaks & Privacy -->
                     <GroupBox Header="Tweaks &amp; Privacy"
                               Grid.Column="1"
                               Margin="8,0,0,0">
@@ -234,16 +224,12 @@
 
                             <CheckBox x:Name="CbDisableStartRecommended"
                                       Content="Hide Start menu recommended items" />
-
                             <CheckBox x:Name="CbDisableSuggestedApps"
                                       Content="Turn off suggested apps and promotions" />
-
                             <CheckBox x:Name="CbDisableTipsStart"
                                       Content="Disable tips and suggestions in Start" />
-
                             <CheckBox x:Name="CbDisableBingSearch"
                                       Content="Turn off Bing / web results in Start search" />
-
                             <CheckBox x:Name="CbClassicMoreOptions"
                                       Content="Use classic 'More options' right-click menu" />
 
@@ -255,25 +241,21 @@
 
                             <CheckBox x:Name="CbDisableWidgets"
                                       Content="Turn off Widgets" />
-
                             <CheckBox x:Name="CbDisableTaskbarNews"
                                       Content="Turn off News / taskbar content" />
-
                             <CheckBox x:Name="CbDisableMeetNow"
                                       Content="Hide legacy Meet Now button (if present)" />
 
                             <Separator />
 
-                            <!-- Privacy & telemetry (safe level) -->
+                            <!-- Privacy & telemetry -->
                             <TextBlock Text="Privacy &amp; telemetry (safe level)"
                                        Style="{StaticResource SectionHeading}" />
 
                             <CheckBox x:Name="CbDisableAdvertisingId"
                                       Content="Turn off advertising ID" />
-
                             <CheckBox x:Name="CbLimitFeedbackPrompts"
                                       Content="Reduce feedback and survey prompts" />
-
                             <CheckBox x:Name="CbDisableOnlineTips"
                                       Content="Disable online tips and suggestions" />
 
@@ -304,7 +286,6 @@
                     </GroupBox>
                 </Grid>
             </TabItem>
-
         </TabControl>
 
         <!-- Status bar -->
@@ -314,8 +295,10 @@
                 BorderBrush="#111827"
                 BorderThickness="1,1,1,0">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <TextBlock Text="Status: " Foreground="{StaticResource TextSubtle}" />
+                <StackPanel DockPanel.Dock="Left"
+                            Orientation="Horizontal">
+                    <TextBlock Text="Status: "
+                               Foreground="{StaticResource TextSubtle}" />
                     <TextBlock x:Name="StatusLabel"
                                Text="Idle"
                                Foreground="White" />
@@ -325,7 +308,7 @@
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
 
-                    <!-- Summary + Run button as a small control block -->
+                    <!-- Summary + Run button -->
                     <StackPanel Orientation="Vertical"
                                 Margin="0,0,10,0"
                                 VerticalAlignment="Center">
@@ -340,7 +323,7 @@
                                 Style="{StaticResource PrimaryButton}" />
                     </StackPanel>
 
-                    <!-- Progress to the right of the block -->
+                    <!-- Progress bar -->
                     <ProgressBar x:Name="MainProgress"
                                  Width="220"
                                  Height="16"
