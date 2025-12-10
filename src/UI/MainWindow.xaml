@@ -210,10 +210,90 @@
 
 
                     <GroupBox Header="Tweaks &amp; Privacy" Grid.Column="1">
-                        <TextBlock Text="UI and privacy tweaks will live here."
-                                   Foreground="{StaticResource TextSubtle}"
-                                   TextWrapping="Wrap" />
-                    </GroupBox>
+    <StackPanel Margin="8">
+
+        <!-- Start menu & recommendations -->
+        <TextBlock Text="Start menu & recommendations"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,4" />
+
+        <CheckBox x:Name="CbDisableStartRecommended"
+                  Content="Hide Start menu recommended items"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbDisableSuggestedApps"
+                  Content="Turn off suggested apps and promotions"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbDisableTipsStart"
+                  Content="Disable tips and suggestions in Start"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,8" />
+
+        <Separator Margin="0,4,0,8" />
+
+        <!-- Taskbar & widgets -->
+        <TextBlock Text="Taskbar & widgets"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,4" />
+
+        <CheckBox x:Name="CbDisableWidgets"
+                  Content="Turn off Widgets"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbDisableTaskbarNews"
+                  Content="Turn off News / taskbar content"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbDisableMeetNow"
+                  Content="Hide legacy Meet Now button (if present)"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,8" />
+
+        <Separator Margin="0,4,0,8" />
+
+        <!-- Privacy & telemetry (safe level) -->
+        <TextBlock Text="Privacy & telemetry (safe level)"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,4" />
+
+        <CheckBox x:Name="CbDisableAdvertisingId"
+                  Content="Turn off advertising ID"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbLimitFeedbackPrompts"
+                  Content="Reduce feedback and survey prompts"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+        <CheckBox x:Name="CbDisableOnlineTips"
+                  Content="Disable online tips and suggestions"
+                  Foreground="White"
+                  FontSize="14"
+                  Margin="0,0,0,2" />
+
+    </StackPanel>
+</GroupBox>
+
                 </Grid>
             </TabItem>
 
