@@ -23,7 +23,7 @@
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
         </Style>
 
-        <!-- GroupBox style -->
+                <!-- GroupBox style -->
         <Style TargetType="GroupBox">
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Margin" Value="10" />
@@ -35,8 +35,10 @@
                 <Setter.Value>
                     <DataTemplate>
                         <TextBlock Text="{Binding}"
-                                   Foreground="{StaticResource AccentBrush}"
-                                   FontWeight="Bold" />
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#E5E7EB"
+                                   Margin="6,0,0,4" />
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
