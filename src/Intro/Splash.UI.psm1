@@ -1,10 +1,10 @@
 # Splash.UI.psm1
 # Handles displaying and updating the splash/loading window
 
+# Load XAML from file and return the WPF window, with logo wired up
 function New-QOTSplashWindow {
     param(
-        [string]$Path,
-        [string]$LogoPath
+        [string]$Path
     )
 
     if (-not (Test-Path $Path)) {
@@ -14,26 +14,31 @@ function New-QOTSplashWindow {
     $xamlContent = Get-Content $Path -Raw
     $window      = [Windows.Markup.XamlReader]::Parse($xamlContent)
 
-    # Attach Studio Voly logo if available
+    # After the window is created, attach the Studio Voly logo
     try {
-        if ($LogoPath -and (Test-Path $LogoPath)) {
-            $img = $window.FindName("FoxLogoImage")
-            if ($img) {
+        $imageControl = $window.FindName("FoxLogoImage")
+        if ($imageControl) {
+            $pngPath = Join-Path $PSScriptRoot "StudioVolySplash.png"
+
+            if (Test-Path $pngPath) {
                 $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
                 $bitmap.BeginInit()
-                $bitmap.UriSource   = [Uri]::new($LogoPath)
+                $bitmap.UriSource   = New-Object System.Uri($pngPath, [System.UriKind]::Absolute)
                 $bitmap.CacheOption = [System.Windows.Media.Imaging.BitmapCacheOption]::OnLoad
                 $bitmap.EndInit()
-                $img.Source = $bitmap
+
+                $imageControl.Source = $bitmap
             }
         }
-    } catch {
-        # If image fails, just continue with glow + progress
+    }
+    catch {
+        # If anything goes wrong, just continue without the image
     }
 
     return $window
 }
 
+# Updates status text in the splash window
 function Update-QOTSplashStatus {
     param(
         [object]$Window,
@@ -42,15 +47,12 @@ function Update-QOTSplashStatus {
 
     try {
         $label = $Window.FindName("SplashStatusText")
-        if ($label) {
-            $label.Dispatcher.Invoke({
-                param($t)
-                $this.Text = $t
-            }, $Text)
-        }
-    } catch { }
+        if ($label) { $label.Text = $Text }
+    }
+    catch { }
 }
 
+# Updates progress bar value
 function Update-QOTSplashProgress {
     param(
         [object]$Window,
@@ -59,13 +61,9 @@ function Update-QOTSplashProgress {
 
     try {
         $bar = $Window.FindName("SplashProgressBar")
-        if ($bar) {
-            $bar.Dispatcher.Invoke({
-                param($v)
-                $this.Value = $v
-            }, $Value)
-        }
-    } catch { }
+        if ($bar) { $bar.Value = $Value }
+    }
+    catch { }
 }
 
 Export-ModuleMember -Function `
