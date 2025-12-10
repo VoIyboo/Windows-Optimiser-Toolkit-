@@ -113,9 +113,11 @@
         </Border>
 
         <!-- Main tabs -->
+               <!-- Main tabs -->
         <TabControl Grid.Row="1" x:Name="MainTabs" Margin="10">
+
             <!-- Tweaks & Cleaning -->
-                       <TabItem Header="Tweaks &amp; Cleaning">
+            <TabItem Header="Tweaks &amp; Cleaning">
                 <Grid Margin="5,10,5,5">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -319,10 +321,6 @@
                 </Grid>
             </TabItem>
 
-
-                </Grid>
-            </TabItem>
-
             <!-- Apps -->
             <TabItem Header="Apps">
                 <Grid Margin="5,10,5,5">
@@ -344,6 +342,7 @@
                     </GroupBox>
                 </Grid>
             </TabItem>
+
         </TabControl>
 
         <!-- Status bar -->
