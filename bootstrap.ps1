@@ -3,14 +3,19 @@
 
 $ErrorActionPreference = "Stop"
 
+finally {
 # Remember where the user started
 $originalLocation = Get-Location
 
-try {
-    # Make sure TLS 1.2 is enabled for GitHub
     try {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    } catch { }
+        # Make sure TLS 1.2 is enabled for GitHub
+        try {
+            if ($consoleHandle -ne [IntPtr]::Zero) {
+                # 9 = SW_RESTORE – brings it back to normal state
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            }
+        } catch { }
+    }
 
     $repoOwner = "VoIyboo"
     $repoName  = "Windows-Optimiser-Toolkit-"
