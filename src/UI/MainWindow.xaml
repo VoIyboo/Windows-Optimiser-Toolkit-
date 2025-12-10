@@ -321,13 +321,28 @@
                                Foreground="White" />
                 </StackPanel>
 
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button x:Name="RunButton"
-                            Content="Run selected actions"
-                            Width="160"
-                            Margin="0,0,10,0" />
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+
+                    <!-- Summary + Run button as a small control block -->
+                    <StackPanel Orientation="Vertical"
+                                Margin="0,0,10,0"
+                                VerticalAlignment="Center">
+                        <TextBlock x:Name="SelectedActionsText"
+                                   Text="Selected actions: summary coming soon"
+                                   Foreground="{StaticResource TextSubtle}"
+                                   FontSize="11"
+                                   TextAlignment="Right" />
+                        <Button x:Name="RunButton"
+                                Content="Run selected actions"
+                                Width="190"
+                                Style="{StaticResource PrimaryButton}" />
+                    </StackPanel>
+
+                    <!-- Progress to the right of the block -->
                     <ProgressBar x:Name="MainProgress"
-                                 Width="200"
+                                 Width="220"
                                  Height="16"
                                  Minimum="0"
                                  Maximum="100"
