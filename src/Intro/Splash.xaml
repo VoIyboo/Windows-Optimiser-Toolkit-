@@ -11,73 +11,25 @@
         ShowInTaskbar="False"
         Topmost="True">
 
-    <!-- Resources: soft radial glow -->
-    <Window.Resources>
-        <RadialGradientBrush x:Key="GlowBrush"
-                             Center="0.5,0.4"
-                             GradientOrigin="0.5,0.4"
-                             RadiusX="0.8"
-                             RadiusY="0.8">
-            <GradientStop Color="#223366" Offset="0.0" />
-            <GradientStop Color="#111827" Offset="0.55" />
-            <GradientStop Color="#020617" Offset="1.0" />
-        </RadialGradientBrush>
-    </Window.Resources>
-
-    <!-- Fade–in on load -->
-    <Window.Triggers>
-        <EventTrigger RoutedEvent="Window.Loaded">
-            <BeginStoryboard>
-                <Storyboard>
-                    <DoubleAnimation Storyboard.TargetName="RootBorder"
-                                     Storyboard.TargetProperty="Opacity"
-                                     From="0"
-                                     To="1"
-                                     Duration="0:0:0.35" />
-                </Storyboard>
-            </BeginStoryboard>
-        </EventTrigger>
-    </Window.Triggers>
-
-    <Border x:Name="RootBorder"
-            CornerRadius="20"
+    <Border CornerRadius="20"
             Background="#020617"
             BorderBrush="#111827"
             BorderThickness="1"
-            Padding="24"
-            Opacity="0">
+            Padding="24">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Logo + glow block -->
-            <Grid Grid.Row="0"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center">
-
-                <!-- Glow behind fox -->
-                <Ellipse Width="260"
-                         Height="260"
-                         Fill="{StaticResource GlowBrush}"
-                         Opacity="0.85"
-                         Panel.ZIndex="0">
-                    <Ellipse.Effect>
-                        <BlurEffect Radius="22" />
-                    </Ellipse.Effect>
-                </Ellipse>
-
-                <!-- Studio Voly fox logo (image source set in Splash.UI.psm1) -->
-                <Image x:Name="FoxLogoImage"
-                       Width="220"
-                       Height="220"
-                       Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       Panel.ZIndex="1" />
-            </Grid>
+            <!-- Studio Voly fox logo -->
+            <Image x:Name="FoxLogoImage"
+                   Grid.Row="0"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Width="260"
+                   Height="260"
+                   Stretch="Uniform" />
 
             <!-- Status + progress at the bottom -->
             <StackPanel Grid.Row="1"
