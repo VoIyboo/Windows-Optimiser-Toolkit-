@@ -84,17 +84,16 @@ function Start-QOTMainWindow {
     # Ensure the window is initialised
     $window = Initialize-QOTMainWindow
 
-    # Bring it to the front once, but don't keep it always-on-top
     try {
-        $window.Topmost = $true      # temporarily mark as topmost
-        $window.Activate() | Out-Null
-        $window.Topmost = $false     # drop back to normal so it behaves like a normal app
-    } catch { }
-
-    # Show the window modally
-    [void]$window.ShowDialog()
+        # Make sure it sits on top of other windows while it is open
+        $window.Topmost = $true
+        [void]$window.ShowDialog()
+    }
+    finally {
+        # Safety: if anything re-uses the window later, drop Topmost
+        $window.Topmost = $false
+    }
 }
-
 function Set-QOTStatus {
     param([string]$Text)
 
