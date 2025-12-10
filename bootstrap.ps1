@@ -6,40 +6,31 @@ $ErrorActionPreference = "Stop"
 # Remember where the user started
 $originalLocation = Get-Location
 
-# Track the PowerShell console window (if any)
-$consoleHandle = [IntPtr]::Zero
-
-# Try to load Win32 APIs and minimise the console
-try {
-    Add-Type -Namespace QOT -Name NativeMethods -MemberDefinition @'
+# Win32 helper to control the PowerShell window
+Add-Type -Namespace QOT -Name NativeMethods -MemberDefinition @'
 using System;
 using System.Runtime.InteropServices;
 
-public static class NativeMethods {
-    [DllImport("kernel32.dll")]
-    public static extern IntPtr GetConsoleWindow();
-
+public static class NativeMethods
+{
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 }
 '@
 
-    $consoleHandle = [QOT.NativeMethods]::GetConsoleWindow()
-    if ($consoleHandle -ne [IntPtr]::Zero) {
-        # 6 = SW_MINIMIZE
-        [QOT.NativeMethods]::ShowWindow($consoleHandle, 6) | Out-Null
-    }
-}
-catch {
-    # If this fails, we just leave the console alone
+# Try to get the current PowerShell host window and minimise it
+$psWindowHandle = [IntPtr](Get-Process -Id $PID).MainWindowHandle
+if ($psWindowHandle -ne [IntPtr]::Zero)
+{
+    # 6 = SW_MINIMIZE
+    [QOT.NativeMethods]::ShowWindow($psWindowHandle, 6) | Out-Null
 }
 
 try {
     # Make sure TLS 1.2 is enabled for GitHub
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    }
-    catch { }
+    } catch { }
 
     $repoOwner = "VoIyboo"
     $repoName  = "Windows-Optimiser-Toolkit-"
@@ -93,12 +84,9 @@ finally {
     # Always restore the user's original prompt location
     Set-Location $originalLocation
 
-    # Try to restore the console window if we minimised it
-    try {
-        if ($consoleHandle -ne [IntPtr]::Zero) {
-            # 9 = SW_RESTORE
-            [QOT.NativeMethods]::ShowWindow($consoleHandle, 9) | Out-Null
-        }
+    # Restore the PowerShell window if we managed to minimise it
+    if ($psWindowHandle -ne [IntPtr]::Zero) {
+        # 9 = SW_RESTORE
+        [QOT.NativeMethods]::ShowWindow($psWindowHandle, 9) | Out-Null
     }
-    catch { }
 }
