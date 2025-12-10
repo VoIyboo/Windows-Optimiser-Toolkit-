@@ -44,14 +44,16 @@
                 <Ellipse Width="260"
                          Height="260"
                          Fill="{StaticResource GlowBrush}"
-                         Opacity="0.9" />
+                         Opacity="0.7"
+                         Panel.ZIndex="1" />
 
                 <!-- Studio Voly logo -->
                 <Image x:Name="LogoImage"
                        Source="StudioVolySplash.png"
                        Width="220"
-                       RenderOptions.BitmapScalingMode="HighQuality"
                        Stretch="Uniform">
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Panel.ZIndex="2">
                     <Image.RenderTransform>
                         <TranslateTransform Y="8" />
                     </Image.RenderTransform>
