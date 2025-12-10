@@ -25,7 +25,7 @@
 
                 <!-- GroupBox style -->
         <Style TargetType="GroupBox">
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Foreground" Value="black" />
             <Setter Property="Margin" Value="10" />
             <Setter Property="Padding" Value="8" />
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
