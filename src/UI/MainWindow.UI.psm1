@@ -81,8 +81,17 @@ function Initialize-QOTMainWindow {
 }
 
 function Start-QOTMainWindow {
-    # Ensure the window is initialised, then show it modally
+    # Ensure the window is initialised
     $window = Initialize-QOTMainWindow
+
+    # Bring it to the front once, but don't keep it always-on-top
+    try {
+        $window.Topmost = $true      # temporarily mark as topmost
+        $window.Activate() | Out-Null
+        $window.Topmost = $false     # drop back to normal so it behaves like a normal app
+    } catch { }
+
+    # Show the window modally
     [void]$window.ShowDialog()
 }
 
