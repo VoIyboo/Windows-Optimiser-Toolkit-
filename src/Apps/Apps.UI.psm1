@@ -319,7 +319,33 @@ function Initialize-QOTAppsUI {
         [System.Windows.Controls.Button]::ClickEvent,
         [System.Windows.RoutedEventHandler]{
             param($sender, $e)
-            ...
+
+            $button = $e.OriginalSource
+            if (-not ($button -is [System.Windows.Controls.Button])) { return }
+
+            $row = $button.DataContext
+            if (-not $row) { return }
+
+            if (-not $row.IsInstallable) { return }
+
+            $name = $row.Name
+            $id   = $row.WingetId
+
+            $confirm = [System.Windows.MessageBox]::Show(
+                "Install $name from winget?",
+                "Install app",
+                'YesNo',
+                'Question'
+            )
+
+            if ($confirm -ne 'Yes') { return }
+
+            Update-QOTStatusSafe "Installing $name..."
+            Install-QOTCommonApp -WingetId $id -Name $name | Out-Null
+
+            # Refresh statuses so the row updates
+            Refresh-QOTCommonAppsGrid -Grid $InstallGrid
+            Update-QOTStatusSafe "Common apps list updated after install."
         }
     )
 
@@ -335,4 +361,3 @@ Export-ModuleMember -Function `
     Refresh-QOTCommonAppsGrid, `
     Invoke-QOTUninstallSelectedApps, `
     Initialize-QOTAppsUI
-
