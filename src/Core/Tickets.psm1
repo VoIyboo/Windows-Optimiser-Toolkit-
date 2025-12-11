@@ -1,6 +1,8 @@
 # Tickets.psm1
 # Storage and basic model for Studio Voly Ticketing System
 
+Import-Module "$PSScriptRoot\Settings.psm1" -Force
+
 # We use settings.json to decide where tickets live.
 # Tickets are stored as JSON at a primary path, with timestamped backups.
 
