@@ -32,7 +32,8 @@ function New-QOTMainWindow {
     $xml      = [xml]$xamlText
     $reader   = New-Object System.Xml.XmlNodeReader $xml
     $window   = [Windows.Markup.XamlReader]::Load($reader)
-
+    }
+    
     # Set window icon from local icon.ico (fox icon)
     $iconPath = Join-Path $PSScriptRoot 'icon.ico'
     if (Test-Path $iconPath) {
