@@ -74,12 +74,17 @@ function Initialize-QOTMainWindow {
                              -InstallGrid $InstallGrid
     }
 
-    # NEW: load settings and apply preferred tab
+        # Load settings
     if (-not $global:QOSettings) {
         $global:QOSettings = Get-QOSettings
     }
 
+    # Ensure ticket storage is ready (creates Tickets.json + backups folder on first run)
+    Initialize-QOTicketStorage
+
+    # Apply preferred start tab
     Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
+
 
     # Simple initial state
     if ($script:StatusLabel) {
