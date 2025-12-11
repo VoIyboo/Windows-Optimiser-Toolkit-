@@ -74,7 +74,7 @@ function Initialize-QOTMainWindow {
                              -BtnUninstallSelected $BtnUninstallApps `
                              -AppsGrid $AppsGrid `
                              -InstallGrid $InstallGrid
-    }
+    
     # Tickets tab controls
     $TicketsGrid       = $window.FindName("TicketsGrid")
     $BtnNewTicket      = $window.FindName("BtnNewTicket")
