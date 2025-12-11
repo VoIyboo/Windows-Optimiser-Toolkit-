@@ -12,6 +12,8 @@ try {
 
 Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
 Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
+Import-Module "$PSScriptRoot\InstalledApps.psm1"           -Force
+Import-Module "$PSScriptRoot\InstallCommonApps.psm1"       -Force
 
 # We also depend on the main window status helpers
 try {
