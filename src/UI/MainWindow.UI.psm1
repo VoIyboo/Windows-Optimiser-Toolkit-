@@ -75,6 +75,20 @@ function Initialize-QOTMainWindow {
                              -AppsGrid $AppsGrid `
                              -InstallGrid $InstallGrid
     }
+    # Tickets tab controls
+    $TicketsGrid       = $window.FindName("TicketsGrid")
+    $BtnNewTicket      = $window.FindName("BtnNewTicket")
+    $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
+
+    if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
+        Initialize-QOTicketsUI -TicketsGrid $TicketsGrid `
+                               -BtnNewTicket $BtnNewTicket `
+                               -BtnRefreshTickets $BtnRefreshTickets
+    }
+
+
+
+
 
         # Load settings
     if (-not $global:QOSettings) {
