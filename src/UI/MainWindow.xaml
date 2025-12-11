@@ -398,36 +398,7 @@
                 </StackPanel>
 
                 <!-- Tickets grid -->
-                <DataGrid x:Name="TicketsGrid"
-                          Grid.Row="1"
-                          Margin="0,4,0,0"
-                          AutoGenerateColumns="False"
-                          HeadersVisibility="Column"
-                          IsReadOnly="True"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          GridLinesVisibility="Horizontal"
-                          Background="{StaticResource CardBrush}"
-                          BorderBrush="{StaticResource BorderBrush}"
-                          Foreground="White">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Id"
-                                            Binding="{Binding Id}"
-                                            Width="220" />
-                        <DataGridTextColumn Header="Created"
-                                            Binding="{Binding CreatedAt}"
-                                            Width="150" />
-                        <DataGridTextColumn Header="Status"
-                                            Binding="{Binding Status}"
-                                            Width="90" />
-                        <DataGridTextColumn Header="Priority"
-                                            Binding="{Binding Priority}"
-                                            Width="90" />
-                        <DataGridTextColumn Header="Title"
-                                            Binding="{Binding Title}"
-                                            Width="*" />
-                    </DataGrid.Columns>
-                </DataGrid>
+<DataGrid x:Name="TicketsGrid"
             </Grid>
         </GroupBox>
     </Grid>
