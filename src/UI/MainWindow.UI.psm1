@@ -6,8 +6,7 @@ Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"         -Force
 Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"         -Force
-Import-Module "$PSScriptRoot\..\Tickets\Tickets.UI.psm1"   -Force   # NEW
-
+Import-Module "$PSScriptRoot\..\Tickets\Tickets.UI.psm1"   -Force
 
 # Keep references to the window and key controls inside this module
 $script:MainWindow   = $null
@@ -32,8 +31,7 @@ function New-QOTMainWindow {
     $xml      = [xml]$xamlText
     $reader   = New-Object System.Xml.XmlNodeReader $xml
     $window   = [Windows.Markup.XamlReader]::Load($reader)
-    }
-    
+
     # Set window icon from local icon.ico (fox icon)
     $iconPath = Join-Path $PSScriptRoot 'icon.ico'
     if (Test-Path $iconPath) {
@@ -75,7 +73,8 @@ function Initialize-QOTMainWindow {
                              -BtnUninstallSelected $BtnUninstallApps `
                              -AppsGrid $AppsGrid `
                              -InstallGrid $InstallGrid
-    
+    }
+
     # Tickets tab controls
     $TicketsGrid       = $window.FindName("TicketsGrid")
     $BtnNewTicket      = $window.FindName("BtnNewTicket")
@@ -87,11 +86,7 @@ function Initialize-QOTMainWindow {
                                -BtnRefreshTickets $BtnRefreshTickets
     }
 
-
-
-
-
-        # Load settings
+    # Load settings
     if (-not $global:QOSettings) {
         $global:QOSettings = Get-QOSettings
     }
@@ -101,7 +96,6 @@ function Initialize-QOTMainWindow {
 
     # Apply preferred start tab
     Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
-
 
     # Simple initial state
     if ($script:StatusLabel) {
