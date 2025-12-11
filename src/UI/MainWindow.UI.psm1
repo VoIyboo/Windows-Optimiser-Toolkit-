@@ -23,20 +23,25 @@ function New-QOTMainWindow {
 
     Write-Verbose "Loading main window XAML from $XamlPath"
 
-$xml      = [xml]$xamlText
-$reader   = New-Object System.Xml.XmlNodeReader $xml
-$window   = [Windows.Markup.XamlReader]::Load($reader)
+    # Load XAML into a WPF window
+    $xamlText = Get-Content -Path $XamlPath -Raw
+    $xml      = [xml]$xamlText
+    $reader   = New-Object System.Xml.XmlNodeReader $xml
+    $window   = [Windows.Markup.XamlReader]::Load($reader)
 
-# Set window icon from local icon.ico (fox icon)
-$iconPath = Join-Path $PSScriptRoot 'icon.ico'
-if (Test-Path $iconPath) {
-    $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
-    $bitmap.BeginInit()
-    $bitmap.UriSource = [Uri]$iconPath
-    $bitmap.EndInit()
-    $window.Icon = $bitmap
-}
+    # Set window icon from local icon.ico (fox icon)
+    $iconPath = Join-Path $PSScriptRoot 'icon.ico'
+    if (Test-Path $iconPath) {
+        # Ensure WPF imaging types are available
+        [void][Reflection.Assembly]::LoadWithPartialName("PresentationCore")
 
+        $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+        $bitmap.BeginInit()
+        $bitmap.UriSource = New-Object System.Uri($iconPath, [System.UriKind]::Absolute)
+        $bitmap.EndInit()
+
+        $window.Icon = $bitmap
+    }
 
     return $window
 }
