@@ -58,11 +58,22 @@ function Initialize-QOTicketsUI {
     # Wire "New test ticket" button
     if ($script:BtnNewTicket) {
         $script:BtnNewTicket.Add_Click({
-            try {
-                $title = "Test ticket " + (Get-Date -Format 'HH:mm:ss')
-                $desc  = "Created from Quinn Tickets tab preview."
+            $title = "Test ticket " + (Get-Date -Format 'HH:mm:ss')
+            $desc  = "Created from Quinn Tickets tab preview."
 
-                $ticket = New-QOTicket -Title $title `
-                                       -Description $desc `
-                                       -Category 'Testing' `
-                                       -Priority 'Low'
+            $ticket = New-QOTicket -Title $title `
+                                   -Description $desc `
+                                   -Category 'Testing' `
+                                   -Priority 'Low'
+
+            Add-QOTicket -Ticket $ticket | Out-Null
+
+            # Reload all tickets from disk so the grid is always in sync
+            Refresh-QOTicketsGrid
+        })
+    }
+}
+
+Export-ModuleMember -Function `
+    Refresh-QOTicketsGrid, `
+    Initialize-QOTicketsUI
