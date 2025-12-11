@@ -3,9 +3,8 @@
 
 Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
 Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
-Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force   # NEW
+Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force  # NEW
 Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"         -Force
-
 
 # Keep references to the window and key controls inside this module
 $script:MainWindow   = $null
@@ -103,10 +102,20 @@ function Initialize-QOTMainWindow {
     return $script:MainWindow
 }
 
+function Start-QOTMainWindow {
+    # Ensure the window is initialised
+    $window = Initialize-QOTMainWindow
 
-#-------------------------------------------------------
-#                   Helper Function
-#-------------------------------------------------------
+    try {
+        # Make sure it sits on top of other windows while it is open
+        $window.Topmost = $true
+        [void]$window.ShowDialog()
+    }
+    finally {
+        # Safety: if anything re-uses the window later, drop Topmost
+        $window.Topmost = $false
+    }
+}
 
 function Select-QOTPreferredTab {
     param(
@@ -146,30 +155,10 @@ function Select-QOTPreferredTab {
         $tabControl.SelectedItem = $targetTab
     }
     elseif ($tabControl.Items.Count -gt 0) {
-        # Fallback to first tab so things never break
         $tabControl.SelectedIndex = 0
     }
 }
 
-
-
-
-
-
-function Start-QOTMainWindow {
-    # Ensure the window is initialised
-    $window = Initialize-QOTMainWindow
-
-    try {
-        # Make sure it sits on top of other windows while it is open
-        $window.Topmost = $true
-        [void]$window.ShowDialog()
-    }
-    finally {
-        # Safety: if anything re-uses the window later, drop Topmost
-        $window.Topmost = $false
-    }
-}
 function Set-QOTStatus {
     param([string]$Text)
 
@@ -196,4 +185,3 @@ Export-ModuleMember -Function `
     Start-QOTMainWindow, `
     Set-QOTStatus, `
     Set-QOTSummary
-
