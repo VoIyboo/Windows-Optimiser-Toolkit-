@@ -304,11 +304,10 @@ function Initialize-QOTAppsUI {
     $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
     $InstallGrid.ItemsSource = $Global:QOT_CommonAppsCollection
 
-    # Rescan button
-    $BtnScanApps.Add_Click({
-        Refresh-QOTInstalledAppsGrid -Grid $AppsGrid
-        Refresh-QOTCommonAppsGrid    -Grid $InstallGrid
-    })
+    # Hide Scan button – lists are auto-loaded
+    if ($BtnScanApps) {
+        $BtnScanApps.Visibility = 'Collapsed'
+    }
 
     # Uninstall selected button
     $BtnUninstallSelected.Add_Click({
@@ -320,37 +319,11 @@ function Initialize-QOTAppsUI {
         [System.Windows.Controls.Button]::ClickEvent,
         [System.Windows.RoutedEventHandler]{
             param($sender, $e)
-
-            $button = $e.OriginalSource
-            if (-not ($button -is [System.Windows.Controls.Button])) { return }
-
-            $row = $button.DataContext
-            if (-not $row) { return }
-
-            if (-not $row.IsInstallable) { return }
-
-            $name = $row.Name
-            $id   = $row.WingetId
-
-            $confirm = [System.Windows.MessageBox]::Show(
-                "Install $name from winget?",
-                "Install app",
-                'YesNo',
-                'Question'
-            )
-
-            if ($confirm -ne 'Yes') { return }
-
-            Update-QOTStatusSafe "Installing $name..."
-            Install-QOTCommonApp -WingetId $id -Name $name | Out-Null
-
-            # Refresh statuses so the row updates
-            Refresh-QOTCommonAppsGrid -Grid $InstallGrid
-            Update-QOTStatusSafe "Common apps list updated after install."
+            ...
         }
     )
 
-    # Initial load
+    # Initial load (auto scan)
     Refresh-QOTInstalledAppsGrid -Grid $AppsGrid
     Refresh-QOTCommonAppsGrid    -Grid $InstallGrid
 
