@@ -296,34 +296,33 @@
         BorderThickness="1,1,1,0">
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
+            <!-- Bar takes all the flex space -->
             <ColumnDefinition Width="*" />
+            <!-- Button block sizes to content -->
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Left: status -->
-        <StackPanel Grid.Column="0"
-                    Orientation="Horizontal"
-                    VerticalAlignment="Center">
-            <TextBlock Text="Status: "
-                       Foreground="{StaticResource TextSubtle}" />
+        <!-- Progress bar with status text overlaid -->
+        <Grid Grid.Column="0"
+              Margin="0,0,8,0"
+              VerticalAlignment="Center">
+            <ProgressBar x:Name="MainProgress"
+                         Height="18"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="0" />
+
+            <!-- Status shown inside the bar -->
             <TextBlock x:Name="StatusLabel"
                        Text="Idle"
-                       Foreground="White" />
-        </StackPanel>
+                       Foreground="White"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       Margin="10,0,0,0" />
+        </Grid>
 
-        <!-- Middle: progress bar -->
-        <ProgressBar Grid.Column="1"
-                     x:Name="MainProgress"
-                     Margin="16,0,16,0"
-                     Height="16"
-                     VerticalAlignment="Center"
-                     Minimum="0"
-                     Maximum="100"
-                     Value="0" />
-
-        <!-- Right: primary action -->
-        <StackPanel Grid.Column="2"
+        <!-- Right side: primary action + summary -->
+        <StackPanel Grid.Column="1"
                     Orientation="Vertical"
                     VerticalAlignment="Center">
             <Button x:Name="RunButton"
@@ -339,7 +338,6 @@
         </StackPanel>
     </Grid>
 </Border>
-
     </Grid>
 </Window>
 
