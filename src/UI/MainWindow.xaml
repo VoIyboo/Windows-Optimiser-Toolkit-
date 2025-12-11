@@ -452,9 +452,10 @@
                 </DataGrid>
 
                 <!-- Ticket details panel -->
+                <!-- Ticket details panel -->
                 <Border Grid.Row="2"
                         Margin="0,0,0,0"
-                        Padding="8"
+                        Padding="12"
                         Background="#020617"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1">
@@ -463,75 +464,64 @@
                             <ColumnDefinition Width="2*" />
                             <ColumnDefinition Width="3*" />
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                        <!-- Left: meta fields -->
-                        <StackPanel Grid.Column="0"
-                                    Margin="0,0,8,0">
-                            <TextBlock Text="Ticket details"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextSubtle}"
-                                       Margin="0,0,0,6" />
+                        <!-- Title -->
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Text="Ticket details"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSubtle}"
+                                   Margin="0,0,0,8" />
 
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Text="Id" />
-                            <TextBlock Foreground="White"
-                                       Text="{Binding SelectedItem.Id, ElementName=TicketsGrid}" />
+                        <!-- Id -->
+                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                   Text="Id"
+                                   Foreground="{StaticResource TextSubtle}" />
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="{Binding SelectedItem.Id, ElementName=TicketsGrid}"
+                                   Foreground="White" />
 
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Margin="0,6,0,0"
-                                       Text="Created" />
-                            <TextBlock Foreground="White"
-                                       Text="{Binding SelectedItem.CreatedAt, ElementName=TicketsGrid}" />
+                        <!-- Created -->
+                        <TextBlock Grid.Row="2" Grid.Column="0"
+                                   Text="Created"
+                                   Foreground="{StaticResource TextSubtle}" />
+                        <TextBlock Grid.Row="2" Grid.Column="1"
+                                   Text="{Binding SelectedItem.CreatedAt, ElementName=TicketsGrid}"
+                                   Foreground="White" />
 
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Margin="0,6,0,0"
-                                       Text="Status" />
-                            <TextBlock Foreground="White"
-                                       Text="{Binding SelectedItem.Status, ElementName=TicketsGrid}" />
+                        <!-- Status -->
+                        <TextBlock Grid.Row="3" Grid.Column="0"
+                                   Text="Status"
+                                   Foreground="{StaticResource TextSubtle}" />
+                        <TextBlock Grid.Row="3" Grid.Column="1"
+                                   Text="{Binding SelectedItem.Status, ElementName=TicketsGrid}"
+                                   Foreground="White" />
 
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Margin="0,6,0,0"
-                                       Text="Priority" />
-                            <TextBlock Foreground="White"
-                                       Text="{Binding SelectedItem.Priority, ElementName=TicketsGrid}" />
+                        <!-- Priority -->
+                        <TextBlock Grid.Row="4" Grid.Column="0"
+                                   Text="Priority"
+                                   Foreground="{StaticResource TextSubtle}" />
+                        <TextBlock Grid.Row="4" Grid.Column="1"
+                                   Text="{Binding SelectedItem.Priority, ElementName=TicketsGrid}"
+                                   Foreground="White" />
 
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Margin="0,6,0,0"
-                                       Text="Category" />
-                            <TextBlock Foreground="White"
-                                       Text="{Binding SelectedItem.Category, ElementName=TicketsGrid}" />
-                        </StackPanel>
-
-                        <!-- Right: title + description -->
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Text="Title" />
-                            <TextBlock Foreground="White"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap"
-                                       Text="{Binding SelectedItem.Title, ElementName=TicketsGrid}" />
-
-                            <TextBlock Foreground="{StaticResource TextSubtle}"
-                                       FontSize="11"
-                                       Margin="0,6,0,0"
-                                       Text="Description" />
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                          Height="70">
-                                <TextBlock Foreground="White"
-                                           TextWrapping="Wrap"
-                                           Text="{Binding SelectedItem.Description, ElementName=TicketsGrid}" />
-                            </ScrollViewer>
-                        </StackPanel>
+                        <!-- Category -->
+                        <TextBlock Grid.Row="5" Grid.Column="0"
+                                   Text="Category"
+                                   Foreground="{StaticResource TextSubtle}" />
+                        <TextBlock Grid.Row="5" Grid.Column="1"
+                                   Text="{Binding SelectedItem.Category, ElementName=TicketsGrid}"
+                                   Foreground="White" />
                     </Grid>
                 </Border>
-
             </Grid>
         </GroupBox>
     </Grid>
