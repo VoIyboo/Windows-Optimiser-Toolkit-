@@ -74,6 +74,12 @@ function Initialize-QOTMainWindow {
                              -InstallGrid $InstallGrid
     }
 
+    # NEW: load settings and apply preferred tab
+    if (-not $global:QOSettings) {
+        $global:QOSettings = Get-QOSettings
+    }
+
+    Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
 
     # Simple initial state
     if ($script:StatusLabel) {
@@ -96,6 +102,8 @@ function Initialize-QOTMainWindow {
 
     return $script:MainWindow
 }
+
+
 #-------------------------------------------------------
 #                   Helper Function
 #-------------------------------------------------------
