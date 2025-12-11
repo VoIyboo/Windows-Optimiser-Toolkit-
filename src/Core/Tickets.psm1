@@ -145,8 +145,186 @@ function Save-QOTickets {
     }
 }
 
+
+function New-QOTicket {
+    <#
+        Creates a new ticket object in memory only.
+        Use Add-QOTicket to persist it to Tickets.json.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Title,
+
+        [string]$Description      = '',
+        [string]$Category         = 'General',
+        [string]$Priority         = 'Normal',  # e.g. Low | Normal | High | Urgent
+        [string]$Source           = 'Manual',  # e.g. Manual | Email | Script
+        [string]$SourceEmailId    = $null,
+        [string]$RequesterName    = $null,
+        [string]$RequesterEmail   = $null,
+        [string[]]$Tags           = @()
+    )
+
+    $now         = Get-Date
+    $ticketId    = [guid]::NewGuid().ToString()
+    $userName    = $env:USERNAME
+    $displayName = $env:USERNAME  # Later we can pull from AD / Entra if we want
+
+    # Initial history entry
+    $history = @(
+        [pscustomobject]@{
+            At            = $now
+            Action        = 'Created'
+            ByUserName    = $userName
+            ByDisplayName = $displayName
+            FromStatus    = $null
+            ToStatus      = 'New'
+            Notes         = 'Ticket created'
+        }
+    )
+
+    $ticket = [pscustomobject]@{
+        Id                     = $ticketId
+        CreatedAt              = $now
+        UpdatedAt              = $now
+        Status                 = 'New'
+        Priority               = $Priority
+        Category               = $Category
+        Title                  = $Title
+        Description            = $Description
+        Source                 = $Source
+        SourceEmailId          = $SourceEmailId
+        RequesterName          = $RequesterName
+        RequesterEmail         = $RequesterEmail
+        AssignedToUserName     = $null
+        AssignedToDisplayName  = $null
+        AssignedAt             = $null
+        FirstResponseAt        = $null
+        ResolvedAt             = $null
+        Tags                   = $Tags
+        History                = $history
+    }
+
+    return $ticket
+}
+
+function Add-QOTicket {
+    <#
+        Adds a ticket object to the database and saves it.
+        Returns the same ticket object.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        $Ticket
+    )
+
+    $db = Get-QOTickets
+
+    # Normalise to an array so we can append safely
+    $tickets = @()
+    if ($db.Tickets) {
+        $tickets = @($db.Tickets)
+    }
+
+    $tickets += $Ticket
+    $db.Tickets = $tickets
+
+    Save-QOTickets -TicketsDb $db
+    return $Ticket
+}
+
+function Get-QOTicketById {
+    <#
+        Fetch a single ticket by its Id.
+        Returns $null if not found.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Id
+    )
+
+    $db = Get-QOTickets
+    $tickets = @()
+    if ($db.Tickets) {
+        $tickets = @($db.Tickets)
+    }
+
+    return ($tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1)
+}
+
+function Set-QOTicketStatus {
+    <#
+        Updates a ticket's Status and history, then saves the database.
+
+        Example:
+            $t = Set-QOTicketStatus -Id $id -Status 'InProgress' -Notes 'Started working on it'
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Id,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Status,
+
+        [string]$Notes = ''
+    )
+
+    $db = Get-QOTickets
+    $tickets = @()
+    if ($db.Tickets) {
+        $tickets = @($db.Tickets)
+    }
+
+    $ticket = $tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
+    if (-not $ticket) {
+        throw "Ticket with Id '$Id' not found."
+    }
+
+    $now       = Get-Date
+    $oldStatus = $ticket.Status
+
+    $ticket.Status    = $Status
+    $ticket.UpdatedAt = $now
+
+    if (-not $ticket.FirstResponseAt -and $Status -ne 'New') {
+        $ticket.FirstResponseAt = $now
+    }
+
+    if ($Status -eq 'Resolved' -and -not $ticket.ResolvedAt) {
+        $ticket.ResolvedAt = $now
+    }
+
+    $userName    = $env:USERNAME
+    $displayName = $env:USERNAME
+
+    $historyEntry = [pscustomobject]@{
+        At            = $now
+        Action        = 'StatusChanged'
+        ByUserName    = $userName
+        ByDisplayName = $displayName
+        FromStatus    = $oldStatus
+        ToStatus      = $Status
+        Notes         = $Notes
+    }
+
+    $ticket.History = @($ticket.History) + $historyEntry
+
+    # Put the array back and save
+    $db.Tickets = $tickets
+    Save-QOTickets -TicketsDb $db
+
+    return $ticket
+}
+
+
+
 Export-ModuleMember -Function `
     Initialize-QOTicketStorage, `
     New-QODefaultTicketDatabase, `
     Get-QOTickets, `
-    Save-QOTickets
+    Save-QOTickets, `
+    New-QOTicket, `
+    Add-QOTicket, `
+    Get-QOTicketById, `
+    Set-QOTicketStatus
+
