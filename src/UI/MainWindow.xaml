@@ -536,6 +536,7 @@
         </GroupBox>
     </Grid>
 </TabItem>
+</TabControl>
 
 <!-- Status bar -->
 <Border Grid.Row="2"
