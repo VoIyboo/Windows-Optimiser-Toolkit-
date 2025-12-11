@@ -23,10 +23,20 @@ function New-QOTMainWindow {
 
     Write-Verbose "Loading main window XAML from $XamlPath"
 
-    $xamlText = Get-Content -Path $XamlPath -Raw
-    $xml      = [xml]$xamlText
-    $reader   = New-Object System.Xml.XmlNodeReader $xml
-    $window   = [Windows.Markup.XamlReader]::Load($reader)
+$xml      = [xml]$xamlText
+$reader   = New-Object System.Xml.XmlNodeReader $xml
+$window   = [Windows.Markup.XamlReader]::Load($reader)
+
+# Set window icon from local icon.ico (fox icon)
+$iconPath = Join-Path $PSScriptRoot 'icon.ico'
+if (Test-Path $iconPath) {
+    $bitmap = New-Object System.Windows.Media.Imaging.BitmapImage
+    $bitmap.BeginInit()
+    $bitmap.UriSource = [Uri]$iconPath
+    $bitmap.EndInit()
+    $window.Icon = $bitmap
+}
+
 
     return $window
 }
