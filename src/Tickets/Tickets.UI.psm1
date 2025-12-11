@@ -4,37 +4,28 @@
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force
 
 # Script-level references
-$script:TicketsGrid        = $null
-$script:TicketsCollection  = $null
-$script:BtnNewTicket       = $null
-$script:BtnRefreshTickets  = $null
-
-function Get-QOTicketsCollection {
-    if (-not $script:TicketsCollection) {
-        $script:TicketsCollection = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
-    }
-    return $script:TicketsCollection
-}
+$script:TicketsGrid       = $null
+$script:BtnNewTicket      = $null
+$script:BtnRefreshTickets = $null
 
 function Refresh-QOTicketsGrid {
+    <#
+        Reloads tickets from the JSON database and binds them to the grid.
+    #>
+
     if (-not $script:TicketsGrid) {
         return
     }
 
     $db = Get-QOTickets
+
     $tickets = @()
     if ($db.Tickets) {
         $tickets = @($db.Tickets)
     }
 
-    $collection = Get-QOTicketsCollection
-    $collection.Clear()
-
-    foreach ($t in $tickets) {
-        $collection.Add($t)
-    }
-
-    $script:TicketsGrid.ItemsSource = $collection
+    # Bind simple array to the DataGrid
+    $script:TicketsGrid.ItemsSource = $tickets
 }
 
 function Initialize-QOTicketsUI {
@@ -49,6 +40,7 @@ function Initialize-QOTicketsUI {
         $BtnRefreshTickets
     )
 
+    # Cache controls
     $script:TicketsGrid       = $TicketsGrid
     $script:BtnNewTicket      = $BtnNewTicket
     $script:BtnRefreshTickets = $BtnRefreshTickets
@@ -56,34 +48,21 @@ function Initialize-QOTicketsUI {
     # First load
     Refresh-QOTicketsGrid
 
-    # Wire buttons
+    # Wire Refresh button
     if ($script:BtnRefreshTickets) {
         $script:BtnRefreshTickets.Add_Click({
             Refresh-QOTicketsGrid
         })
     }
 
+    # Wire "New test ticket" button
     if ($script:BtnNewTicket) {
         $script:BtnNewTicket.Add_Click({
             try {
                 $title = "Test ticket " + (Get-Date -Format 'HH:mm:ss')
                 $desc  = "Created from Quinn Tickets tab preview."
 
-                $ticket = New-QOTicket -Title $title -Description $desc -Category 'Testing' -Priority 'Low'
-                Add-QOTicket -Ticket $ticket | Out-Null
-
-                $collection = Get-QOTicketsCollection
-                $collection.Add($ticket)
-            }
-            catch {
-                # In a future version we can surface this nicely in the UI
-                Write-Host "Error creating test ticket: $_"
-            }
-        })
-    }
-}
-
-Export-ModuleMember -Function `
-    Get-QOTicketsCollection, `
-    Refresh-QOTicketsGrid, `
-    Initialize-QOTicketsUI
+                $ticket = New-QOTicket -Title $title `
+                                       -Description $desc `
+                                       -Category 'Testing' `
+                                       -Priority 'Low'
