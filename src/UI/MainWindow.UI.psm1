@@ -96,6 +96,57 @@ function Initialize-QOTMainWindow {
 
     return $script:MainWindow
 }
+#-------------------------------------------------------
+#                   Helper Function
+#-------------------------------------------------------
+
+function Select-QOTPreferredTab {
+    param(
+        [string]$PreferredTab
+    )
+
+    if (-not $script:MainWindow) {
+        return
+    }
+
+    $tabControl = $script:MainWindow.FindName("MainTabControl")
+    if (-not $tabControl) {
+        return
+    }
+
+    $targetTab = $null
+
+    switch ($PreferredTab) {
+        'Cleaning' {
+            $targetTab = $script:MainWindow.FindName("TabCleaning")
+        }
+        'Apps' {
+            $targetTab = $script:MainWindow.FindName("TabApps")
+        }
+        'Advanced' {
+            $targetTab = $script:MainWindow.FindName("TabAdvanced")
+        }
+        'Tickets' {
+            $targetTab = $script:MainWindow.FindName("TabTickets")
+        }
+        default {
+            $targetTab = $script:MainWindow.FindName("TabCleaning")
+        }
+    }
+
+    if ($targetTab -and $tabControl.Items.Contains($targetTab)) {
+        $tabControl.SelectedItem = $targetTab
+    }
+    elseif ($tabControl.Items.Count -gt 0) {
+        # Fallback to first tab so things never break
+        $tabControl.SelectedIndex = 0
+    }
+}
+
+
+
+
+
 
 function Start-QOTMainWindow {
     # Ensure the window is initialised
