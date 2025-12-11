@@ -110,7 +110,7 @@ Update-QOTSplashProgress -Window $splash -Value 0
 # -----------------------------------------------------------------
 # Drive the progress bar for up to ~10 seconds
 # -----------------------------------------------------------------
-$maxDurationMs = 10000          # 10 seconds
+$maxDurationMs = 5000          # 5 seconds ( update 11/12/2025 )
 $steps         = 40             # number of progress updates
 $stepDelayMs   = [int]($maxDurationMs / $steps)
 
