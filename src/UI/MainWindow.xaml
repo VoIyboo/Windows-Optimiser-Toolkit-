@@ -5,7 +5,8 @@
         Width="1000"
         WindowStartupLocation="CenterScreen"
         Background="#0F172A"
-        Topmost="True">
+        Topmost="True"
+        Icon="icon.ico">
 
     <Window.Resources>
         <!-- Basic colours -->
