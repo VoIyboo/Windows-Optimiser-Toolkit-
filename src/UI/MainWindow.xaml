@@ -307,7 +307,7 @@
 
             <!-- Progress bar -->
             <ProgressBar x:Name="MainProgress"
-                         Height="20"
+                         Height="28"
                          Minimum="0"
                          Maximum="100"
                          Value="0"
