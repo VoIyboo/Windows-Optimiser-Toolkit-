@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterScreen"
         Background="#0F172A"
         Topmost="True"
-        Icon="icon.ico">
+        Icon="icon.png">
 
     <Window.Resources>
         <!-- Basic colours -->
