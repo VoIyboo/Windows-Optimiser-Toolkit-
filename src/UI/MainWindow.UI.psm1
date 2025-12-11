@@ -4,6 +4,7 @@
 Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
 Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force  # NEW
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"         -Force   # NEW
 Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"         -Force
 
 # Keep references to the window and key controls inside this module
