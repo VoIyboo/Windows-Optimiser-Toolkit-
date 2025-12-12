@@ -1,6 +1,9 @@
 # Tickets.UI.psm1
 # Simple UI wiring for the Tickets tab
 
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force -ErrorAction SilentlyContinue
+
+
 function Update-QOTicketsGrid {
     try {
         $tickets = Get-QOTickets
