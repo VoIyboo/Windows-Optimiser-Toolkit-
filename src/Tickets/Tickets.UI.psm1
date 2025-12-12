@@ -71,6 +71,9 @@ function Initialize-QOTicketsUI {
     # Keep references for later
     $script:TicketsGrid = $TicketsGrid
 
+    # Allow editing in the grid (Title column is editable in XAML)
+    $TicketsGrid.IsReadOnly = $false
+
     # Refresh button
     $BtnRefreshTickets.Add_Click({
         Update-QOTicketsGrid
@@ -97,6 +100,38 @@ function Initialize-QOTicketsUI {
 
         Update-QOTicketsGrid
     })
+
+    # When a cell finishes editing, persist Title changes
+    $TicketsGrid.Add_CellEditEnding({
+        param($sender, $e)
+
+        # We only care about the Title column
+        if ($e.Column.Header -ne 'Title') { return }
+
+        $row = $e.Row.Item
+        if (-not $row) { return }
+
+        $ticketId = $row.Id
+        if ([string]::IsNullOrWhiteSpace($ticketId)) { return }
+
+        # For DataGridTextColumn this is a TextBox
+        $newTitle = $e.EditingElement.Text
+
+        try {
+            Set-QOTicketTitle -Id $ticketId -Title $newTitle | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to save edited title. $_"
+        }
+
+        # Important: do NOT call Update-QOTicketsGrid here,
+        # it would fight with the edit transaction and cause errors.
+    })
+
+    # Initial load
+    Update-QOTicketsGrid
+}
+
 
     # NOTE:
     # For now we let WPF handle inline Title editing in-memory only.
