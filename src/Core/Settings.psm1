@@ -200,3 +200,59 @@ function Initialize-QOTicketsUI {
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
+
+
+# ------------------------------
+# Quinn Optimiser Toolkit Settings helpers
+# ------------------------------
+
+# Where settings.json will live
+$script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
+
+function Get-QOSettings {
+    if (-not (Test-Path $script:QOSettingsPath)) {
+        # First run: create a default settings object
+        $default = [PSCustomObject]@{
+            TicketsColumnLayout = @()
+        }
+
+        $dir = Split-Path $script:QOSettingsPath
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+
+        $default | ConvertTo-Json -Depth 5 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+        return $default
+    }
+
+    $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
+    if (-not $json) {
+        return [PSCustomObject]@{
+            TicketsColumnLayout = @()
+        }
+    }
+
+    $settings = $json | ConvertFrom-Json
+
+    # Make sure TicketsColumnLayout always exists
+    if (-not $settings.PSObject.Properties.Name -contains 'TicketsColumnLayout') {
+        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
+    }
+
+    return $settings
+}
+
+function Save-QOSettings {
+    param(
+        [Parameter(Mandatory)]
+        $Settings
+    )
+
+    $dir = Split-Path $script:QOSettingsPath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    $Settings | ConvertTo-Json -Depth 5 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+}
+
