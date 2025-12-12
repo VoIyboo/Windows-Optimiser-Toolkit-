@@ -3,6 +3,59 @@
 
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force -ErrorAction SilentlyContinue
 
+ Guard so we do not re-save while we are applying the saved order
+$script:TicketsColumnOrderApplying = $false
+
+function Get-QOTicketsColumnOrder {
+    $settings = Get-QOSettings
+    return $settings.TicketsColumnOrder
+}
+
+function Save-QOTicketsColumnOrder {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
+
+    $settings = Get-QOSettings
+
+    # Order the columns by their DisplayIndex and save by header name
+    $order = @(
+        $DataGrid.Columns |
+        Sort-Object DisplayIndex |
+        ForEach-Object { $_.Header.ToString() }
+    )
+
+    $settings.TicketsColumnOrder = $order
+    Save-QOSettings -Settings $settings
+}
+
+function Apply-QOTicketsColumnOrder {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
+
+    $order = Get-QOTicketsColumnOrder
+    if (-not $order -or $order.Count -eq 0) { return }
+
+    $script:TicketsColumnOrderApplying = $true
+    try {
+        foreach ($col in $DataGrid.Columns) {
+            $header = $col.Header.ToString()
+            $idx = [array]::IndexOf($order, $header)
+            if ($idx -ge 0) {
+                $col.DisplayIndex = $idx
+            }
+        }
+    }
+    finally {
+        $script:TicketsColumnOrderApplying = $false
+    }
+}
+
+
+
 function Update-QOTicketsGrid {
     try {
         # Get the full tickets DB
