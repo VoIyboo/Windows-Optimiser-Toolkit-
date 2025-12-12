@@ -431,10 +431,6 @@
                                 </DataGrid.Resources>
 
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Id"
-                                                        Binding="{Binding Id}"
-                                                        Width="220"
-                                                        IsReadOnly="True" />
                                     <DataGridTextColumn Header="Created"
                                                         Binding="{Binding CreatedAt}"
                                                         Width="150"
