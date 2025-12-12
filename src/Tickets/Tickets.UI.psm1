@@ -5,55 +5,70 @@ Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"  -Force -ErrorAction Silently
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction SilentlyContinue
 
 # Guard so we do not re-save while we are applying the saved order
-$script:TicketsColumnOrderApplying = $false
-
-function Get-QOTicketsColumnOrder {
-    $settings = Get-QOSettings
-    return $settings.TicketsColumnOrder
-}
-
-function Save-QOTicketsColumnOrder {
+function Initialize-QOTicketsUI {
     param(
         [Parameter(Mandatory)]
-        $DataGrid
-    )
+        $TicketsGrid,
 
-    $settings = Get-QOSettings
-
-    # Order the columns by their DisplayIndex and save by header name
-    $order = @(
-        $DataGrid.Columns |
-        Sort-Object DisplayIndex |
-        ForEach-Object { $_.Header.ToString() }
-    )
-
-    $settings.TicketsColumnOrder = $order
-    Save-QOSettings -Settings $settings
-}
-
-function Apply-QOTicketsColumnOrder {
-    param(
         [Parameter(Mandatory)]
-        $DataGrid
+        $BtnRefreshTickets,
+
+        [Parameter(Mandatory)]
+        $BtnNewTicket
     )
 
-    $order = Get-QOTicketsColumnOrder
-    if (-not $order -or $order.Count -eq 0) { return }
+    # Keep references for later
+    $script:TicketsGrid = $TicketsGrid
 
-    $script:TicketsColumnOrderApplying = $true
-    try {
-        foreach ($col in $DataGrid.Columns) {
-            $header = $col.Header.ToString()
-            $idx = [array]::IndexOf($order, $header)
-            if ($idx -ge 0) {
-                $col.DisplayIndex = $idx
-            }
+    # Allow inline editing (Title column is editable in XAML)
+    $TicketsGrid.IsReadOnly = $false
+
+    # Save column order when user drags headers left/right
+    $TicketsGrid.Add_ColumnReordered({
+        param($sender, $e)
+        Save-QOTicketsColumnOrder -DataGrid $sender
+    })
+
+    # Save column widths when user resizes columns
+    $TicketsGrid.Add_ColumnWidthChanged({
+        param($sender, $e)
+        Save-QOTicketsColumnWidths -DataGrid $sender
+    })
+
+    # Refresh button
+    $BtnRefreshTickets.Add_Click({
+        Update-QOTicketsGrid
+    })
+
+    # New test ticket button
+    $BtnNewTicket.Add_Click({
+        try {
+            $now = Get-Date
+
+            # New-QOTicket creates the in-memory ticket
+            $ticket = New-QOTicket `
+                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                -Description "Test ticket created from the UI." `
+                -Category "Testing" `
+                -Priority "Low"
+
+            # Add-QOTicket saves it into Tickets.json
+            Add-QOTicket -Ticket $ticket | Out-Null
         }
-    }
-    finally {
-        $script:TicketsColumnOrderApplying = $false
-    }
+        catch {
+            Write-Warning "Tickets UI: failed to create test ticket. $_"
+        }
+
+        Update-QOTicketsGrid
+    })
+
+    # Initial load
+    Update-QOTicketsGrid
+
+    # Apply saved layout (order + widths) after first load
+    Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
+
 
 
 
