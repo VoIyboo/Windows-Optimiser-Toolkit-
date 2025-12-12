@@ -5,23 +5,23 @@ Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force -ErrorAction SilentlyC
 
 function Update-QOTicketsGrid {
     try {
+        # Get the full tickets DB
         $db = Get-QOTickets
+        $tickets = @()
+        if ($db.Tickets) {
+            $tickets = @($db.Tickets)
+        }
     }
     catch {
         Write-Warning "Tickets UI: failed to load tickets. $_"
-        $db = $null
+        $tickets = @()
     }
 
-    $tickets = @()
-    if ($db -and $db.Tickets) {
-        $tickets = @($db.Tickets)
-    }
-
-    # Build view objects with formatted CreatedAt
     $view = foreach ($t in $tickets) {
 
+        # Normalise/format Created time, drop seconds and use local PC time
         $created = $null
-        $raw     = $null
+        $raw = $null
 
         if ($t.PSObject.Properties.Name -contains 'CreatedAt') {
             $raw = $t.CreatedAt
@@ -35,7 +35,7 @@ function Update-QOTicketsGrid {
         }
 
         if ($created) {
-            # Example: 12/12/2025 8:45 PM  (no seconds)
+            # Example: 12/11/2025 11:09 PM (no seconds)
             $createdString = $created.ToString('dd/MM/yyyy h:mm tt')
         }
         else {
@@ -52,6 +52,7 @@ function Update-QOTicketsGrid {
         }
     }
 
+    # Just set ItemsSource once with the view list
     $script:TicketsGrid.ItemsSource = $view
 }
 
@@ -80,12 +81,14 @@ function Initialize-QOTicketsUI {
         try {
             $now = Get-Date
 
+            # New-QOTicket creates the in-memory ticket
             $ticket = New-QOTicket `
                 -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
                 -Description "Test ticket created from the UI." `
                 -Category "Testing" `
                 -Priority "Low"
 
+            # Add-QOTicket saves it into Tickets.json
             Add-QOTicket -Ticket $ticket | Out-Null
         }
         catch {
@@ -95,37 +98,11 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    # Inline edit: when a cell edit is committed, persist Title changes
-    $TicketsGrid.Add_CellEditEnding({
-        param($sender, $e)
-
-        if ($e.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) {
-            return
-        }
-
-        $rowObj = $e.Row.Item
-        if (-not $rowObj) { return }
-
-        # Only care about the Title column
-        if ($e.Column -and $e.Column.Header -ne 'Title') {
-            return
-        }
-
-        $newTitle = $rowObj.Title
-        if ([string]::IsNullOrWhiteSpace($newTitle)) {
-            return
-        }
-
-        try {
-            Set-QOTicketTitle -Id $rowObj.Id -Title $newTitle | Out-Null
-        }
-        catch {
-            Write-Warning "Tickets UI: failed to rename ticket. $_"
-        }
-
-        # Refresh grid so formatting stays consistent
-        Update-QOTicketsGrid
-    })
+    # NOTE:
+    # For now we let WPF handle inline Title editing in-memory only.
+    # No popups, no extra windows, no ItemsSource reset during edit.
+    # Later we can add a "Save changes" button that walks the grid
+    # and syncs titles back into the JSON file.
 
     # Initial load
     Update-QOTicketsGrid
