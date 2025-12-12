@@ -16,6 +16,7 @@ function Get-QOSettings {
         # First run: create a default settings object
         $default = [PSCustomObject]@{
             TicketsColumnLayout = @()
+            TicketStorePath     = $null
         }
 
         $dir = Split-Path $script:QOSettingsPath
@@ -31,6 +32,7 @@ function Get-QOSettings {
     if (-not $json) {
         return [PSCustomObject]@{
             TicketsColumnLayout = @()
+            TicketStorePath     = $null
         }
     }
 
@@ -40,26 +42,12 @@ function Get-QOSettings {
         $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
     }
 
-    return $settings
-}
-
-function Save-QOSettings {
-    param(
-        [Parameter(Mandatory)]
-        $Settings
-    )
-
-    $dir = Split-Path $script:QOSettingsPath
-    if (-not (Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    if (-not $settings.PSObject.Properties.Name -contains 'TicketStorePath') {
+        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
     }
 
-    $Settings | ConvertTo-Json -Depth 5 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+    return $settings
 }
-
-
-
-
 
 
 
