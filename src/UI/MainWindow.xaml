@@ -445,7 +445,7 @@
                                                         IsReadOnly="True" />
                                     <DataGridTextColumn Header="Priority"
                                                         Binding="{Binding Priority}"
-                                                        Width="90"
+                                                        Width="*"
                                                         IsReadOnly="False" />
                                     <!-- Title is the ONLY editable column -->
                                     <DataGridTextColumn Header="Title"
