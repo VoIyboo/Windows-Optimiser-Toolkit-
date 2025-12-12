@@ -1,76 +1,78 @@
 # Tickets.UI.psm1
 # Simple UI wiring for the Tickets tab
 
-Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"  -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction SilentlyContinue
 
-# Guard so we do not re-save while we are applying the saved order
-function Initialize-QOTicketsUI {
-    param(
-        [Parameter(Mandatory)]
-        $TicketsGrid,
+# Guard so we do not re-save while we are applying the saved layout
+$script:TicketsColumnLayoutApplying = $false
 
-        [Parameter(Mandatory)]
-        $BtnRefreshTickets,
-
-        [Parameter(Mandatory)]
-        $BtnNewTicket
-    )
-
-    # Keep references for later
-    $script:TicketsGrid = $TicketsGrid
-
-    # Allow inline editing (Title column is editable in XAML)
-    $TicketsGrid.IsReadOnly = $false
-
-    # Save column order when user drags headers left/right
-    $TicketsGrid.Add_ColumnReordered({
-        param($sender, $e)
-        Save-QOTicketsColumnOrder -DataGrid $sender
-    })
-
-    # Save column widths when user resizes columns
-    $TicketsGrid.Add_ColumnWidthChanged({
-        param($sender, $e)
-        Save-QOTicketsColumnWidths -DataGrid $sender
-    })
-
-    # Refresh button
-    $BtnRefreshTickets.Add_Click({
-        Update-QOTicketsGrid
-    })
-
-    # New test ticket button
-    $BtnNewTicket.Add_Click({
-        try {
-            $now = Get-Date
-
-            # New-QOTicket creates the in-memory ticket
-            $ticket = New-QOTicket `
-                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
-                -Description "Test ticket created from the UI." `
-                -Category "Testing" `
-                -Priority "Low"
-
-            # Add-QOTicket saves it into Tickets.json
-            Add-QOTicket -Ticket $ticket | Out-Null
-        }
-        catch {
-            Write-Warning "Tickets UI: failed to create test ticket. $_"
-        }
-
-        Update-QOTicketsGrid
-    })
-
-    # Initial load
-    Update-QOTicketsGrid
-
-    # Apply saved layout (order + widths) after first load
-    Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
+function Get-QOTicketsColumnLayout {
+    $settings = Get-QOSettings
+    return $settings.TicketsColumnLayout
 }
 
+function Save-QOTicketsColumnLayout {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
 
+    if ($script:TicketsColumnLayoutApplying) { return }
 
+    $settings = Get-QOSettings
+
+    # Capture current columns by their DisplayIndex and header name + width
+    $layout = @(
+        $DataGrid.Columns |
+        Sort-Object DisplayIndex |
+        ForEach-Object {
+            [pscustomobject]@{
+                Header       = $_.Header.ToString()
+                DisplayIndex = $_.DisplayIndex
+                Width        = if ($_.Width -is [double]) { [double]$_.Width } else { $null }
+            }
+        }
+    )
+
+    $settings.TicketsColumnLayout = $layout
+    Save-QOSettings -Settings $settings
+}
+
+function Apply-QOTicketsColumnLayout {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
+
+    $layout = Get-QOTicketsColumnLayout
+    if (-not $layout -or $layout.Count -eq 0) { return }
+
+    $script:TicketsColumnLayoutApplying = $true
+    try {
+        foreach ($entry in $layout) {
+            $header = $entry.Header
+            if (-not $header) { continue }
+
+            $col = $DataGrid.Columns |
+                   Where-Object { $_.Header.ToString() -eq $header } |
+                   Select-Object -First 1
+
+            if (-not $col) { continue }
+
+            if ($entry.DisplayIndex -ge 0) {
+                $col.DisplayIndex = $entry.DisplayIndex
+            }
+
+            if ($entry.Width -and $entry.Width -gt 0) {
+                $col.Width = [double]$entry.Width
+            }
+        }
+    }
+    finally {
+        $script:TicketsColumnLayoutApplying = $false
+    }
+}
 
 function Update-QOTicketsGrid {
     try {
@@ -112,11 +114,11 @@ function Update-QOTicketsGrid {
         }
 
         [PSCustomObject]@{
-            Id        = $t.Id
+            Title     = $t.Title
             CreatedAt = $createdString
             Status    = $t.Status
             Priority  = $t.Priority
-            Title     = $t.Title
+            Id        = $t.Id
             Category  = $t.Category
         }
     }
@@ -137,25 +139,34 @@ function Initialize-QOTicketsUI {
         $BtnNewTicket
     )
 
-    # Keep references for later
+    # Keep reference
     $script:TicketsGrid = $TicketsGrid
 
-        # Apply any previously saved column order
-    Apply-QOTicketsColumnOrder -DataGrid $TicketsGrid
+    # Allow inline editing (Title column is editable in XAML)
+    $TicketsGrid.IsReadOnly           = $false
+    $TicketsGrid.CanUserReorderColumns = $true
+    $TicketsGrid.CanUserResizeColumns  = $true
 
-    # Save the column order when the user reorders columns
+    # Apply saved layout once the grid is loaded
+    $TicketsGrid.Add_Loaded({
+        Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+    })
+
+    # Save layout whenever columns are reordered
     $TicketsGrid.Add_ColumnReordered({
-        param($sender, $eventArgs)
-
-        # Prevent saving while we are *applying* a saved order
-        if (-not $script:TicketsColumnOrderApplying) {
-            Save-QOTicketsColumnOrder -DataGrid $sender
+        param($sender,$eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) {
+            Save-QOTicketsColumnLayout -DataGrid $sender
         }
     })
 
-
-    # Allow inline editing (Title column is editable in XAML)
-    $TicketsGrid.IsReadOnly = $false
+    # Save layout whenever a column width is changed
+    $TicketsGrid.Add_ColumnWidthChanged({
+        param($sender,$eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) {
+            Save-QOTicketsColumnLayout -DataGrid $sender
+        }
+    })
 
     # Refresh button
     $BtnRefreshTickets.Add_Click({
@@ -184,34 +195,7 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    # When a cell finishes editing, persist Title changes
-    $TicketsGrid.Add_CellEditEnding({
-        param($sender, $e)
-
-        # We only care about the Title column
-        if ($e.Column.Header -ne 'Title') { return }
-
-        $row = $e.Row.Item
-        if (-not $row) { return }
-
-        $ticketId = $row.Id
-        if ([string]::IsNullOrWhiteSpace($ticketId)) { return }
-
-        # For DataGridTextColumn this is a TextBox
-        $newTitle = $e.EditingElement.Text
-
-        try {
-            Set-QOTicketTitle -Id $ticketId -Title $newTitle | Out-Null
-        }
-        catch {
-            Write-Warning "Tickets UI: failed to save edited title. $_"
-        }
-
-        # Do NOT call Update-QOTicketsGrid here,
-        # it would fight with the active edit transaction.
-    })
-
-    # Initial load
+    # Initial load of data
     Update-QOTicketsGrid
 }
 
