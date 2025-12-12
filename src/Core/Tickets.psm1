@@ -3,10 +3,7 @@
 
 Import-Module "$PSScriptRoot\Settings.psm1" -Force
 
-# We use settings.json to decide where tickets live.
-# Tickets are stored as JSON at a primary path, with timestamped backups.
-
-# Script-level cache of resolved paths
+# Script level cache of resolved paths
 $script:TicketStorePath   = $null
 $script:TicketBackupPath  = $null
 
@@ -71,18 +68,16 @@ function New-QODefaultTicketDatabase {
           "Tickets": []
         }
     #>
-    $db = [pscustomobject]@{
+    [pscustomobject]@{
         SchemaVersion = 1
         Tickets       = @()
     }
-
-    return $db
 }
 
 function Get-QOTickets {
     <#
         Returns the current ticket database object.
-        If the file is missing or corrupted, it self-heals with a default DB.
+        If the file is missing or corrupted, it self heals with a default DB.
     #>
 
     Initialize-QOTicketStorage
@@ -95,12 +90,17 @@ function Get-QOTickets {
 
         $db = $json | ConvertFrom-Json -ErrorAction Stop
 
-        # Light schema self-heal if needed
+        # Light schema self heal if needed
         if (-not $db.PSObject.Properties.Name.Contains('SchemaVersion')) {
             $db | Add-Member -NotePropertyName 'SchemaVersion' -NotePropertyValue 1
         }
         if (-not $db.PSObject.Properties.Name.Contains('Tickets')) {
             $db | Add-Member -NotePropertyName 'Tickets' -NotePropertyValue @()
+        }
+
+        # Always normalise Tickets to an array
+        if ($db.Tickets -isnot [System.Collections.IEnumerable]) {
+            $db.Tickets = @($db.Tickets)
         }
 
         return $db
@@ -145,7 +145,6 @@ function Save-QOTickets {
     }
 }
 
-
 function New-QOTicket {
     <#
         Creates a new ticket object in memory only.
@@ -157,8 +156,8 @@ function New-QOTicket {
 
         [string]$Description      = '',
         [string]$Category         = 'General',
-        [string]$Priority         = 'Normal',  # e.g. Low | Normal | High | Urgent
-        [string]$Source           = 'Manual',  # e.g. Manual | Email | Script
+        [string]$Priority         = 'Normal',  # Low | Normal | High | Urgent
+        [string]$Source           = 'Manual',  # Manual | Email | Script
         [string]$SourceEmailId    = $null,
         [string]$RequesterName    = $null,
         [string]$RequesterEmail   = $null,
@@ -168,9 +167,8 @@ function New-QOTicket {
     $now         = Get-Date
     $ticketId    = [guid]::NewGuid().ToString()
     $userName    = $env:USERNAME
-    $displayName = $env:USERNAME  # Later we can pull from AD / Entra if we want
+    $displayName = $env:USERNAME  # Later we can pull from AD or Entra if we want
 
-    # Initial history entry
     $history = @(
         [pscustomobject]@{
             At            = $now
@@ -183,7 +181,7 @@ function New-QOTicket {
         }
     )
 
-    $ticket = [pscustomobject]@{
+    [pscustomobject]@{
         Id                     = $ticketId
         CreatedAt              = $now
         UpdatedAt              = $now
@@ -204,8 +202,6 @@ function New-QOTicket {
         Tags                   = $Tags
         History                = $history
     }
-
-    return $ticket
 }
 
 function Add-QOTicket {
@@ -220,7 +216,6 @@ function Add-QOTicket {
 
     $db = Get-QOTickets
 
-    # Normalise to an array so we can append safely
     $tickets = @()
     if ($db.Tickets) {
         $tickets = @($db.Tickets)
@@ -249,15 +244,12 @@ function Get-QOTicketById {
         $tickets = @($db.Tickets)
     }
 
-    return ($tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1)
+    $tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
 }
 
 function Set-QOTicketStatus {
     <#
-        Updates a ticket's Status and history, then saves the database.
-
-        Example:
-            $t = Set-QOTicketStatus -Id $id -Status 'InProgress' -Notes 'Started working on it'
+        Updates a ticket Status and history, then saves the database.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -309,14 +301,43 @@ function Set-QOTicketStatus {
 
     $ticket.History = @($ticket.History) + $historyEntry
 
-    # Put the array back and save
     $db.Tickets = $tickets
     Save-QOTickets -TicketsDb $db
 
     return $ticket
 }
 
+function Set-QOTicketTitle {
+    <#
+        Updates a ticket Title, bumps UpdatedAt, and saves the database.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Id,
 
+        [Parameter(Mandatory = $true)]
+        [string]$Title
+    )
+
+    $db = Get-QOTickets
+    $tickets = @()
+    if ($db.Tickets) {
+        $tickets = @($db.Tickets)
+    }
+
+    $ticket = $tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
+    if (-not $ticket) {
+        throw "Ticket with Id '$Id' not found."
+    }
+
+    $ticket.Title     = $Title
+    $ticket.UpdatedAt = Get-Date
+
+    $db.Tickets = $tickets
+    Save-QOTickets -TicketsDb $db
+
+    return $ticket
+}
 
 Export-ModuleMember -Function `
     Initialize-QOTicketStorage, `
@@ -326,5 +347,5 @@ Export-ModuleMember -Function `
     New-QOTicket, `
     Add-QOTicket, `
     Get-QOTicketById, `
-    Set-QOTicketStatus
-
+    Set-QOTicketStatus, `
+    Set-QOTicketTitle
