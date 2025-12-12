@@ -1,7 +1,8 @@
 # Tickets.UI.psm1
 # Simple UI wiring for the Tickets tab
 
-Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"  -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction SilentlyContinue
 
 # Guard so we do not re-save while we are applying the saved order
 $script:TicketsColumnOrderApplying = $false
