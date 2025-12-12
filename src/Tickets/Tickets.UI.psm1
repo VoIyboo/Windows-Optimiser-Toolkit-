@@ -35,7 +35,7 @@ function Update-QOTicketsGrid {
         }
 
         if ($created) {
-            # Example output: 12/12/2025 8:45 PM  (no seconds)
+            # Example: 12/12/2025 8:45 PM  (no seconds)
             $createdString = $created.ToString('dd/MM/yyyy h:mm tt')
         }
         else {
@@ -95,36 +95,35 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    # Double click a row to rename the ticket TITLE and persist it
-    $TicketsGrid.Add_MouseDoubleClick({
-        param($sender, $args)
+    # Inline edit: when a cell edit is committed, persist Title changes
+    $TicketsGrid.Add_CellEditEnding({
+        param($sender, $e)
 
-        $row = $sender.SelectedItem
-        if (-not $row) { return }
+        if ($e.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) {
+            return
+        }
 
-        # Simple input box
-        Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue
+        $rowObj = $e.Row.Item
+        if (-not $rowObj) { return }
 
-        $currentTitle = $row.Title
-        $promptText   = "Enter a new title for this ticket:"
-        $promptTitle  = "Rename ticket"
+        # Only care about the Title column
+        if ($e.Column -and $e.Column.Header -ne 'Title') {
+            return
+        }
 
-        $newTitle = [Microsoft.VisualBasic.Interaction]::InputBox(
-            $promptText,
-            $promptTitle,
-            $currentTitle
-        )
-
-        if ([string]::IsNullOrWhiteSpace($newTitle)) { return }
+        $newTitle = $rowObj.Title
+        if ([string]::IsNullOrWhiteSpace($newTitle)) {
+            return
+        }
 
         try {
-            # Persist rename using ticket Id
-            Set-QOTicketTitle -Id $row.Id -Title $newTitle | Out-Null
+            Set-QOTicketTitle -Id $rowObj.Id -Title $newTitle | Out-Null
         }
         catch {
             Write-Warning "Tickets UI: failed to rename ticket. $_"
         }
 
+        # Refresh grid so formatting stays consistent
         Update-QOTicketsGrid
     })
 
