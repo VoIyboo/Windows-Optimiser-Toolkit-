@@ -44,12 +44,43 @@ function Apply-QOTicketsColumnLayout {
         [Parameter(Mandatory)]
         $DataGrid
     )
+
+    $layout = Get-QOTicketsColumnLayout
+    if (-not $layout -or $layout.Count -eq 0) { return }
+
+    $script:TicketsColumnLayoutApplying = $true
+    try {
+        foreach ($entry in $layout) {
+            $header = $entry.Header
+            if (-not $header) { continue }
+
+            $col = $DataGrid.Columns |
+                Where-Object { $_.Header.ToString() -eq $header }
+
+            if (-not $col) { continue }
+
+            if ($entry.DisplayIndex -ne $null) {
+                $col.DisplayIndex = $entry.DisplayIndex
+            }
+
+            if ($entry.Width -ne $null) {
+                $col.Width = $entry.Width
+            }
+        }
+    }
+    finally {
+        $script:TicketsColumnLayoutApplying = $false
+    }
+}
+
 function Apply-QOTicketsColumnOrder {
     param(
         $TicketsGrid
     )
-    Apply-QOTicketsColumnLayout -TicketsGrid $TicketsGrid
+
+    Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
+
 
 
 
