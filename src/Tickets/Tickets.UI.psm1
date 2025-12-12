@@ -3,7 +3,7 @@
 
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force -ErrorAction SilentlyContinue
 
- Guard so we do not re-save while we are applying the saved order
+# Guard so we do not re-save while we are applying the saved order
 $script:TicketsColumnOrderApplying = $false
 
 function Get-QOTicketsColumnOrder {
