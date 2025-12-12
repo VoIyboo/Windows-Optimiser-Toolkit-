@@ -124,6 +124,20 @@ function Initialize-QOTicketsUI {
     # Keep references for later
     $script:TicketsGrid = $TicketsGrid
 
+        # Apply any previously saved column order
+    Apply-QOTicketsColumnOrder -DataGrid $TicketsGrid
+
+    # Save the column order when the user reorders columns
+    $TicketsGrid.Add_ColumnReordered({
+        param($sender, $eventArgs)
+
+        # Prevent saving while we are *applying* a saved order
+        if (-not $script:TicketsColumnOrderApplying) {
+            Save-QOTicketsColumnOrder -DataGrid $sender
+        }
+    })
+
+
     # Allow inline editing (Title column is editable in XAML)
     $TicketsGrid.IsReadOnly = $false
 
