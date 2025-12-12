@@ -3,21 +3,25 @@
 
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force -ErrorAction SilentlyContinue
 
-
 function Update-QOTicketsGrid {
     try {
-        $tickets = Get-QOTickets
+        $db = Get-QOTickets
     }
     catch {
         Write-Warning "Tickets UI: failed to load tickets. $_"
-        $tickets = @()
+        $db = $null
     }
 
+    $tickets = @()
+    if ($db -and $db.Tickets) {
+        $tickets = @($db.Tickets)
+    }
+
+    # Build view objects with formatted CreatedAt
     $view = foreach ($t in $tickets) {
 
-        # Normalise/format Created time, drop seconds and use local PC time
         $created = $null
-        $raw = $null
+        $raw     = $null
 
         if ($t.PSObject.Properties.Name -contains 'CreatedAt') {
             $raw = $t.CreatedAt
@@ -31,7 +35,7 @@ function Update-QOTicketsGrid {
         }
 
         if ($created) {
-            # Example: 12/11/2025 11:09 PM  (no seconds)
+            # Example output: 12/12/2025 8:45 PM  (no seconds)
             $createdString = $created.ToString('dd/MM/yyyy h:mm tt')
         }
         else {
@@ -75,11 +79,14 @@ function Initialize-QOTicketsUI {
     $BtnNewTicket.Add_Click({
         try {
             $now = Get-Date
-            New-QOTTicket `
+
+            $ticket = New-QOTicket `
                 -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
                 -Description "Test ticket created from the UI." `
                 -Category "Testing" `
-                -Priority "Low" | Out-Null
+                -Priority "Low"
+
+            Add-QOTicket -Ticket $ticket | Out-Null
         }
         catch {
             Write-Warning "Tickets UI: failed to create test ticket. $_"
@@ -88,14 +95,14 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    # Double-click a row to rename the ticket TITLE
+    # Double click a row to rename the ticket TITLE and persist it
     $TicketsGrid.Add_MouseDoubleClick({
         param($sender, $args)
 
         $row = $sender.SelectedItem
         if (-not $row) { return }
 
-        # Use a simple input box for now
+        # Simple input box
         Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue
 
         $currentTitle = $row.Title
@@ -110,9 +117,15 @@ function Initialize-QOTicketsUI {
 
         if ([string]::IsNullOrWhiteSpace($newTitle)) { return }
 
-        # For now, update in-memory; later we can wire this to persist into the JSON store.
-        $row.Title = $newTitle
-        $script:TicketsGrid.Items.Refresh()
+        try {
+            # Persist rename using ticket Id
+            Set-QOTicketTitle -Id $row.Id -Title $newTitle | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to rename ticket. $_"
+        }
+
+        Update-QOTicketsGrid
     })
 
     # Initial load
