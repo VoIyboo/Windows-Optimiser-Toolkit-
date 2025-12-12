@@ -261,6 +261,37 @@ function Set-QOTicketStatus {
         [string]$Notes = ''
     )
 
+function Set-QOTicketTitle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Id,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Title
+    )
+
+    $db = Get-QOTickets
+
+    $tickets = @()
+    if ($db.Tickets) {
+        $tickets = @($db.Tickets)
+    }
+
+    $ticket = $tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
+    if (-not $ticket) {
+        throw "Ticket with Id '$Id' not found."
+    }
+
+    $ticket.Title     = $Title
+    $ticket.UpdatedAt = Get-Date
+
+    $db.Tickets = $tickets
+    Save-QOTickets -TicketsDb $db
+
+    return $ticket
+}
+
+
     $db = Get-QOTickets
     $tickets = @()
     if ($db.Tickets) {
