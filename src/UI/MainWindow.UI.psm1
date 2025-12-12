@@ -7,6 +7,9 @@ Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"         -Force
 Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"         -Force
 Import-Module "$PSScriptRoot\..\Tickets\Tickets.UI.psm1"   -Force
+Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force
+
+
 
 # Keep references to the window and key controls inside this module
 $script:MainWindow   = $null
