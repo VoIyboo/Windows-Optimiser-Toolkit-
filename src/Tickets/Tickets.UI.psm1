@@ -56,4 +56,80 @@ function Update-QOTicketsGrid {
     $script:TicketsGrid.ItemsSource = $view
 }
 
-function
+function Initialize-QOTicketsUI {
+    param(
+        [Parameter(Mandatory)]
+        $TicketsGrid,
+
+        [Parameter(Mandatory)]
+        $BtnRefreshTickets,
+
+        [Parameter(Mandatory)]
+        $BtnNewTicket
+    )
+
+    # Keep references for later
+    $script:TicketsGrid = $TicketsGrid
+
+    # Allow inline editing (Title column is editable in XAML)
+    $TicketsGrid.IsReadOnly = $false
+
+    # Refresh button
+    $BtnRefreshTickets.Add_Click({
+        Update-QOTicketsGrid
+    })
+
+    # New test ticket button
+    $BtnNewTicket.Add_Click({
+        try {
+            $now = Get-Date
+
+            # New-QOTicket creates the in-memory ticket
+            $ticket = New-QOTicket `
+                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                -Description "Test ticket created from the UI." `
+                -Category "Testing" `
+                -Priority "Low"
+
+            # Add-QOTicket saves it into Tickets.json
+            Add-QOTicket -Ticket $ticket | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to create test ticket. $_"
+        }
+
+        Update-QOTicketsGrid
+    })
+
+    # When a cell finishes editing, persist Title changes
+    $TicketsGrid.Add_CellEditEnding({
+        param($sender, $e)
+
+        # We only care about the Title column
+        if ($e.Column.Header -ne 'Title') { return }
+
+        $row = $e.Row.Item
+        if (-not $row) { return }
+
+        $ticketId = $row.Id
+        if ([string]::IsNullOrWhiteSpace($ticketId)) { return }
+
+        # For DataGridTextColumn this is a TextBox
+        $newTitle = $e.EditingElement.Text
+
+        try {
+            Set-QOTicketTitle -Id $ticketId -Title $newTitle | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to save edited title. $_"
+        }
+
+        # Do NOT call Update-QOTicketsGrid here,
+        # it would fight with the active edit transaction.
+    })
+
+    # Initial load
+    Update-QOTicketsGrid
+}
+
+Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
