@@ -373,77 +373,63 @@
         </Grid>
     </TabItem>
 
-    <!-- Tickets -->
-    <TabItem x:Name="TabTickets" Header="Tickets">
-        <Grid Margin="5,10,5,5">
-            <GroupBox Header="Tickets (preview)">
-                <Grid Margin="4">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
+<!-- Tickets grid -->
+<DataGrid x:Name="TicketsGrid"
+          Grid.Row="1"
+          Margin="0,4,0,8"
+          AutoGenerateColumns="False"
+          HeadersVisibility="Column"
+          IsReadOnly="False"
+          CanUserAddRows="False"
+          CanUserDeleteRows="False"
+          GridLinesVisibility="Horizontal"
+          Background="{StaticResource CardBrush}"
+          BorderBrush="{StaticResource BorderBrush}"
+          Foreground="White">
 
-                    <!-- Actions row -->
-                    <StackPanel Grid.Row="0"
-                                Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                Margin="0,0,0,6">
-                        <Button x:Name="BtnRefreshTickets"
-                                Content="Refresh"
-                                Width="90" />
-                        <Button x:Name="BtnNewTicket"
-                                Content="New test ticket"
-                                Width="140"
-                                Margin="6,0,0,0" />
-                    </StackPanel>
+    <!-- Header / row styling -->
+    <DataGrid.Resources>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="Background" Value="#111827" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="BorderBrush" Value="#374151" />
+        </Style>
 
-                    <!-- Tickets grid -->
-                    <DataGrid x:Name="TicketsGrid"
-                              Grid.Row="1"
-                              Margin="0,4,0,8"
-                              AutoGenerateColumns="False"
-                              HeadersVisibility="Column"
-                              IsReadOnly="True"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              GridLinesVisibility="Horizontal"
-                              Background="{StaticResource CardBrush}"
-                              BorderBrush="{StaticResource BorderBrush}"
-                              Foreground="White">
-                        <DataGrid.Resources>
-                            <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Foreground" Value="#E5E7EB" />
-                                <Setter Property="Background" Value="#111827" />
-                                <Setter Property="FontWeight" Value="SemiBold" />
-                                <Setter Property="BorderBrush" Value="#374151" />
-                            </Style>
-                            <Style TargetType="DataGridRow">
-                                <Setter Property="Background" Value="#020617" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Style>
-                            <Style TargetType="DataGridCell">
-                                <Setter Property="BorderBrush" Value="#374151" />
-                            </Style>
-                        </DataGrid.Resources>
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="#020617" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
 
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Id"
-                                                Binding="{Binding Id}"
-                                                Width="220" />
-                            <DataGridTextColumn Header="Created"
-                                                Binding="{Binding CreatedAt}"
-                                                Width="150" />
-                            <DataGridTextColumn Header="Status"
-                                                Binding="{Binding Status}"
-                                                Width="90" />
-                            <DataGridTextColumn Header="Priority"
-                                                Binding="{Binding Priority}"
-                                                Width="90" />
-                            <DataGridTextColumn Header="Title"
-                                                Binding="{Binding Title}"
-                                                Width="*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderBrush" Value="#374151" />
+        </Style>
+    </DataGrid.Resources>
+
+    <DataGrid.Columns>
+        <DataGridTextColumn Header="Id"
+                            Binding="{Binding Id}"
+                            Width="220"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="Created"
+                            Binding="{Binding CreatedAt}"
+                            Width="150"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="Status"
+                            Binding="{Binding Status}"
+                            Width="90"
+                            IsReadOnly="True" />
+        <DataGridTextColumn Header="Priority"
+                            Binding="{Binding Priority}"
+                            Width="90"
+                            IsReadOnly="True" />
+        <!-- Title is the ONLY editable column -->
+        <DataGridTextColumn Header="Title"
+                            Binding="{Binding Title}"
+                            Width="*" />
+    </DataGrid.Columns>
+</DataGrid>
+
                 </Grid>
             </GroupBox>
         </Grid>
