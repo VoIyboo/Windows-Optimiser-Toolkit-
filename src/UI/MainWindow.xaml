@@ -431,6 +431,9 @@
                                 </DataGrid.Resources>
 
                                 <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Title"
+                                                        Binding="{Binding Title}"
+                                                        Width="*" />
                                     <DataGridTextColumn Header="Created"
                                                         Binding="{Binding CreatedAt}"
                                                         Width="150"
@@ -443,10 +446,7 @@
                                                         Binding="{Binding Priority}"
                                                         Width="*"
                                                         IsReadOnly="False" />
-                                    <!-- Title is the ONLY editable column -->
-                                    <DataGridTextColumn Header="Title"
-                                                        Binding="{Binding Title}"
-                                                        Width="*" />
+
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>
