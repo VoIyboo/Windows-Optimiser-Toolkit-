@@ -4,12 +4,19 @@
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction SilentlyContinue
 
-# Guard so we do not re-save while we are applying the saved layout
+# -------------------------------------------------------------------
+# State
+# -------------------------------------------------------------------
+
 $script:TicketsColumnLayoutApplying = $false
+$script:TicketsGrid                 = $null
+
+# -------------------------------------------------------------------
+# Column layout helpers
+# -------------------------------------------------------------------
 
 function Get-QOTicketsColumnLayout {
-    $settings = Get-QOSettings
-    return $settings.TicketsColumnLayout
+    (Get-QOSettings).TicketsColumnLayout
 }
 
 function Save-QOTicketsColumnLayout {
@@ -22,8 +29,7 @@ function Save-QOTicketsColumnLayout {
 
     $settings = Get-QOSettings
 
-    # Capture current columns by their DisplayIndex and header name + width
-    $layout = @(
+    $settings.TicketsColumnLayout = @(
         $DataGrid.Columns |
         Sort-Object DisplayIndex |
         ForEach-Object {
@@ -35,7 +41,6 @@ function Save-QOTicketsColumnLayout {
         }
     )
 
-    $settings.TicketsColumnLayout = $layout
     Save-QOSettings -Settings $settings
 }
 
@@ -74,7 +79,7 @@ function Apply-QOTicketsColumnLayout {
     }
 }
 
-# Backwards-compat wrapper: old code can still call this name
+# Backwards-compat wrapper for any older code
 function Apply-QOTicketsColumnOrder {
     param(
         [Parameter(Mandatory)]
@@ -84,14 +89,17 @@ function Apply-QOTicketsColumnOrder {
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
+# -------------------------------------------------------------------
+# Grid data binding
+# -------------------------------------------------------------------
+
 function Update-QOTicketsGrid {
+
+    if (-not $script:TicketsGrid) { return }
+
     try {
-        # Get the full tickets DB
         $db = Get-QOTickets
-        $tickets = @()
-        if ($db.Tickets) {
-            $tickets = @($db.Tickets)
-        }
+        $tickets = if ($db -and $db.Tickets) { @($db.Tickets) } else { @() }
     }
     catch {
         Write-Warning "Tickets UI: failed to load tickets. $_"
@@ -100,13 +108,9 @@ function Update-QOTicketsGrid {
 
     $view = foreach ($t in $tickets) {
 
-        # Normalise/format Created time, drop seconds and use local PC time
+        # Normalise CreatedAt
+        $raw     = $t.CreatedAt
         $created = $null
-        $raw = $null
-
-        if ($t.PSObject.Properties.Name -contains 'CreatedAt') {
-            $raw = $t.CreatedAt
-        }
 
         if ($raw -is [datetime]) {
             $created = $raw
@@ -115,12 +119,10 @@ function Update-QOTicketsGrid {
             [datetime]::TryParse($raw, [ref]$created) | Out-Null
         }
 
-        if ($created) {
-            # Example: 12/11/2025 11:09 PM (no seconds)
-            $createdString = $created.ToString('dd/MM/yyyy h:mm tt')
-        }
-        else {
-            $createdString = $raw
+        $createdString = if ($created) {
+            $created.ToString('dd/MM/yyyy h:mm tt')
+        } else {
+            $raw
         }
 
         [PSCustomObject]@{
@@ -133,9 +135,20 @@ function Update-QOTicketsGrid {
         }
     }
 
+    # Force $view to ALWAYS be an array (even with 0 or 1 tickets)
+    if ($view -isnot [System.Collections.IEnumerable] -or $view -is [string]) {
+        $view = @($view)
+    } else {
+        $view = @($view)
+    }
+
     # Bind to the grid
     $script:TicketsGrid.ItemsSource = $view
 }
+
+# -------------------------------------------------------------------
+# Initialise Tickets tab UI
+# -------------------------------------------------------------------
 
 function Initialize-QOTicketsUI {
     param(
@@ -152,17 +165,18 @@ function Initialize-QOTicketsUI {
     # Keep reference
     $script:TicketsGrid = $TicketsGrid
 
-    # Allow inline editing (Title column is editable in XAML)
+    # Allow inline editing (Title column editable in XAML)
     $TicketsGrid.IsReadOnly            = $false
     $TicketsGrid.CanUserReorderColumns = $true
     $TicketsGrid.CanUserResizeColumns  = $true
 
-    # Apply saved layout once the grid is loaded
+    # Apply saved layout when grid is loaded
     $TicketsGrid.Add_Loaded({
         Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+        Update-QOTicketsGrid
     })
 
-    # Save layout whenever columns are reordered
+    # Save layout when columns are reordered
     $TicketsGrid.Add_ColumnReordered({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
@@ -170,10 +184,7 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # NOTE:
-    # We intentionally do NOT use Add_ColumnWidthChanged here because the WPF DataGrid
-    # in this context does not expose that event method. Widths will still be captured
-    # whenever layout is saved during re-order.
+    # NO ColumnWidthChanged here; WPF DataGrid does not expose it in this context.
 
     # Refresh button
     $BtnRefreshTickets.Add_Click({
@@ -204,4 +215,6 @@ function Initialize-QOTicketsUI {
     Update-QOTicketsGrid
 }
 
-Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
+Export-ModuleMember -Function `
+    Initialize-QOTicketsUI, `
+    Update-QOTicketsGrid
