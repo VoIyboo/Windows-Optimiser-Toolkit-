@@ -318,3 +318,5 @@ function Save-QOSettings {
 
     $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
 }
+
+Export-ModuleMember -Function Get-QOSettings, Save-QOSettings
