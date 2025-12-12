@@ -1,4 +1,3 @@
-$db | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encodin
 
 # =====================================================================
 # DATABASE
