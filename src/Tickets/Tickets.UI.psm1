@@ -82,8 +82,6 @@ function Apply-QOTicketsColumnOrder {
 }
 
 
-
-
     $layout = Get-QOTicketsColumnLayout
     if (-not $layout -or $layout.Count -eq 0) { return }
 
