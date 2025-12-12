@@ -170,8 +170,10 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # NOTE: ColumnWidthChanged event was removed because DataGrid
-    #       does not expose Add_ColumnWidthChanged in this context.
+    # NOTE:
+    # We intentionally do NOT use Add_ColumnWidthChanged here because the WPF DataGrid
+    # in this context does not expose that event method. Widths will still be captured
+    # whenever layout is saved during re-order.
 
     # Refresh button
     $BtnRefreshTickets.Add_Click({
@@ -183,14 +185,12 @@ function Initialize-QOTicketsUI {
         try {
             $now = Get-Date
 
-            # New-QOTicket creates the in-memory ticket
             $ticket = New-QOTicket `
                 -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
                 -Description "Test ticket created from the UI." `
                 -Category "Testing" `
                 -Priority "Low"
 
-            # Add-QOTicket saves it into Tickets.json
             Add-QOTicket -Ticket $ticket | Out-Null
         }
         catch {
