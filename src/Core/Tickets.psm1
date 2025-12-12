@@ -98,6 +98,24 @@ if (-not ($settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath'))
 
     # Persist any new defaults back to settings.json
     Save-QOSettings -Settings $settings
+function Save-QOSettings {
+    param(
+        [Parameter(Mandatory)]
+        $Settings
+    )
+
+    $dir = Split-Path $script:QOSettingsPath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+}
+
+
+
+
+
 
     $script:TicketStorePath  = $settings.TicketStorePath
     $script:TicketBackupPath = $settings.LocalTicketBackupPath
