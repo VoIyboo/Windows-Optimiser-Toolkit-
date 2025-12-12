@@ -124,6 +124,7 @@ function Update-QOTicketsGrid {
     }
 
     # Bind to the grid
+    $view = @($view)
     $script:TicketsGrid.ItemsSource = $view
 }
 
