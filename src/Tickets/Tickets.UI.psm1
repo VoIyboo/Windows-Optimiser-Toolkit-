@@ -44,6 +44,14 @@ function Apply-QOTicketsColumnLayout {
         [Parameter(Mandatory)]
         $DataGrid
     )
+function Apply-QOTicketsColumnOrder {
+    param(
+        $TicketsGrid
+    )
+    Apply-QOTicketsColumnLayout -TicketsGrid $TicketsGrid
+}
+
+
 
     $layout = Get-QOTicketsColumnLayout
     if (-not $layout -or $layout.Count -eq 0) { return }
