@@ -340,7 +340,7 @@ function Set-QOTicketTitle {
 
 function Set-QOTicketTitle {
     <#
-        Updates a ticket Title, bumps UpdatedAt, and saves the database.
+        Updates a ticket Title and UpdatedAt, then saves the database.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -351,6 +351,7 @@ function Set-QOTicketTitle {
     )
 
     $db = Get-QOTickets
+
     $tickets = @()
     if ($db.Tickets) {
         $tickets = @($db.Tickets)
