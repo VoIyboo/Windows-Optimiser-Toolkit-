@@ -54,6 +54,10 @@ function New-QODefaultSettings {
         LocalTicketBackupPath  = ''
         PreferredStartTab      = 'Cleaning'   # Cleaning | Apps | Advanced | Tickets
         InternalProtectionKey  = $null        # Will be generated and stored later
+
+        # Tickets tab layout
+        TicketsColumnOrder     = @()
+        TicketsColumnWidths    = @{}
     }
 
     $dir = Split-Path -Parent $script:SettingsPath
