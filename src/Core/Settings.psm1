@@ -75,13 +75,10 @@ function Apply-QOTicketsColumnLayout {
 }
 
 function Update-QOTicketsGrid {
+
     try {
-        # Get the full tickets DB
         $db = Get-QOTickets
-        $tickets = @()
-        if ($db.Tickets) {
-            $tickets = @($db.Tickets)
-        }
+        $tickets = if ($db.Tickets) { @($db.Tickets) } else { @() }
     }
     catch {
         Write-Warning "Tickets UI: failed to load tickets. $_"
@@ -90,13 +87,8 @@ function Update-QOTicketsGrid {
 
     $view = foreach ($t in $tickets) {
 
-        # Normalise/format Created time, drop seconds and use local PC time
+        $raw     = $t.CreatedAt
         $created = $null
-        $raw = $null
-
-        if ($t.PSObject.Properties.Name -contains 'CreatedAt') {
-            $raw = $t.CreatedAt
-        }
 
         if ($raw -is [datetime]) {
             $created = $raw
@@ -105,12 +97,11 @@ function Update-QOTicketsGrid {
             [datetime]::TryParse($raw, [ref]$created) | Out-Null
         }
 
-        if ($created) {
-            # Example: 12/11/2025 11:09 PM (no seconds)
-            $createdString = $created.ToString('dd/MM/yyyy h:mm tt')
+        $createdString = if ($created) {
+            $created.ToString('dd/MM/yyyy h:mm tt')
         }
         else {
-            $createdString = $raw
+            $raw
         }
 
         [PSCustomObject]@{
@@ -123,8 +114,12 @@ function Update-QOTicketsGrid {
         }
     }
 
-    # Bind to the grid
-    $view = @($view)
+    # ⭐ FORCE ARRAY ALWAYS ⭐
+    if ($view -isnot [System.Collections.IEnumerable] -or $view -is [string]) {
+        $view = @($view)
+    }
+
+    # Bind to grid
     $script:TicketsGrid.ItemsSource = $view
 }
 
