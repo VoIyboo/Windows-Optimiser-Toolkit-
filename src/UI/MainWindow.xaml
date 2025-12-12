@@ -381,7 +381,6 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <!-- Actions row -->
@@ -450,83 +449,11 @@
                     </DataGrid.Columns>
 
                 </DataGrid>
-
-                <!-- Ticket details panel -->
-                <!-- Ticket details panel -->
-                <Border Grid.Row="2"
-                        Margin="0,0,0,0"
-                        Padding="12"
-                        Background="#020617"
-                        BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="1">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*" />
-                            <ColumnDefinition Width="3*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <!-- Title -->
-                        <TextBlock Grid.Row="0" Grid.Column="0"
-                                   Text="Ticket details"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextSubtle}"
-                                   Margin="0,0,0,8" />
-
-                        <!-- Id -->
-                        <TextBlock Grid.Row="1" Grid.Column="0"
-                                   Text="Id"
-                                   Foreground="{StaticResource TextSubtle}" />
-                        <TextBlock Grid.Row="1" Grid.Column="1"
-                                   Text="{Binding SelectedItem.Id, ElementName=TicketsGrid}"
-                                   Foreground="White" />
-
-                        <!-- Created -->
-                        <TextBlock Grid.Row="2" Grid.Column="0"
-                                   Text="Created"
-                                   Foreground="{StaticResource TextSubtle}" />
-                        <TextBlock Grid.Row="2" Grid.Column="1"
-                                   Text="{Binding SelectedItem.CreatedAt, ElementName=TicketsGrid}"
-                                   Foreground="White" />
-
-                        <!-- Status -->
-                        <TextBlock Grid.Row="3" Grid.Column="0"
-                                   Text="Status"
-                                   Foreground="{StaticResource TextSubtle}" />
-                        <TextBlock Grid.Row="3" Grid.Column="1"
-                                   Text="{Binding SelectedItem.Status, ElementName=TicketsGrid}"
-                                   Foreground="White" />
-
-                        <!-- Priority -->
-                        <TextBlock Grid.Row="4" Grid.Column="0"
-                                   Text="Priority"
-                                   Foreground="{StaticResource TextSubtle}" />
-                        <TextBlock Grid.Row="4" Grid.Column="1"
-                                   Text="{Binding SelectedItem.Priority, ElementName=TicketsGrid}"
-                                   Foreground="White" />
-
-                        <!-- Category -->
-                        <TextBlock Grid.Row="5" Grid.Column="0"
-                                   Text="Category"
-                                   Foreground="{StaticResource TextSubtle}" />
-                        <TextBlock Grid.Row="5" Grid.Column="1"
-                                   Text="{Binding SelectedItem.Category, ElementName=TicketsGrid}"
-                                   Foreground="White" />
-                    </Grid>
-                </Border>
             </Grid>
         </GroupBox>
     </Grid>
 </TabItem>
-</TabControl>
+
 
 <!-- Status bar -->
 <Border Grid.Row="2"
