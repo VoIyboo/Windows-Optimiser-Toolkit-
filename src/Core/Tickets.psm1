@@ -70,6 +70,16 @@ function Initialize-QOTicketStorage {
 
     # Load current settings
     $settings = Get-QOSettings
+# Ensure missing settings properties exist
+if (-not ($settings.PSObject.Properties.Name -contains 'TicketStorePath')) {
+    $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
+}
+
+if (-not ($settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath')) {
+    $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
+}
+
+
 
     # Default primary store:
     #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Tickets.json
