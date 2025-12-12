@@ -55,53 +55,16 @@ function Apply-QOTicketsColumnLayout {
             if (-not $header) { continue }
 
             $col = $DataGrid.Columns |
-                Where-Object { $_.Header.ToString() -eq $header }
+                Where-Object { $_.Header.ToString() -eq $header } |
+                Select-Object -First 1
 
             if (-not $col) { continue }
 
-            if ($entry.DisplayIndex -ne $null) {
+            if ($entry.DisplayIndex -ne $null -and $entry.DisplayIndex -ge 0) {
                 $col.DisplayIndex = $entry.DisplayIndex
             }
 
-            if ($entry.Width -ne $null) {
-                $col.Width = $entry.Width
-            }
-        }
-    }
-    finally {
-        $script:TicketsColumnLayoutApplying = $false
-    }
-}
-
-function Apply-QOTicketsColumnOrder {
-    param(
-        $TicketsGrid
-    )
-
-    Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
-}
-
-
-    $layout = Get-QOTicketsColumnLayout
-    if (-not $layout -or $layout.Count -eq 0) { return }
-
-    $script:TicketsColumnLayoutApplying = $true
-    try {
-        foreach ($entry in $layout) {
-            $header = $entry.Header
-            if (-not $header) { continue }
-
-            $col = $DataGrid.Columns |
-                   Where-Object { $_.Header.ToString() -eq $header } |
-                   Select-Object -First 1
-
-            if (-not $col) { continue }
-
-            if ($entry.DisplayIndex -ge 0) {
-                $col.DisplayIndex = $entry.DisplayIndex
-            }
-
-            if ($entry.Width -and $entry.Width -gt 0) {
+            if ($entry.Width -ne $null -and $entry.Width -gt 0) {
                 $col.Width = [double]$entry.Width
             }
         }
@@ -109,6 +72,16 @@ function Apply-QOTicketsColumnOrder {
     finally {
         $script:TicketsColumnLayoutApplying = $false
     }
+}
+
+# Backwards-compat wrapper: old code can still call this name
+function Apply-QOTicketsColumnOrder {
+    param(
+        [Parameter(Mandatory)]
+        $TicketsGrid
+    )
+
+    Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
 function Update-QOTicketsGrid {
@@ -180,7 +153,7 @@ function Initialize-QOTicketsUI {
     $script:TicketsGrid = $TicketsGrid
 
     # Allow inline editing (Title column is editable in XAML)
-    $TicketsGrid.IsReadOnly           = $false
+    $TicketsGrid.IsReadOnly            = $false
     $TicketsGrid.CanUserReorderColumns = $true
     $TicketsGrid.CanUserResizeColumns  = $true
 
@@ -191,19 +164,14 @@ function Initialize-QOTicketsUI {
 
     # Save layout whenever columns are reordered
     $TicketsGrid.Add_ColumnReordered({
-        param($sender,$eventArgs)
+        param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
             Save-QOTicketsColumnLayout -DataGrid $sender
         }
     })
 
-    # Save layout whenever a column width is changed
-    $TicketsGrid.Add_ColumnWidthChanged({
-        param($sender,$eventArgs)
-        if (-not $script:TicketsColumnLayoutApplying) {
-            Save-QOTicketsColumnLayout -DataGrid $sender
-        }
-    })
+    # NOTE: ColumnWidthChanged event was removed because DataGrid
+    #       does not expose Add_ColumnWidthChanged in this context.
 
     # Refresh button
     $BtnRefreshTickets.Add_Click({
