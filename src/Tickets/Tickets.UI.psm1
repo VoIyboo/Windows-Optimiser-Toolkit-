@@ -1,79 +1,119 @@
 # Tickets.UI.psm1
-# WPF UI wiring for the Tickets tab
+# Simple UI wiring for the Tickets tab
 
-Import-Module "$PSScriptRoot\..\Core\Tickets.psm1" -Force
-
-# Script-level references
-$script:TicketsGrid       = $null
-$script:BtnNewTicket      = $null
-$script:BtnRefreshTickets = $null
-
-function Refresh-QOTicketsGrid {
-    <#
-        Reloads tickets from the JSON database and binds them to the grid.
-    #>
-
-    if (-not $script:TicketsGrid) {
-        return
+function Update-QOTicketsGrid {
+    try {
+        $tickets = Get-QOTickets
+    }
+    catch {
+        Write-Warning "Tickets UI: failed to load tickets. $_"
+        $tickets = @()
     }
 
-    $db = Get-QOTickets
+    $view = foreach ($t in $tickets) {
 
-    $tickets = @()
-    if ($db.Tickets) {
-        $tickets = @($db.Tickets)
+        # Normalise/format Created time, drop seconds and use local PC time
+        $created = $null
+        $raw = $null
+
+        if ($t.PSObject.Properties.Name -contains 'CreatedAt') {
+            $raw = $t.CreatedAt
+        }
+
+        if ($raw -is [datetime]) {
+            $created = $raw
+        }
+        elseif ($raw) {
+            [datetime]::TryParse($raw, [ref]$created) | Out-Null
+        }
+
+        if ($created) {
+            # Example: 12/11/2025 11:09 PM  (no seconds)
+            $createdString = $created.ToString('dd/MM/yyyy h:mm tt')
+        }
+        else {
+            $createdString = $raw
+        }
+
+        [PSCustomObject]@{
+            Id        = $t.Id
+            CreatedAt = $createdString
+            Status    = $t.Status
+            Priority  = $t.Priority
+            Title     = $t.Title
+            Category  = $t.Category
+        }
     }
 
-    # Bind simple array to the DataGrid
-    $script:TicketsGrid.ItemsSource = $tickets
+    $script:TicketsGrid.ItemsSource = $view
 }
 
 function Initialize-QOTicketsUI {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         $TicketsGrid,
 
-        [Parameter(Mandatory = $true)]
-        $BtnNewTicket,
+        [Parameter(Mandatory)]
+        $BtnRefreshTickets,
 
-        [Parameter(Mandatory = $true)]
-        $BtnRefreshTickets
+        [Parameter(Mandatory)]
+        $BtnNewTicket
     )
 
-    # Cache controls
-    $script:TicketsGrid       = $TicketsGrid
-    $script:BtnNewTicket      = $BtnNewTicket
-    $script:BtnRefreshTickets = $BtnRefreshTickets
+    # Keep references for later
+    $script:TicketsGrid = $TicketsGrid
 
-    # First load
-    Refresh-QOTicketsGrid
+    # Refresh button
+    $BtnRefreshTickets.Add_Click({
+        Update-QOTicketsGrid
+    })
 
-    # Wire Refresh button
-    if ($script:BtnRefreshTickets) {
-        $script:BtnRefreshTickets.Add_Click({
-            Refresh-QOTicketsGrid
-        })
-    }
+    # New test ticket button
+    $BtnNewTicket.Add_Click({
+        try {
+            $now = Get-Date
+            New-QOTTicket `
+                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                -Description "Test ticket created from the UI." `
+                -Category "Testing" `
+                -Priority "Low" | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to create test ticket. $_"
+        }
 
-    # Wire "New test ticket" button
-    if ($script:BtnNewTicket) {
-        $script:BtnNewTicket.Add_Click({
-            $title = "Test ticket " + (Get-Date -Format 'HH:mm:ss')
-            $desc  = "Created from Quinn Tickets tab preview."
+        Update-QOTicketsGrid
+    })
 
-            $ticket = New-QOTicket -Title $title `
-                                   -Description $desc `
-                                   -Category 'Testing' `
-                                   -Priority 'Low'
+    # Double-click a row to rename the ticket TITLE
+    $TicketsGrid.Add_MouseDoubleClick({
+        param($sender, $args)
 
-            Add-QOTicket -Ticket $ticket | Out-Null
+        $row = $sender.SelectedItem
+        if (-not $row) { return }
 
-            # Reload all tickets from disk so the grid is always in sync
-            Refresh-QOTicketsGrid
-        })
-    }
+        # Use a simple input box for now
+        Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction SilentlyContinue
+
+        $currentTitle = $row.Title
+        $promptText   = "Enter a new title for this ticket:"
+        $promptTitle  = "Rename ticket"
+
+        $newTitle = [Microsoft.VisualBasic.Interaction]::InputBox(
+            $promptText,
+            $promptTitle,
+            $currentTitle
+        )
+
+        if ([string]::IsNullOrWhiteSpace($newTitle)) { return }
+
+        # For now, update in-memory; later we can wire this to persist into the JSON store.
+        $row.Title = $newTitle
+        $script:TicketsGrid.Items.Refresh()
+    })
+
+    # Initial load
+    Update-QOTicketsGrid
 }
 
-Export-ModuleMember -Function `
-    Refresh-QOTicketsGrid, `
-    Initialize-QOTicketsUI
+Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
