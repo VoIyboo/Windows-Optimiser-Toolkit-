@@ -100,6 +100,10 @@ function Initialize-QOTMainWindow {
     $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
     $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
 
+$cmd = Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue
+Write-Host "Initialize-QOTicketsUI Source: $($cmd.Source)" -ForegroundColor Yellow
+Write-Host "Initialize-QOTicketsUI Syntax: $($cmd.Syntax)" -ForegroundColor Yellow
+
     if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
         if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
             Initialize-QOTicketsUI `
