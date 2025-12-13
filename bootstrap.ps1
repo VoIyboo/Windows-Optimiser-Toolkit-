@@ -87,6 +87,7 @@ try {
     & $introPath -LogPath $logPath -Quiet
 }
 finally {
+    try { Stop-Transcript | Out-Null } catch { }
     # Always restore the user's original prompt location
     Set-Location $originalLocation
 
