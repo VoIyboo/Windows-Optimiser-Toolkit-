@@ -7,18 +7,28 @@ $ErrorActionPreference = "Stop"
 # IMPORTS
 # -------------------------------------------------------------------
 
-Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force -ErrorAction Stop
-Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
+$basePath = Join-Path $PSScriptRoot ".."
 
-# These may not exist in older builds, so we keep them soft
-Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"         -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
 
-Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"         -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\..\Tickets\Tickets.UI.psm1"   -Force -ErrorAction SilentlyContinue
+# Core modules can be soft if older builds do not include them
+Import-Module (Join-Path $basePath "Core\Settings.psm1") -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction SilentlyContinue
+
+# UI modules
+Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")       -Force -ErrorAction SilentlyContinue
+
+# IMPORTANT: If any earlier module (like Settings) defined Initialize-QOTicketsUI,
+# remove it so the correct Tickets UI version can be loaded.
+Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
+
+# Load Tickets UI from the correct location, and do not hide failures.
+Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
+
 
 # -------------------------------------------------------------------
-# WINDOW-LEVEL REFERENCES
+# WINDOW LEVEL REFERENCES
 # -------------------------------------------------------------------
 
 $script:MainWindow   = $null
@@ -26,6 +36,7 @@ $script:StatusLabel  = $null
 $script:SummaryText  = $null
 $script:MainProgress = $null
 $script:RunButton    = $null
+
 
 # -------------------------------------------------------------------
 # XAML LOADER
@@ -58,6 +69,7 @@ function New-QOTMainWindow {
 
     return $window
 }
+
 
 # -------------------------------------------------------------------
 # INIT WINDOW + TABS
@@ -99,10 +111,6 @@ function Initialize-QOTMainWindow {
     $BtnNewTicket      = $window.FindName("BtnNewTicket")
     $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
     $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
-
-$cmd = Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-Write-Host "Initialize-QOTicketsUI Source: $($cmd.Source)" -ForegroundColor Yellow
-Write-Host "Initialize-QOTicketsUI Syntax: $($cmd.Syntax)" -ForegroundColor Yellow
 
     if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
         if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
@@ -164,6 +172,7 @@ Write-Host "Initialize-QOTicketsUI Syntax: $($cmd.Syntax)" -ForegroundColor Yell
     return $script:MainWindow
 }
 
+
 # -------------------------------------------------------------------
 # SHOW WINDOW
 # -------------------------------------------------------------------
@@ -171,10 +180,9 @@ Write-Host "Initialize-QOTicketsUI Syntax: $($cmd.Syntax)" -ForegroundColor Yell
 function Start-QOTMainWindow {
 
     $window = Initialize-QOTMainWindow
-
-    # Don’t force topmost forever. If you want it on initial show only, we can do that later.
     [void]$window.ShowDialog()
 }
+
 
 # -------------------------------------------------------------------
 # TAB SELECTION
@@ -204,6 +212,7 @@ function Select-QOTPreferredTab {
     }
 }
 
+
 # -------------------------------------------------------------------
 # STATUS + SUMMARY HELPERS
 # -------------------------------------------------------------------
@@ -227,6 +236,7 @@ function Set-QOTSummary {
         })
     }
 }
+
 
 # -------------------------------------------------------------------
 # EXPORTS
