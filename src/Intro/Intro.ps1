@@ -2,8 +2,25 @@
 # Minimal splash startup for the Quinn Optimiser Toolkit
 
 param(
-    [switch]$SkipSplash
+    [switch]$SkipSplash,
+    [string]$LogPath,
+    [switch]$Quiet
 )
+
+# Default log path if none provided
+if (-not $LogPath) {
+    $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
+    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+    $LogPath = Join-Path $logDir ("QOT_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+}
+
+$script:QOTLogPath = $LogPath
+
+# Hide noisy module warnings in the console
+$oldWarningPreference = $WarningPreference
+$WarningPreference = 'SilentlyContinue'
+
+
 
 $ErrorActionPreference = "Stop"
 
