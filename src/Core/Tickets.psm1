@@ -381,4 +381,5 @@ Export-ModuleMember -Function `
     Add-QOTicket, `
     Get-QOTicketById, `
     Set-QOTicketStatus, `
-    Set-QOTicketTitle
+    Set-QOTicketTitle, `
+    Remove-QOTicket
