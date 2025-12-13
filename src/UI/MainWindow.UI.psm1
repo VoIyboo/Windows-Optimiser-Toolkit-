@@ -93,7 +93,8 @@ function Initialize-QOTMainWindow {
     $TicketsGrid       = $window.FindName("TicketsGrid")
     $BtnNewTicket      = $window.FindName("BtnNewTicket")
     $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
-
+    $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
+    
     if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
         Initialize-QOTicketsUI `
             -TicketsGrid       $TicketsGrid `
