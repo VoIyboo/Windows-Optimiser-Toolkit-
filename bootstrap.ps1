@@ -93,10 +93,4 @@ finally {
     try { Stop-Transcript | Out-Null } catch { }
     # Always restore the user's original prompt location
     Set-Location $originalLocation
-
-    # Restore the PowerShell window if we managed to minimise it
-    if ($psWindowHandle -ne [IntPtr]::Zero) {
-        # 9 = SW_RESTORE
-        [NativeMethods]::ShowWindow($psWindowHandle, 9);
-    }
 }
