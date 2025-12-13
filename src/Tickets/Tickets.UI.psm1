@@ -139,19 +139,18 @@ function Update-QOTicketsGrid {
 # -------------------------------------------------------------------
 
 param(
-    [Parameter(Mandatory)]
-    $TicketsGrid,
+    [Parameter(Mandatory = $true)]
+    [object]$TicketsGrid,
 
-    [Parameter(Mandatory)]
-    $BtnRefreshTickets,
+    [Parameter(Mandatory = $true)]
+    [object]$BtnRefreshTickets,
 
-    [Parameter(Mandatory)]
-    $BtnNewTicket,
+    [Parameter(Mandatory = $true)]
+    [object]$BtnNewTicket,
 
-    # Optional: only wire delete if the button exists in XAML
-    $BtnDeleteTicket
+    [Parameter(Mandatory = $false)]
+    [object]$BtnDeleteTicket
 )
-
 
     $script:TicketsGrid = $TicketsGrid
 
