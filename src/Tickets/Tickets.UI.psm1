@@ -193,6 +193,28 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
+if ($BtnDeleteTicket) {
+    $BtnDeleteTicket.Add_Click({
+
+        $selected = $script:TicketsGrid.SelectedItem
+        if (-not $selected) { return }
+
+        try {
+            # You need Remove-QOTicket in Core\Tickets.psm1 for this to work
+            Remove-QOTicket -Id $selected.Id | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to delete ticket. $_"
+        }
+
+        Update-QOTicketsGrid
+    })
+}
+
+
+
+
+
     if ($BtnDeleteTicket) {
         $BtnDeleteTicket.Add_Click({
             try {
