@@ -71,7 +71,6 @@
                                     BorderThickness="0,0,0,2">
                                 <ContentPresenter ContentSource="Header"
                                                   VerticalAlignment="Center" />
-
                             </Border>
 
                             <!-- Content card -->
@@ -169,44 +168,28 @@
                               Margin="0,0,8,0">
                         <StackPanel Margin="4">
 
-                            <!-- Storage cleanup -->
-                            <TextBlock Text="Storage cleanup"
-                                       Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Storage cleanup" Style="{StaticResource SectionHeading}" />
 
-                            <CheckBox x:Name="CbCleanTempFiles"
-                                      Content="Clear temporary files" />
-                            <CheckBox x:Name="CbEmptyRecycleBin"
-                                      Content="Empty Recycle Bin" />
-                            <CheckBox x:Name="CbCleanDoCache"
-                                      Content="Clean Delivery Optimisation cache" />
-                            <CheckBox x:Name="CbCleanWuCache"
-                                      Content="Clear Windows Update cache" />
-                            <CheckBox x:Name="CbCleanThumbCache"
-                                      Content="Clean thumbnail cache" />
+                            <CheckBox x:Name="CbCleanTempFiles" Content="Clear temporary files" />
+                            <CheckBox x:Name="CbEmptyRecycleBin" Content="Empty Recycle Bin" />
+                            <CheckBox x:Name="CbCleanDoCache" Content="Clean Delivery Optimisation cache" />
+                            <CheckBox x:Name="CbCleanWuCache" Content="Clear Windows Update cache" />
+                            <CheckBox x:Name="CbCleanThumbCache" Content="Clean thumbnail cache" />
 
                             <Separator />
 
-                            <!-- Windows housekeeping -->
-                            <TextBlock Text="Windows housekeeping"
-                                       Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Windows housekeeping" Style="{StaticResource SectionHeading}" />
 
-                            <CheckBox x:Name="CbCleanErrorLogs"
-                                      Content="Clean old error logs and crash dumps" />
-                            <CheckBox x:Name="CbCleanSetupLeftovers"
-                                      Content="Remove safe setup / upgrade leftovers" />
-                            <CheckBox x:Name="CbClearStoreCache"
-                                      Content="Clear Microsoft Store cache" />
+                            <CheckBox x:Name="CbCleanErrorLogs" Content="Clean old error logs and crash dumps" />
+                            <CheckBox x:Name="CbCleanSetupLeftovers" Content="Remove safe setup / upgrade leftovers" />
+                            <CheckBox x:Name="CbClearStoreCache" Content="Clear Microsoft Store cache" />
 
                             <Separator />
 
-                            <!-- Browser cleanup (light) -->
-                            <TextBlock Text="Browser cleanup (light)"
-                                       Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Browser cleanup (light)" Style="{StaticResource SectionHeading}" />
 
-                            <CheckBox x:Name="CbEdgeLightCleanup"
-                                      Content="Light clean of Microsoft Edge cache" />
-                            <CheckBox x:Name="CbChromeLightCleanup"
-                                      Content="Light clean of Chrome / Chromium cache" />
+                            <CheckBox x:Name="CbEdgeLightCleanup" Content="Light clean of Microsoft Edge cache" />
+                            <CheckBox x:Name="CbChromeLightCleanup" Content="Light clean of Chrome / Chromium cache" />
 
                         </StackPanel>
                     </GroupBox>
@@ -217,46 +200,29 @@
                               Margin="8,0,0,0">
                         <StackPanel Margin="4">
 
-                            <!-- Start menu & recommendations -->
-                            <TextBlock Text="Start menu &amp; recommendations"
-                                       Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Start menu &amp; recommendations" Style="{StaticResource SectionHeading}" />
 
-                            <CheckBox x:Name="CbDisableStartRecommended"
-                                      Content="Hide Start menu recommended items" />
-                            <CheckBox x:Name="CbDisableSuggestedApps"
-                                      Content="Turn off suggested apps and promotions" />
-                            <CheckBox x:Name="CbDisableTipsStart"
-                                      Content="Disable tips and suggestions in Start" />
-                            <CheckBox x:Name="CbDisableBingSearch"
-                                      Content="Turn off Bing / web results in Start search" />
-                            <CheckBox x:Name="CbClassicMoreOptions"
-                                      Content="Use classic 'More options' right-click menu" />
+                            <CheckBox x:Name="CbDisableStartRecommended" Content="Hide Start menu recommended items" />
+                            <CheckBox x:Name="CbDisableSuggestedApps" Content="Turn off suggested apps and promotions" />
+                            <CheckBox x:Name="CbDisableTipsStart" Content="Disable tips and suggestions in Start" />
+                            <CheckBox x:Name="CbDisableBingSearch" Content="Turn off Bing / web results in Start search" />
+                            <CheckBox x:Name="CbClassicMoreOptions" Content="Use classic 'More options' right-click menu" />
 
                             <Separator />
 
-                            <!-- Taskbar & widgets -->
-                            <TextBlock Text="Taskbar &amp; widgets"
-                                       Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Taskbar &amp; widgets" Style="{StaticResource SectionHeading}" />
 
-                            <CheckBox x:Name="CbDisableWidgets"
-                                      Content="Turn off Widgets" />
-                            <CheckBox x:Name="CbDisableTaskbarNews"
-                                      Content="Turn off News / taskbar content" />
-                            <CheckBox x:Name="CbDisableMeetNow"
-                                      Content="Hide legacy Meet Now button (if present)" />
+                            <CheckBox x:Name="CbDisableWidgets" Content="Turn off Widgets" />
+                            <CheckBox x:Name="CbDisableTaskbarNews" Content="Turn off News / taskbar content" />
+                            <CheckBox x:Name="CbDisableMeetNow" Content="Hide legacy Meet Now button (if present)" />
 
                             <Separator />
 
-                            <!-- Privacy & telemetry -->
-                            <TextBlock Text="Privacy &amp; telemetry (safe level)"
-                                       Style="{StaticResource SectionHeading}" />
+                            <TextBlock Text="Privacy &amp; telemetry (safe level)" Style="{StaticResource SectionHeading}" />
 
-                            <CheckBox x:Name="CbDisableAdvertisingId"
-                                      Content="Turn off advertising ID" />
-                            <CheckBox x:Name="CbLimitFeedbackPrompts"
-                                      Content="Reduce feedback and survey prompts" />
-                            <CheckBox x:Name="CbDisableOnlineTips"
-                                      Content="Disable online tips and suggestions" />
+                            <CheckBox x:Name="CbDisableAdvertisingId" Content="Turn off advertising ID" />
+                            <CheckBox x:Name="CbLimitFeedbackPrompts" Content="Reduce feedback and survey prompts" />
+                            <CheckBox x:Name="CbDisableOnlineTips" Content="Disable online tips and suggestions" />
 
                         </StackPanel>
                     </GroupBox>
@@ -272,7 +238,6 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- Left: Installed apps -->
                     <GroupBox Header="Installed apps"
                               Grid.Column="0"
                               Margin="0,0,8,0">
@@ -282,21 +247,14 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
-                            <!-- Actions row -->
                             <StackPanel Grid.Row="0"
                                         Orientation="Horizontal"
                                         HorizontalAlignment="Right"
                                         Margin="0,0,0,6">
-                                <Button x:Name="BtnScanApps"
-                                        Content="Scan apps"
-                                        Width="110" />
-                                <Button x:Name="BtnUninstallSelected"
-                                        Content="Uninstall selected"
-                                        Width="130"
-                                        Margin="6,0,0,0" />
+                                <Button x:Name="BtnScanApps" Content="Scan apps" Width="110" />
+                                <Button x:Name="BtnUninstallSelected" Content="Uninstall selected" Width="130" Margin="6,0,0,0" />
                             </StackPanel>
 
-                            <!-- Installed apps grid -->
                             <DataGrid x:Name="AppsGrid"
                                       Grid.Row="1"
                                       Margin="0,4,0,0"
@@ -310,21 +268,14 @@
                                       BorderBrush="{StaticResource BorderBrush}"
                                       Foreground="White">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Name"
-                                                        Binding="{Binding Name}"
-                                                        Width="*" />
-                                    <DataGridTextColumn Header="Version"
-                                                        Binding="{Binding Version}"
-                                                        Width="130" />
-                                    <DataGridTextColumn Header="Publisher"
-                                                        Binding="{Binding Publisher}"
-                                                        Width="200" />
+                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                    <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="130" />
+                                    <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="200" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>
                     </GroupBox>
 
-                    <!-- Right: Common installs -->
                     <GroupBox Header="Common app installs"
                               Grid.Column="1"
                               Margin="8,0,0,0">
@@ -339,19 +290,12 @@
                                   BorderBrush="{StaticResource BorderBrush}"
                                   Foreground="White">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="App"
-                                                    Binding="{Binding Name}"
-                                                    Width="*" />
-                                <DataGridTextColumn Header="Status"
-                                                    Binding="{Binding Status}"
-                                                    Width="120" />
+                                <DataGridTextColumn Header="App" Binding="{Binding Name}" Width="*" />
+                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120" />
                                 <DataGridTemplateColumn Header="">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate>
-                                            <Button Content="Install"
-                                                    Width="70"
-                                                    Padding="6,2"
-                                                    Tag="{Binding Id}" />
+                                            <Button Content="Install" Width="70" Padding="6,2" Tag="{Binding Id}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
@@ -372,134 +316,108 @@
                 </Grid>
             </TabItem>
 
-         <!-- Tickets -->
-<TabItem x:Name="TabTickets" Header="Tickets">
-    <Grid Margin="5,10,5,5">
-        <GroupBox>
-            <!-- Custom header with title on left, icons on right -->
-            <GroupBox.Header>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+            <!-- Tickets -->
+            <TabItem x:Name="TabTickets" Header="Tickets">
+                <Grid Margin="5,10,5,5">
+                    <GroupBox>
+                        <GroupBox.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Tickets (preview)"
-                               Foreground="White"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center" />
-
-                    <StackPanel Grid.Column="1"
-            Orientation="Horizontal"
-            VerticalAlignment="Center">
-
-                            <!-- Refresh -->
-                            <Button x:Name="BtnRefreshTickets"
-                                    Width="28" Height="28"
-                                    Margin="0,0,8,0"
-                                    ToolTip="Refresh"
-                                    Background="#2563EB"
-                                    BorderBrush="#2563EB"
-                                    Foreground="White">
-                                <TextBlock FontFamily="Segoe MDL2 Assets"
+                                <TextBlock Text="Tickets (preview)"
+                                           Foreground="#E5E7EB"
                                            FontSize="14"
-                                           Text="&#xE72C;"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                            </Button>
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
 
-                            <!-- New ticket -->
-                            <Button x:Name="BtnNewTicket"
-                                    Width="28" Height="28"
-                                    Margin="0,0,8,0"
-                                    ToolTip="New ticket"
-                                    Background="#2563EB"
-                                    BorderBrush="#2563EB"
-                                    Foreground="White">
-                                <TextBlock FontFamily="Segoe MDL2 Assets"
-                                           FontSize="14"
-                                           Text="&#xE710;"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                            </Button>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
 
-                            <!-- Delete selected ticket -->
-                            <Button x:Name="BtnDeleteTicket"
-                                    Width="28" Height="28"
-                                    ToolTip="Delete selected ticket"
-                                    Background="#2563EB"
-                                    BorderBrush="#2563EB"
-                                    Foreground="White">
-                                <TextBlock FontFamily="Segoe MDL2 Assets"
-                                           FontSize="14"
-                                           Text="&#xE74D;"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"/>
-                            </Button>
+                                    <Button x:Name="BtnRefreshTickets"
+                                            Width="28"
+                                            Height="28"
+                                            Margin="0,0,8,0"
+                                            ToolTip="Refresh">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="14"
+                                                   Text="&#xE72C;"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Button>
 
-                        </StackPanel>
+                                    <Button x:Name="BtnNewTicket"
+                                            Width="28"
+                                            Height="28"
+                                            Margin="0,0,8,0"
+                                            ToolTip="New ticket">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="14"
+                                                   Text="&#xE710;"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Button>
 
+                                    <Button x:Name="BtnDeleteTicket"
+                                            Width="28"
+                                            Height="28"
+                                            ToolTip="Delete selected ticket">
+                                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="14"
+                                                   Text="&#xE74D;"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Button>
 
+                                </StackPanel>
+                            </Grid>
+                        </GroupBox.Header>
 
+                        <Grid Margin="4">
+                            <DataGrid x:Name="TicketsGrid"
+                                      Margin="0,4,0,8"
+                                      AutoGenerateColumns="False"
+                                      HeadersVisibility="Column"
+                                      IsReadOnly="False"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      GridLinesVisibility="Horizontal"
+                                      Background="{StaticResource CardBrush}"
+                                      BorderBrush="{StaticResource BorderBrush}"
+                                      Foreground="White">
 
-                    </StackPanel>
+                                <DataGrid.Resources>
+                                    <Style TargetType="DataGridColumnHeader">
+                                        <Setter Property="Foreground" Value="#E5E7EB" />
+                                        <Setter Property="Background" Value="#111827" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                        <Setter Property="BorderBrush" Value="#374151" />
+                                    </Style>
+
+                                    <Style TargetType="DataGridRow">
+                                        <Setter Property="Background" Value="#020617" />
+                                        <Setter Property="Foreground" Value="White" />
+                                    </Style>
+
+                                    <Style TargetType="DataGridCell">
+                                        <Setter Property="BorderBrush" Value="#374151" />
+                                    </Style>
+                                </DataGrid.Resources>
+
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+                                    <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="150" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="*" IsReadOnly="False" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </GroupBox>
                 </Grid>
-            </GroupBox.Header>
-
-            <Grid Margin="4">
-                <DataGrid x:Name="TicketsGrid"
-                          Margin="0,4,0,8"
-                          AutoGenerateColumns="False"
-                          HeadersVisibility="Column"
-                          IsReadOnly="False"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          GridLinesVisibility="Horizontal"
-                          Background="{StaticResource CardBrush}"
-                          BorderBrush="{StaticResource BorderBrush}"
-                          Foreground="White">
-
-                    <DataGrid.Resources>
-                        <Style TargetType="DataGridColumnHeader">
-                            <Setter Property="Foreground" Value="#E5E7EB" />
-                            <Setter Property="Background" Value="#111827" />
-                            <Setter Property="FontWeight" Value="SemiBold" />
-                            <Setter Property="BorderBrush" Value="#374151" />
-                        </Style>
-
-                        <Style TargetType="DataGridRow">
-                            <Setter Property="Background" Value="#020617" />
-                            <Setter Property="Foreground" Value="White" />
-                        </Style>
-
-                        <Style TargetType="DataGridCell">
-                            <Setter Property="BorderBrush" Value="#374151" />
-                        </Style>
-                    </DataGrid.Resources>
-
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Title"
-                                            Binding="{Binding Title}"
-                                            Width="*" />
-                        <DataGridTextColumn Header="Created"
-                                            Binding="{Binding CreatedAt}"
-                                            Width="150"
-                                            IsReadOnly="True" />
-                        <DataGridTextColumn Header="Status"
-                                            Binding="{Binding Status}"
-                                            Width="90"
-                                            IsReadOnly="True" />
-                        <DataGridTextColumn Header="Priority"
-                                            Binding="{Binding Priority}"
-                                            Width="*"
-                                            IsReadOnly="False" />
-                    </DataGrid.Columns>
-                </DataGrid>
-            </Grid>
-        </GroupBox>
-    </Grid>
-</TabItem>
+            </TabItem>
 
         </TabControl>
 
@@ -515,12 +433,10 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Progress bar + overlay text -->
                 <Grid Grid.Column="0"
                       Margin="0,0,12,0"
                       VerticalAlignment="Center">
 
-                    <!-- Progress bar -->
                     <ProgressBar x:Name="MainProgress"
                                  Height="28"
                                  Minimum="0"
@@ -529,7 +445,6 @@
                                  Foreground="#2563EB"
                                  Background="#1E293B" />
 
-                    <!-- Status text OVER the bar -->
                     <TextBlock x:Name="StatusLabel"
                                Text="Idle"
                                Foreground="White"
@@ -541,7 +456,6 @@
                                IsHitTestVisible="False" />
                 </Grid>
 
-                <!-- Right: action + summary -->
                 <StackPanel Grid.Column="1"
                             Orientation="Vertical"
                             VerticalAlignment="Center">
