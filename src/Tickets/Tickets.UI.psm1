@@ -138,20 +138,20 @@ function Update-QOTicketsGrid {
 # Initialise Tickets tab UI
 # -------------------------------------------------------------------
 
-function Initialize-QOTicketsUI {
-    param(
-        [Parameter(Mandatory)]
-        $TicketsGrid,
+param(
+    [Parameter(Mandatory)]
+    $TicketsGrid,
 
-        [Parameter(Mandatory)]
-        $BtnRefreshTickets,
+    [Parameter(Mandatory)]
+    $BtnRefreshTickets,
 
-        [Parameter(Mandatory)]
-        $BtnNewTicket,
+    [Parameter(Mandatory)]
+    $BtnNewTicket,
 
-        # Optional: only wire delete if the button exists in XAML
-        $BtnDeleteTicket
-    )
+    # Optional: only wire delete if the button exists in XAML
+    $BtnDeleteTicket
+)
+
 
     $script:TicketsGrid = $TicketsGrid
 
