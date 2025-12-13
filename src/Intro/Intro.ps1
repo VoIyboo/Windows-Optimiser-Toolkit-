@@ -51,11 +51,24 @@ if (-not (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue)) {
     }
 }
 
-if (-not (Get-Command Start-QLogSession -ErrorAction SilentlyContinue)) {
-    function Start-QLogSession {
-        param([string]$Prefix = "QuinnOptimiserToolkit")
+if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
+    function Write-QLog {
+        param(
+            [string]$Message,
+            [string]$Level = "INFO"
+        )
         $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Write-Host "[$ts] [INFO] Log session started (fallback in Intro.ps1)."
+        $line = "[$ts] [$Level] $Message"
+
+        try {
+            if ($script:QOTLogPath) {
+                $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
+            }
+        } catch { }
+
+        if (-not $Quiet) {
+            Write-Host $line
+        }
     }
 }
 
