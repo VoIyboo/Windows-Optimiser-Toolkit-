@@ -66,8 +66,11 @@ if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
             }
         } catch { }
 
+
+        $WarningPreference = $oldWarningPreference
+        
         if (-not $Quiet) {
-            Write-Host $line
+            Write-Host "Log saved to: $script:QOTLogPath"
         }
     }
 }
