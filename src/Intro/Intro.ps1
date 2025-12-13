@@ -101,7 +101,13 @@ if (-not $SkipSplash) {
     Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
     Update-QOTSplashProgress -Window $splash -Value 5
     [void]$splash.Show()
+
+    # Minimum splash time so users can actually enjoy it
+    $script:MinSplashMs   = 3000
+    $script:SplashShownAt = Get-Date
 }
+
+
 
 function Set-IntroProgress {
     param(
@@ -128,7 +134,17 @@ Write-QLog "Closing splash and starting main window."
 
 if ($splash) {
     Set-IntroProgress -Value 100 -Text "Ready."
-    Start-Sleep -Milliseconds 150
+
+    # Enforce minimum display time
+    $elapsedMs = 0
+    if ($script:SplashShownAt) {
+        $elapsedMs = [int]((Get-Date) - $script:SplashShownAt).TotalMilliseconds
+    }
+
+    if ($script:MinSplashMs -and $elapsedMs -lt $script:MinSplashMs) {
+        Start-Sleep -Milliseconds ($script:MinSplashMs - $elapsedMs)
+    }
+
     $splash.Close()
 }
 
