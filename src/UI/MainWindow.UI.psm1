@@ -1,19 +1,24 @@
 # MainWindow.UI.psm1
 # WPF main window loader for the Quinn Optimiser Toolkit (Studio Voly Edition)
 
-# -------------------------------------------------------------------
-# CLEAN IMPORT BLOCK
-# -------------------------------------------------------------------
-
-Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"       -Force
-Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1"     -Force
-Import-Module "$PSScriptRoot\..\Core\Settings.psm1"            -Force
-Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"             -Force
-Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"             -Force
-Import-Module "$PSScriptRoot\..\Tickets\Tickets.UI.psm1"       -Force
+$ErrorActionPreference = "Stop"
 
 # -------------------------------------------------------------------
-# WINDOW-LEVEL GLOBAL REFERENCES
+# IMPORTS
+# -------------------------------------------------------------------
+
+Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
+
+# These may not exist in older builds, so we keep them soft
+Import-Module "$PSScriptRoot\..\Core\Settings.psm1"        -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"         -Force -ErrorAction SilentlyContinue
+
+Import-Module "$PSScriptRoot\..\Apps\Apps.UI.psm1"         -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Tickets\Tickets.UI.psm1"   -Force -ErrorAction SilentlyContinue
+
+# -------------------------------------------------------------------
+# WINDOW-LEVEL REFERENCES
 # -------------------------------------------------------------------
 
 $script:MainWindow   = $null
@@ -23,26 +28,25 @@ $script:MainProgress = $null
 $script:RunButton    = $null
 
 # -------------------------------------------------------------------
-# LOAD XAML + ICON
+# XAML LOADER
 # -------------------------------------------------------------------
 
 function New-QOTMainWindow {
-    param([string]$XamlPath)
+    param([Parameter(Mandatory)][string]$XamlPath)
 
-    if (-not (Test-Path $XamlPath)) {
+    if (-not (Test-Path -LiteralPath $XamlPath)) {
         throw "Main window XAML not found at: $XamlPath"
     }
 
-    $xamlText = Get-Content -Path $XamlPath -Raw
+    $xamlText = Get-Content -LiteralPath $XamlPath -Raw
     $xml      = [xml]$xamlText
     $reader   = New-Object System.Xml.XmlNodeReader $xml
     $window   = [Windows.Markup.XamlReader]::Load($reader)
 
-    # Apply Studio Voly icon
+    # Apply Studio Voly icon (optional)
     $iconPath = Join-Path $PSScriptRoot "icon.ico"
-    if (Test-Path $iconPath) {
-
-        [void][System.Reflection.Assembly]::LoadWithPartialName("PresentationCore")
+    if (Test-Path -LiteralPath $iconPath) {
+        Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
 
         $bmp = New-Object System.Windows.Media.Imaging.BitmapImage
         $bmp.BeginInit()
@@ -56,7 +60,7 @@ function New-QOTMainWindow {
 }
 
 # -------------------------------------------------------------------
-# INITIALISE WINDOW + TABS
+# INIT WINDOW + TABS
 # -------------------------------------------------------------------
 
 function Initialize-QOTMainWindow {
@@ -64,7 +68,6 @@ function Initialize-QOTMainWindow {
     $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
     $window   = New-QOTMainWindow -XamlPath $xamlPath
 
-    # Cache references
     $script:MainWindow   = $window
     $script:StatusLabel  = $window.FindName("StatusLabel")
     $script:SummaryText  = $window.FindName("SummaryText")
@@ -74,17 +77,19 @@ function Initialize-QOTMainWindow {
     # ------------------------------
     # Apps Tab
     # ------------------------------
-    $BtnScanApps      = $window.FindName("BtnScanApps")
-    $BtnUninstallApps = $window.FindName("BtnUninstallSelected")
-    $AppsGrid         = $window.FindName("AppsGrid")
-    $InstallGrid      = $window.FindName("InstallGrid")
+    $BtnScanApps        = $window.FindName("BtnScanApps")
+    $BtnUninstallApps   = $window.FindName("BtnUninstallSelected")
+    $AppsGrid           = $window.FindName("AppsGrid")
+    $InstallGrid        = $window.FindName("InstallGrid")
 
-    if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
-        Initialize-QOTAppsUI `
-            -BtnScanApps        $BtnScanApps `
-            -BtnUninstallSelected $BtnUninstallApps `
-            -AppsGrid           $AppsGrid `
-            -InstallGrid        $InstallGrid
+    if (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue) {
+        if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
+            Initialize-QOTAppsUI `
+                -BtnScanApps          $BtnScanApps `
+                -BtnUninstallSelected $BtnUninstallApps `
+                -AppsGrid             $AppsGrid `
+                -InstallGrid          $InstallGrid
+        }
     }
 
     # ------------------------------
@@ -94,32 +99,45 @@ function Initialize-QOTMainWindow {
     $BtnNewTicket      = $window.FindName("BtnNewTicket")
     $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
     $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
-    
-    if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
-    Initialize-QOTicketsUI `
-        -TicketsGrid $TicketsGrid `
-        -BtnRefreshTickets $BtnRefreshTickets `
-        -BtnNewTicket $BtnNewTicket `
-        -BtnDeleteTicket $BtnDeleteTicket
+
+    if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
+        if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
+            Initialize-QOTicketsUI `
+                -TicketsGrid       $TicketsGrid `
+                -BtnRefreshTickets $BtnRefreshTickets `
+                -BtnNewTicket      $BtnNewTicket `
+                -BtnDeleteTicket   $BtnDeleteTicket
+        }
     }
 
     # ------------------------------
-    # Settings + Ticket Storage Init
+    # Settings init (safe)
     # ------------------------------
-
     if (-not $global:QOSettings) {
-        $global:QOSettings = Get-QOSettings
+        if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
+            $global:QOSettings = Get-QOSettings
+        }
+        else {
+            $global:QOSettings = [pscustomobject]@{ PreferredStartTab = "Cleaning" }
+        }
     }
 
-    Initialize-QOTicketStorage   # Ensures Tickets.json + backups folder exist
+    # ------------------------------
+    # Ticket storage init (safe)
+    # ------------------------------
+    if (Get-Command Initialize-QOTicketStorage -ErrorAction SilentlyContinue) {
+        Initialize-QOTicketStorage
+    }
+    elseif (Get-Command Initialize-QOTicketsStore -ErrorAction SilentlyContinue) {
+        Initialize-QOTicketsStore
+    }
 
     # Apply preferred start tab
     Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
 
     # ------------------------------
-    # Status Bar Defaults
+    # Status bar defaults
     # ------------------------------
-
     if ($script:StatusLabel) {
         $script:StatusLabel.Text = "Idle"
     }
@@ -131,9 +149,8 @@ function Initialize-QOTMainWindow {
     }
 
     # ------------------------------
-    # Run Button placeholder
+    # Run button placeholder
     # ------------------------------
-
     if ($script:RunButton -and $script:StatusLabel) {
         $script:RunButton.Add_Click({
             $script:StatusLabel.Text = "Run clicked (engine coming soon)"
@@ -144,20 +161,15 @@ function Initialize-QOTMainWindow {
 }
 
 # -------------------------------------------------------------------
-# WINDOW DISPLAY
+# SHOW WINDOW
 # -------------------------------------------------------------------
 
 function Start-QOTMainWindow {
 
     $window = Initialize-QOTMainWindow
 
-    try {
-        $window.Topmost = $true
-        [void]$window.ShowDialog()
-    }
-    finally {
-        $window.Topmost = $false
-    }
+    # Don’t force topmost forever. If you want it on initial show only, we can do that later.
+    [void]$window.ShowDialog()
 }
 
 # -------------------------------------------------------------------
@@ -220,5 +232,6 @@ Export-ModuleMember -Function `
     New-QOTMainWindow, `
     Initialize-QOTMainWindow, `
     Start-QOTMainWindow, `
+    Select-QOTPreferredTab, `
     Set-QOTStatus, `
     Set-QOTSummary
