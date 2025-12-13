@@ -160,6 +160,9 @@ function Initialize-QOTicketsUI {
 
         [Parameter(Mandatory)]
         $BtnNewTicket
+        
+        [Parameter(Mandatory)]
+        $BtnDeleteTicket
     )
 
     # Keep reference
