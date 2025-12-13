@@ -422,6 +422,23 @@
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>
                         </Button>
+                        <!-- Delete selected -->
+                        <Button x:Name="BtnDeleteTicket"
+                                Width="28" Height="28"
+                                Margin="0,0,8,0"
+                                Padding="0"
+                                ToolTip="Delete selected ticket"
+                                Background="#2563EB"
+                                BorderBrush="#2563EB"
+                                Foreground="White"
+                                IsEnabled="False">
+                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Text="&#xE74D;"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Button>
+
 
                     </StackPanel>
                 </Grid>
