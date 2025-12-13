@@ -6,6 +6,16 @@ $ErrorActionPreference = "Stop"
 # Remember where the user started
 $originalLocation = Get-Location
 
+$logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
+$logPath = Join-Path $logDir ("Bootstrap_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+
+Start-Transcript -Path $logPath -Append | Out-Null
+
+
 # Win32 helper to control the PowerShell window
 Add-Type -TypeDefinition @"
 using System;
@@ -74,7 +84,7 @@ try {
     Set-Location $toolkitRoot
 
     # Hand off to the Intro script (this shows the Studio Voly splash)
-    & $introPath
+    & $introPath -LogPath $logPath -Quiet
 }
 finally {
     # Always restore the user's original prompt location
