@@ -79,6 +79,7 @@ function Apply-QOTicketsColumnLayout {
     }
 }
 
+# Backwards compat name
 function Apply-QOTicketsColumnOrder {
     param(
         [Parameter(Mandatory)]
@@ -193,37 +194,16 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-if ($BtnDeleteTicket) {
-    $BtnDeleteTicket.Add_Click({
-
-        $selected = $script:TicketsGrid.SelectedItem
-        if (-not $selected) { return }
-
-        try {
-            # You need Remove-QOTicket in Core\Tickets.psm1 for this to work
-            Remove-QOTicket -Id $selected.Id | Out-Null
-        }
-        catch {
-            Write-Warning "Tickets UI: failed to delete ticket. $_"
-        }
-
-        Update-QOTicketsGrid
-    })
-}
-
-
-
-
-
     if ($BtnDeleteTicket) {
         $BtnDeleteTicket.Add_Click({
             try {
                 $selected = $script:TicketsGrid.SelectedItem
                 if (-not $selected) { return }
 
-                $id = $selected.Id
+                $id = [string]$selected.Id
                 if ([string]::IsNullOrWhiteSpace($id)) { return }
 
+                # Needs Remove-QOTicket in Core\Tickets.psm1
                 Remove-QOTicket -Id $id | Out-Null
             }
             catch {
