@@ -89,6 +89,49 @@ function Apply-QOTicketsColumnOrder {
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
+
+
+# Delete selected ticket button
+$BtnDeleteTicket.Add_Click({
+
+    if (-not $script:TicketsGrid.SelectedItem) {
+        return
+    }
+
+    $selected = $script:TicketsGrid.SelectedItem
+    $ticketId = $selected.Id
+
+    if (-not $ticketId) {
+        return
+    }
+
+    # Optional safety prompt (recommended)
+    $confirm = [System.Windows.MessageBox]::Show(
+        "Delete selected ticket? This cannot be undone.",
+        "Confirm delete",
+        "YesNo",
+        "Warning"
+    )
+
+    if ($confirm -ne 'Yes') {
+        return
+    }
+
+    try {
+        $removed = Remove-QOTicketById -Id $ticketId
+        if ($removed) {
+            Update-QOTicketsGrid
+        }
+    }
+    catch {
+        Write-Warning "Tickets UI: failed to delete ticket. $_"
+    }
+})
+
+
+
+
+
 # -------------------------------------------------------------------
 # Grid data binding
 # -------------------------------------------------------------------
