@@ -343,6 +343,31 @@ function Set-QOTicketTitle {
     return $ticket
 }
 
+
+function Remove-QOTicket {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Id
+    )
+
+    $db = Get-QOTickets
+
+    $tickets = if ($db.Tickets) { @($db.Tickets) } else { @() }
+
+    $beforeCount = $tickets.Count
+
+    # Remove matching ticket
+    $tickets = @($tickets | Where-Object { $_.Id -ne $Id })
+
+    $db.Tickets = $tickets
+    Save-QOTickets -TicketsDb $db
+
+    # Return true if something was removed
+    return ($beforeCount -ne $tickets.Count)
+}
+
+
+
 # =====================================================================
 # EXPORTS
 # =====================================================================
