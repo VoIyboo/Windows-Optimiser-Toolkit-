@@ -7,24 +7,28 @@ param(
     [switch]$Quiet
 )
 
-# Default log path if none provided
+$ErrorActionPreference = "Stop"
+
+# ------------------------------
+# Logging setup
+# ------------------------------
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
-    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
     $LogPath = Join-Path $logDir ("QOT_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 }
 
 $script:QOTLogPath = $LogPath
 
-# Hide noisy module warnings in the console
+# Silence noisy module import warnings (unapproved verbs etc.)
 $oldWarningPreference = $WarningPreference
 $WarningPreference = 'SilentlyContinue'
 
-
-
-$ErrorActionPreference = "Stop"
-
-# Make sure WPF assemblies are available
+# ------------------------------
+# WPF assemblies
+# ------------------------------
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 # Work out repo root:
@@ -35,29 +39,22 @@ $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
 $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
 $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
-# Import core modules
-Import-Module $configModule  -Force
-Import-Module $loggingModule -Force
-Import-Module $engineModule  -Force
+# Import core modules (logging module may or may not export helpers)
+Import-Module $configModule  -Force -ErrorAction SilentlyContinue
+Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
+Import-Module $engineModule  -Force -ErrorAction SilentlyContinue
 
-# -------------------------------------------------------------------
+# ------------------------------
 # Safety net logging fallbacks
-# -------------------------------------------------------------------
-if (-not (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue)) {
-    function Set-QLogRoot {
-        param([string]$Root)
-        $Global:QOTLogRoot = $Root
-        Write-Host "[INFO] Set-QLogRoot fallback: $Root"
-    }
-}
-
+# ------------------------------
 if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
     function Write-QLog {
         param(
             [string]$Message,
             [string]$Level = "INFO"
         )
-        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+        $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $line = "[$ts] [$Level] $Message"
 
         try {
@@ -66,29 +63,30 @@ if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
             }
         } catch { }
 
-
-        $WarningPreference = $oldWarningPreference
-        
         if (-not $Quiet) {
-            Write-Host "Log saved to: $script:QOTLogPath"
+            Write-Host $line
         }
     }
 }
 
-if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
-    function Write-QLog {
-        param(
-            [string]$Message,
-            [string]$Level = "INFO"
-        )
-        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        Write-Host "[$ts] [$Level] $Message"
+if (-not (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue)) {
+    function Set-QLogRoot {
+        param([string]$Root)
+        $Global:QOTLogRoot = $Root
+        Write-QLog "Set-QLogRoot fallback: $Root" "INFO"
     }
 }
 
-# -------------------------------------------------------------------
-# Local bootstrap version of Initialize-QOTConfig
-# -------------------------------------------------------------------
+if (-not (Get-Command Start-QLogSession -ErrorAction SilentlyContinue)) {
+    function Start-QLogSession {
+        param([string]$Prefix = "QuinnOptimiserToolkit")
+        Write-QLog "Log session started (fallback in Intro.ps1)." "INFO"
+    }
+}
+
+# ------------------------------
+# Local fallback config init
+# ------------------------------
 function Initialize-QOTConfig {
     param([string]$RootPath)
 
@@ -111,21 +109,22 @@ function Initialize-QOTConfig {
 }
 
 # Import UI helpers
-Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force
-Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force
+Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAction SilentlyContinue
 
 # Initialise config and logging
 $cfg = Initialize-QOTConfig -RootPath $rootPath
-
 Set-QLogRoot -Root $cfg.LogsRoot
 Start-QLogSession
 
-Write-QLog "Intro starting. Root path: $rootPath"
+Write-QLog "Intro starting. Root path: $rootPath" "INFO"
 
-# ---------------------------------------------------------
-# Optional splash (bootstrap can handle splash instead)
-# ---------------------------------------------------------
+# ------------------------------
+# Optional splash
+# ------------------------------
 $splash = $null
+$script:MinSplashMs   = 3000
+$script:SplashShownAt = $null
 
 if (-not $SkipSplash) {
     $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
@@ -135,12 +134,8 @@ if (-not $SkipSplash) {
     Update-QOTSplashProgress -Window $splash -Value 5
     [void]$splash.Show()
 
-    # Minimum splash time so users can actually enjoy it
-    $script:MinSplashMs   = 3000
     $script:SplashShownAt = Get-Date
 }
-
-
 
 function Set-IntroProgress {
     param(
@@ -158,17 +153,16 @@ function Set-IntroProgress {
     }
 }
 
-# Real stage-based progress now
+# Real stage-based progress
 Set-IntroProgress -Value 25 -Text "Loading UI..."
 Set-IntroProgress -Value 55 -Text "Initialising modules..."
 Set-IntroProgress -Value 85 -Text "Starting app..."
 
-Write-QLog "Closing splash and starting main window."
+Write-QLog "Closing splash and starting main window." "INFO"
 
 if ($splash) {
     Set-IntroProgress -Value 100 -Text "Ready."
 
-    # Enforce minimum display time
     $elapsedMs = 0
     if ($script:SplashShownAt) {
         $elapsedMs = [int]((Get-Date) - $script:SplashShownAt).TotalMilliseconds
@@ -184,4 +178,11 @@ if ($splash) {
 # Start the main window
 Start-QOTMain -Mode "Normal"
 
-Write-QLog "Intro completed."
+Write-QLog "Intro completed." "INFO"
+
+# Restore warning preference
+$WarningPreference = $oldWarningPreference
+
+if (-not $Quiet) {
+    Write-Host "Log saved to: $script:QOTLogPath"
+}
