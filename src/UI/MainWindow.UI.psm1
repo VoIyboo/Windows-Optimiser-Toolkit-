@@ -99,6 +99,7 @@ function Initialize-QOTMainWindow {
             -TicketsGrid       $TicketsGrid `
             -BtnNewTicket      $BtnNewTicket `
             -BtnRefreshTickets $BtnRefreshTickets
+            -BtnDeleteTicket $BtnDeleteTicket
     }
 
     # ------------------------------
