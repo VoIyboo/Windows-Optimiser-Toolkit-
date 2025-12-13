@@ -43,7 +43,11 @@ $script:RunButton    = $null
 # -------------------------------------------------------------------
 
 function New-QOTMainWindow {
-    param([Parameter(Mandatory)][string]$XamlPath)
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$XamlPath
+    )
+
 
     if (-not (Test-Path -LiteralPath $XamlPath)) {
         throw "Main window XAML not found at: $XamlPath"
