@@ -193,28 +193,54 @@ function Initialize-QOTicketsUI {
 
         Update-QOTicketsGrid
     })
+    
+if ($BtnDeleteTicket) {
+    $BtnDeleteTicket.Add_Click({
+        try {
+            $selectedItems = $script:TicketsGrid.SelectedItems
 
-    if ($BtnDeleteTicket) {
-        $BtnDeleteTicket.Add_Click({
-            try {
-                $selected = $script:TicketsGrid.SelectedItem
-                if (-not $selected) { return }
+            if (-not $selectedItems -or $selectedItems.Count -lt 1) {
+                return
+            }
 
-                $id = [string]$selected.Id
-                if ([string]::IsNullOrWhiteSpace($id)) { return }
+            $idsToDelete = @()
 
-                # Needs Remove-QOTicket in Core\Tickets.psm1
+            foreach ($item in $selectedItems) {
+                if ($null -ne $item -and $item.PSObject.Properties.Name -contains 'Id') {
+                    if (-not [string]::IsNullOrWhiteSpace($item.Id)) {
+                        $idsToDelete += [string]$item.Id
+                    }
+                }
+            }
+
+            $idsToDelete = $idsToDelete | Select-Object -Unique
+
+            if ($idsToDelete.Count -lt 1) {
+                return
+            }
+
+            $confirm = [System.Windows.MessageBox]::Show(
+                "Delete $($idsToDelete.Count) selected ticket(s)?",
+                "Confirm eliminating tickets 👀",
+                [System.Windows.MessageBoxButton]::YesNo,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+
+            if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) {
+                return
+            }
+
+            foreach ($id in $idsToDelete) {
                 Remove-QOTicket -Id $id | Out-Null
             }
-            catch {
-                Write-Warning "Tickets UI: failed to delete ticket. $_"
-            }
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to delete ticket(s). $_"
+        }
 
-            Update-QOTicketsGrid
-        })
-    }
-
-    Update-QOTicketsGrid
+        Update-QOTicketsGrid
+    })
 }
+
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
