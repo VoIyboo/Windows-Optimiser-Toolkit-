@@ -2,6 +2,9 @@
 # Download latest Quinn Optimiser Toolkit build to a temp folder and run Intro.ps1
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference  = 'SilentlyContinue'
+$VerbosePreference  = 'SilentlyContinue'
 
 # Remember where the user started
 $originalLocation = Get-Location
