@@ -95,9 +95,28 @@ function Start-QOTMain {
 
     Write-QLog "Start-QOTMain called. Root = $RootPath"
 
-    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-        throw "UI module not loaded: Start-QOTMainWindow not found"
+# Safety net: load UI module if it is not already loaded
+if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+
+    $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
+    $uiModule = [System.IO.Path]::GetFullPath($uiModule)
+
+    if (-not (Test-Path -LiteralPath $uiModule)) {
+        throw "UI module file missing: $uiModule"
     }
+
+    try {
+        Import-Module $uiModule -Force -ErrorAction Stop
+    }
+    catch {
+        throw "UI module failed to import: $uiModule. Error: $($_.Exception.Message)"
+    }
+}
+
+if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+    throw "UI module not loaded: Start-QOTMainWindow not found (tried importing $uiModule)"
+}
+
 
     try {
         Start-QOTMainWindow
