@@ -193,7 +193,9 @@ function Start-QOTMainWindow {
 # -------------------------------------------------------------------
 
 function Select-QOTPreferredTab {
-    param([string]$PreferredTab)
+    param(
+        [string]$PreferredTab
+    )
 
     if (-not $script:MainWindow) { return }
 
@@ -216,13 +218,14 @@ function Select-QOTPreferredTab {
     }
 }
 
-
 # -------------------------------------------------------------------
 # STATUS + SUMMARY HELPERS
 # -------------------------------------------------------------------
 
 function Set-QOTStatus {
-    param([string]$Text)
+    param(
+        [string]$Text
+    )
 
     if ($script:StatusLabel) {
         $script:StatusLabel.Dispatcher.Invoke({
@@ -232,7 +235,9 @@ function Set-QOTStatus {
 }
 
 function Set-QOTSummary {
-    param([string]$Text)
+    param(
+        [string]$Text
+    )
 
     if ($script:SummaryText) {
         $script:SummaryText.Dispatcher.Invoke({
@@ -240,7 +245,6 @@ function Set-QOTSummary {
         })
     }
 }
-
 
 # -------------------------------------------------------------------
 # EXPORTS
