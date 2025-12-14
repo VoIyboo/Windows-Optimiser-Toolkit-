@@ -138,19 +138,20 @@ function Update-QOTicketsGrid {
 # Initialise Tickets tab UI
 # -------------------------------------------------------------------
 
-param(
-    [Parameter(Mandatory = $true)]
-    [object]$TicketsGrid,
+function Initialize-QOTicketsUI {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$TicketsGrid,
 
-    [Parameter(Mandatory = $true)]
-    [object]$BtnRefreshTickets,
+        [Parameter(Mandatory = $true)]
+        [object]$BtnRefreshTickets,
 
-    [Parameter(Mandatory = $true)]
-    [object]$BtnNewTicket,
+        [Parameter(Mandatory = $true)]
+        [object]$BtnNewTicket,
 
-    [Parameter(Mandatory = $false)]
-    [object]$BtnDeleteTicket
-)
+        [Parameter(Mandatory = $false)]
+        [object]$BtnDeleteTicket
+    )
 
     $script:TicketsGrid = $TicketsGrid
 
