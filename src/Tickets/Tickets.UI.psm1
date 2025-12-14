@@ -194,42 +194,41 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    if ($BtnDeleteTicket) {
-        $BtnDeleteTicket.Add_Click({
-            try {
-                $selectedItems = $script:TicketsGrid.SelectedItems
-                if (-not $selectedItems -or $selectedItems.Count -lt 1) { return }
+   if ($BtnDeleteTicket) {
+    $BtnDeleteTicket.Add_Click({
+        try {
+            $selectedItems = $script:TicketsGrid.SelectedItems
 
-                $idsToDelete = @(
-                    $selectedItems |
-                    Where-Object { $_.Id } |
-                    ForEach-Object { $_.Id } |
-                    Select-Object -Unique
-                )
+            if (-not $selectedItems -or $selectedItems.Count -lt 1) {
+                return
+            }
 
-                if ($idsToDelete.Count -lt 1) { return }
+            $idsToDelete = @()
 
-                $confirm = [System.Windows.MessageBox]::Show(
-                    "Delete $($idsToDelete.Count) selected ticket(s)?",
-                    "Confirm eliminating tickets 👀",
-                    [System.Windows.MessageBoxButton]::YesNo,
-                    [System.Windows.MessageBoxImage]::Warning
-                )
-
-                if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
-
-                foreach ($id in $idsToDelete) {
-                    Remove-QOTicket -Id $id | Out-Null
+            foreach ($item in $selectedItems) {
+                if ($null -ne $item -and $item.PSObject.Properties.Name -contains 'Id') {
+                    if (-not [string]::IsNullOrWhiteSpace($item.Id)) {
+                        $idsToDelete += [string]$item.Id
+                    }
                 }
             }
-            catch {
-                Write-Warning "Tickets UI: failed to delete ticket(s). $_"
+
+            $idsToDelete = $idsToDelete | Select-Object -Unique
+
+            if ($idsToDelete.Count -lt 1) {
+                return
             }
 
-            Update-QOTicketsGrid
-        })
-    }
-}
+            foreach ($id in $idsToDelete) {
+                Remove-QOTicket -Id $id | Out-Null
+            }
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to delete ticket(s). $_"
+        }
 
+        Update-QOTicketsGrid
+    })
+}
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
