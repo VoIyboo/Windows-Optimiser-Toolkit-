@@ -163,7 +163,7 @@ function Initialize-QOTicketsUI {
         Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
         Update-QOTicketsGrid
     })
-   
+
     $TicketsGrid.Add_ColumnReordered({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
@@ -175,7 +175,7 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-$BtnNewTicket.Add_Click({
+    $BtnNewTicket.Add_Click({
         try {
             $now = Get-Date
 
@@ -193,7 +193,7 @@ $BtnNewTicket.Add_Click({
 
         Update-QOTicketsGrid
     })
-    
+
     if ($BtnDeleteTicket) {
         $BtnDeleteTicket.Add_Click({
             try {
@@ -207,17 +207,7 @@ $BtnNewTicket.Add_Click({
                     Select-Object -Unique
                 )
 
-            $idsToDelete = @()
-
-            foreach ($item in $selectedItems) {
-                if ($null -ne $item -and $item.PSObject.Properties.Name -contains 'Id') {
-                    if (-not [string]::IsNullOrWhiteSpace($item.Id)) {
-                        $idsToDelete += [string]$item.Id
-                    }
-                }
-            }
-
- if ($idsToDelete.Count -lt 1) { return }
+                if ($idsToDelete.Count -lt 1) { return }
 
                 $confirm = [System.Windows.MessageBox]::Show(
                     "Delete $($idsToDelete.Count) selected ticket(s)?",
