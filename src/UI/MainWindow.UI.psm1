@@ -139,13 +139,16 @@ function Initialize-QOTMainWindow {
 
     function Show-QOTSettingsPage {
         if (-not $MainContentHost -or -not $MainTabControl) { return }
+        $MainContentHost = $script:MainWindow.FindName("MainContentHost")
+        $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
+        
+        if (-not $MainContentHost -or -not $MainTabControl) { return }
 
-        # remember where the user was
         $script:LastTab = $MainTabControl.SelectedItem
 
         if (-not $script:SettingsView) {
             if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
-                Set-QOTStatus "Settings UI not available (Initialize-QOSettingsUI missing)"
+                Set-QOTStatus "Settings UI not available"
                 return
             }
 
@@ -161,6 +164,11 @@ function Initialize-QOTMainWindow {
     }
 
     function Restore-QOTMainTabs {
+        if (-not $script:MainWindow) { return }
+
+        $MainContentHost = $script:MainWindow.FindName("MainContentHost")
+        $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
+
         if (-not $MainContentHost -or -not $MainTabControl) { return }
 
         $MainContentHost.Children.Clear()
@@ -171,12 +179,6 @@ function Initialize-QOTMainWindow {
         }
 
         Set-QOTStatus "Idle"
-    }
-
-    if ($BtnSettings) {
-        $BtnSettings.Add_Click({
-            Show-QOTSettingsPage
-        })
     }
 
     # ------------------------------
