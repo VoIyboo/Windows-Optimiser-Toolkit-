@@ -1,4 +1,4 @@
-    # Settings.psm1
+# Settings.psm1
 # Core settings persistence for Quinn Optimiser Toolkit
 
 $ErrorActionPreference = "Stop"
@@ -7,34 +7,10 @@ $script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Sett
 
 function Get-QOSettings {
 
-    if (-not (Test-Path $script:QOSettingsPath)) {
-
-        $default = [PSCustomObject]@{
-            PreferredStartTab     = "Cleaning"
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
-
-            Tickets = [PSCustomObject]@{
-                EmailIntegration = [PSCustomObject]@{
-                    Enabled            = $false
-                    MonitoredAddresses = @()
-                }
-            }
-        }
-
-        $dir = Split-Path $script:QOSettingsPath
-        if (-not (Test-Path $dir)) {
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        }
-
-        $default | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
-        return $default
-    }
-
-    $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
-    if (-not $json) {
-    return [PSCustomObject]@{
+    # ------------------------------
+    # Defaults (single source of truth)
+    # ------------------------------
+    $defaults = [PSCustomObject]@{
         PreferredStartTab     = "Cleaning"
         TicketsColumnLayout   = @()
         TicketStorePath       = $null
@@ -47,49 +23,36 @@ function Get-QOSettings {
             }
         }
     }
-}
 
+    # ------------------------------
+    # First run: create settings.json
+    # ------------------------------
+    if (-not (Test-Path $script:QOSettingsPath)) {
+
+        $dir = Split-Path $script:QOSettingsPath
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+
+        $defaults | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+        return $defaults
+    }
+
+    # ------------------------------
+    # Read existing settings.json
+    # ------------------------------
+    $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
+    if (-not $json) {
+        return $defaults
+    }
 
     $settings = $json | ConvertFrom-Json
 
     # ------------------------------
-# Backward compatibility guards
-# ------------------------------
-if (-not ($settings.PSObject.Properties.Name -contains "Tickets")) {
-    $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue (
-        [PSCustomObject]@{
-            EmailIntegration = [PSCustomObject]@{
-                Enabled            = $false
-                MonitoredAddresses = @()
-            }
-        }
-    )
-}
-
-if (-not ($settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
-    $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
-        [PSCustomObject]@{
-            Enabled            = $false
-            MonitoredAddresses = @()
-        }
-    )
-}
-
-if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
-    $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false
-}
-
-if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
-    $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @()
-}
-
-
-
-
-    
-
+    # Backward compatibility guards
+    # ------------------------------
     if (-not ($settings.PSObject.Properties.Name -contains "PreferredStartTab")) {
-        $settings | Add-Member -NotePropertyName PreferredStartTab -NotePropertyValue "Cleaning"
+        $settings | Add-Member -NotePropertyName PreferredStartTab -NotePropertyValue $defaults.PreferredStartTab
     }
     if (-not ($settings.PSObject.Properties.Name -contains "TicketsColumnLayout")) {
         $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
@@ -99,6 +62,34 @@ if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains 
     }
     if (-not ($settings.PSObject.Properties.Name -contains "LocalTicketBackupPath")) {
         $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
+    }
+
+    if (-not ($settings.PSObject.Properties.Name -contains "Tickets")) {
+        $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue (
+            [PSCustomObject]@{
+                EmailIntegration = [PSCustomObject]@{
+                    Enabled            = $false
+                    MonitoredAddresses = @()
+                }
+            }
+        )
+    }
+
+    if (-not ($settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
+        $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
+            [PSCustomObject]@{
+                Enabled            = $false
+                MonitoredAddresses = @()
+            }
+        )
+    }
+
+    if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
+        $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false
+    }
+
+    if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
+        $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @()
     }
 
     return $settings
