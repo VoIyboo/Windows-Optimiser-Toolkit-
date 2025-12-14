@@ -176,7 +176,8 @@
         </Border>
 
         <!-- Main tabs -->
-        <TabControl Grid.Row="1" x:Name="MainTabControl" Margin="10">
+        <Grid Grid.Row="1" Margin="10" x:Name="MainContentHost">
+            <TabControl x:Name="MainTabControl">
 
             <!-- Tweaks & Cleaning -->
             <TabItem x:Name="TabCleaning" Header="Tweaks &amp; Cleaning">
