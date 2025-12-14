@@ -1,46 +1,36 @@
-# src/UI/Settings.UI.psm1
 $ErrorActionPreference = "Stop"
 
 function Initialize-QOSettingsUI {
     param(
         [Parameter(Mandatory)]
         $Window,
+
         [Parameter(Mandatory)]
-        $OnBack
+        [scriptblock]$OnBack
     )
 
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-    # Root container
     $root = New-Object System.Windows.Controls.Border
-    $root.Background = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#020617")))
-    $root.BorderBrush = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#374151")))
-    $root.BorderThickness = "1"
-    $root.Padding = "12"
-    $root.CornerRadius = "6"
+    $root.Background = [System.Windows.Media.Brushes]::Transparent
+    $root.Padding = "0"
 
     $grid = New-Object System.Windows.Controls.Grid
+    $grid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{ Height = "Auto" })) | Out-Null
+    $grid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{ Height = "*" }))    | Out-Null
 
-    $row1 = New-Object System.Windows.Controls.RowDefinition
-    $row1.Height = "Auto"
-    $row2 = New-Object System.Windows.Controls.RowDefinition
-    $row2.Height = "*"
-    $grid.RowDefinitions.Add($row1)
-    $grid.RowDefinitions.Add($row2)
-
-    # Header with Back button + title
     $header = New-Object System.Windows.Controls.DockPanel
+    $header.LastChildFill = $true
+    $header.Margin = "0,0,0,10"
 
     $btnBack = New-Object System.Windows.Controls.Button
     $btnBack.Content = "Back"
     $btnBack.Width = 90
     $btnBack.Height = 32
     $btnBack.Margin = "0,0,10,0"
-    $btnBack.Add_Click({
-        & $OnBack
-    })
+    $btnBack.Add_Click({ & $OnBack })
     [System.Windows.Controls.DockPanel]::SetDock($btnBack, "Left")
-    $header.Children.Add($btnBack)
+    $header.Children.Add($btnBack) | Out-Null
 
     $title = New-Object System.Windows.Controls.TextBlock
     $title.Text = "Settings"
@@ -48,18 +38,17 @@ function Initialize-QOSettingsUI {
     $title.FontWeight = "SemiBold"
     $title.Foreground = [System.Windows.Media.Brushes]::White
     $title.VerticalAlignment = "Center"
-    $header.Children.Add($title)
+    $header.Children.Add($title) | Out-Null
 
     [System.Windows.Controls.Grid]::SetRow($header, 0)
-    $grid.Children.Add($header)
+    $grid.Children.Add($header) | Out-Null
 
-    # Body placeholder
     $body = New-Object System.Windows.Controls.TextBlock
-    $body.Text = "Settings page loading is wired up. Next we add real settings."
-    $body.Margin = "0,12,0,0"
+    $body.Text = "Settings page is wired up. Next we add real settings."
+    $body.Margin = "2,0,0,0"
     $body.Foreground = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#9CA3AF")))
     [System.Windows.Controls.Grid]::SetRow($body, 1)
-    $grid.Children.Add($body)
+    $grid.Children.Add($body) | Out-Null
 
     $root.Child = $grid
     return $root
