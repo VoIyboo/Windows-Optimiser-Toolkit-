@@ -137,18 +137,42 @@
                 Padding="10"
                 BorderBrush="#111827"
                 BorderThickness="0,0,0,1">
-            <DockPanel>
-                <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
-                    <TextBlock Text="Quinn Optimiser Toolkit"
-                               FontSize="20"
-                               FontWeight="Bold"
-                               Foreground="White" />
-                    <TextBlock x:Name="SummaryText"
-                               Text="System summary will appear here"
-                               Foreground="{StaticResource TextSubtle}"
-                               FontSize="11" />
-                </StackPanel>
-            </DockPanel>
+<DockPanel>
+
+    <!-- Settings button (top right) -->
+    <Button x:Name="BtnSettings"
+            DockPanel.Dock="Right"
+            Width="36"
+            Height="36"
+            Margin="0,0,6,0"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            BorderBrush="{StaticResource BorderBrush}"
+            ToolTip="Settings">
+
+        <TextBlock FontFamily="Segoe MDL2 Assets"
+                   FontSize="16"
+                   Foreground="{StaticResource TextSubtle}"
+                   Text="&#xE713;"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"/>
+    </Button>
+
+    <!-- App title -->
+    <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
+        <TextBlock Text="Quinn Optimiser Toolkit"
+                   FontSize="20"
+                   FontWeight="Bold"
+                   Foreground="White" />
+
+        <TextBlock x:Name="SummaryText"
+                   Text="System summary will appear here"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="11" />
+    </StackPanel>
+
+</DockPanel>
+
         </Border>
 
         <!-- Main tabs -->
