@@ -24,7 +24,7 @@ Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")       -Force -ErrorActio
 Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
 
 # Load Tickets UI from the correct location, and do not hide failures.
-#Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
 
 
 # -------------------------------------------------------------------
