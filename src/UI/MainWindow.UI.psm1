@@ -38,6 +38,8 @@ $script:StatusLabel  = $null
 $script:SummaryText  = $null
 $script:MainProgress = $null
 $script:RunButton    = $null
+$script:SettingsView = $null
+$script:LastTab      = $null
 
 
 # -------------------------------------------------------------------
