@@ -131,6 +131,55 @@ function Initialize-QOTMainWindow {
     }
 
     # ------------------------------
+    # Settings button (cog) wiring
+    # ------------------------------
+    $BtnSettings     = $window.FindName("BtnSettings")
+    $MainContentHost = $window.FindName("MainContentHost")
+    $MainTabControl  = $window.FindName("MainTabControl")
+
+    function Show-QOTSettingsPage {
+        if (-not $MainContentHost -or -not $MainTabControl) { return }
+
+        # remember where the user was
+        $script:LastTab = $MainTabControl.SelectedItem
+
+        if (-not $script:SettingsView) {
+            if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
+                Set-QOTStatus "Settings UI not available (Initialize-QOSettingsUI missing)"
+                return
+            }
+
+            $script:SettingsView = Initialize-QOSettingsUI -Window $window -OnBack {
+                Restore-QOTMainTabs
+            }
+        }
+
+        $MainContentHost.Children.Clear()
+        [void]$MainContentHost.Children.Add($script:SettingsView)
+
+        Set-QOTStatus "Settings"
+    }
+
+    function Restore-QOTMainTabs {
+        if (-not $MainContentHost -or -not $MainTabControl) { return }
+
+        $MainContentHost.Children.Clear()
+        [void]$MainContentHost.Children.Add($MainTabControl)
+
+        if ($script:LastTab) {
+            $MainTabControl.SelectedItem = $script:LastTab
+        }
+
+        Set-QOTStatus "Idle"
+    }
+
+    if ($BtnSettings) {
+        $BtnSettings.Add_Click({
+            Show-QOTSettingsPage
+        })
+    }
+
+    # ------------------------------
     # Settings init (safe)
     # ------------------------------
     if (-not $global:QOSettings) {
