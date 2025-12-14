@@ -34,15 +34,59 @@ function Get-QOSettings {
 
     $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
     if (-not $json) {
-        return [PSCustomObject]@{
-            PreferredStartTab     = "Cleaning"
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
+    return [PSCustomObject]@{
+        PreferredStartTab     = "Cleaning"
+        TicketsColumnLayout   = @()
+        TicketStorePath       = $null
+        LocalTicketBackupPath = $null
+
+        Tickets = [PSCustomObject]@{
+            EmailIntegration = [PSCustomObject]@{
+                Enabled            = $false
+                MonitoredAddresses = @()
+            }
         }
     }
+}
+
 
     $settings = $json | ConvertFrom-Json
+
+    # ------------------------------
+# Backward compatibility guards
+# ------------------------------
+if (-not ($settings.PSObject.Properties.Name -contains "Tickets")) {
+    $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue (
+        [PSCustomObject]@{
+            EmailIntegration = [PSCustomObject]@{
+                Enabled            = $false
+                MonitoredAddresses = @()
+            }
+        }
+    )
+}
+
+if (-not ($settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
+    $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
+        [PSCustomObject]@{
+            Enabled            = $false
+            MonitoredAddresses = @()
+        }
+    )
+}
+
+if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
+    $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false
+}
+
+if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
+    $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @()
+}
+
+
+
+
+    
 
     if (-not ($settings.PSObject.Properties.Name -contains "PreferredStartTab")) {
         $settings | Add-Member -NotePropertyName PreferredStartTab -NotePropertyValue "Cleaning"
