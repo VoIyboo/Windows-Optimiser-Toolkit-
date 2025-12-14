@@ -266,8 +266,9 @@ function Show-QOTSettingsPage {
 
     $MainContentHost = $script:MainWindow.FindName("MainContentHost")
     $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
+    $BtnSettings     = $script:MainWindow.FindName("BtnSettings")
 
-    if (-not $MainContentHost -or -not $MainTabControl) { return }
+    if (-not $MainContentHost -or -not $MainTabControl -or -not $BtnSettings) { return }
 
     $script:LastTab = $MainTabControl.SelectedItem
 
@@ -276,15 +277,19 @@ function Show-QOTSettingsPage {
             Set-QOTStatus "Settings UI not available"
             return
         }
-
-        $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow -OnBack {
-            Restore-QOTMainTabs
-        }
+        $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow
     }
 
     $MainContentHost.Children.Clear()
     [void]$MainContentHost.Children.Add($script:SettingsView)
 
+    $icon = $BtnSettings.Content
+    if ($icon -is [System.Windows.Controls.TextBlock]) {
+        $icon.Text = ""  # Back icon (MDL2 E72B)
+    }
+    $BtnSettings.ToolTip = "Back"
+
+    $script:IsSettingsShown = $true
     Set-QOTStatus "Settings"
 }
 
@@ -293,8 +298,9 @@ function Restore-QOTMainTabs {
 
     $MainContentHost = $script:MainWindow.FindName("MainContentHost")
     $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
+    $BtnSettings     = $script:MainWindow.FindName("BtnSettings")
 
-    if (-not $MainContentHost -or -not $MainTabControl) { return }
+    if (-not $MainContentHost -or -not $MainTabControl -or -not $BtnSettings) { return }
 
     $MainContentHost.Children.Clear()
     [void]$MainContentHost.Children.Add($MainTabControl)
@@ -303,9 +309,15 @@ function Restore-QOTMainTabs {
         $MainTabControl.SelectedItem = $script:LastTab
     }
 
+    $icon = $BtnSettings.Content
+    if ($icon -is [System.Windows.Controls.TextBlock]) {
+        $icon.Text = ""  # Cog icon (MDL2 E713)
+    }
+    $BtnSettings.ToolTip = "Settings"
+
+    $script:IsSettingsShown = $false
     Set-QOTStatus "Idle"
 }
-
 
 # -------------------------------------------------------------------
 # EXPORTS
