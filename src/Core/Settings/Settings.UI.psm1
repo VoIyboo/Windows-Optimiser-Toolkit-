@@ -1,3 +1,7 @@
+Import-Module "$PSScriptRoot\..\Settings.psm1" -Force -ErrorAction SilentlyContinue
+
+
+
 $ErrorActionPreference = "Stop"
 
 function Initialize-QOSettingsUI {
