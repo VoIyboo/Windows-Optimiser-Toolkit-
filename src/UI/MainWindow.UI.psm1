@@ -131,6 +131,16 @@ function Initialize-QOTMainWindow {
     }
 
     # ------------------------------
+    # Settings button (cog) wiring
+    # ------------------------------
+    $BtnSettings = $window.FindName("BtnSettings")
+    if ($BtnSettings) {
+        $BtnSettings.Add_Click({
+            Show-QOTSettingsPage
+        })
+    }
+
+    # ------------------------------
     # Settings init (safe)
     # ------------------------------
     if (-not $global:QOSettings) {
