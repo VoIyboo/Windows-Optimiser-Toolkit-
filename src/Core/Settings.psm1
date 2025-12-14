@@ -1,4 +1,4 @@
-# Settings.psm1
+    # Settings.psm1
 # Core settings persistence for Quinn Optimiser Toolkit
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +14,13 @@ function Get-QOSettings {
             TicketsColumnLayout   = @()
             TicketStorePath       = $null
             LocalTicketBackupPath = $null
+
+            Tickets = [PSCustomObject]@{
+                EmailIntegration = [PSCustomObject]@{
+                    Enabled            = $false
+                    MonitoredAddresses = @()
+                }
+            }
         }
 
         $dir = Split-Path $script:QOSettingsPath
