@@ -445,6 +445,7 @@
             </TabItem>
 
         </TabControl>
+        </Grid>
 
         <!-- Status bar -->
         <Border Grid.Row="2"
