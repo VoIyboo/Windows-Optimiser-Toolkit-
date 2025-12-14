@@ -1,5 +1,5 @@
 # Tickets.UI.psm1
-# Simple UI wiring for the Tickets tab
+# UI wiring for the Tickets tab
 
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
@@ -12,11 +12,12 @@ $script:TicketsColumnLayoutApplying = $false
 $script:TicketsGrid                 = $null
 
 # -------------------------------------------------------------------
-# Column layout helpers
+# Column layout helpers (order + width)
 # -------------------------------------------------------------------
 
 function Get-QOTicketsColumnLayout {
-    (Get-QOSettings).TicketsColumnLayout
+    $s = Get-QOSettings
+    return $s.TicketsColumnLayout
 }
 
 function Save-QOTicketsColumnLayout {
@@ -33,10 +34,19 @@ function Save-QOTicketsColumnLayout {
         $DataGrid.Columns |
         Sort-Object DisplayIndex |
         ForEach-Object {
+            $widthValue = $null
+
+            # DataGridColumn.Width is a DataGridLength, not a double
+            try {
+                if ($_.Width -and $_.Width.IsAbsolute) {
+                    $widthValue = [double]$_.Width.Value
+                }
+            } catch { }
+
             [pscustomobject]@{
                 Header       = $_.Header.ToString()
                 DisplayIndex = $_.DisplayIndex
-                Width        = if ($_.Width -is [double]) { [double]$_.Width } else { $null }
+                Width        = $widthValue
             }
         }
     )
@@ -65,12 +75,13 @@ function Apply-QOTicketsColumnLayout {
 
             if (-not $col) { continue }
 
-            if ($entry.DisplayIndex -ne $null -and $entry.DisplayIndex -ge 0) {
+            if ($entry.DisplayIndex -ne $null -and [int]$entry.DisplayIndex -ge 0) {
                 $col.DisplayIndex = [int]$entry.DisplayIndex
             }
 
             if ($entry.Width -ne $null -and [double]$entry.Width -gt 0) {
-                $col.Width = [double]$entry.Width
+                # Set absolute width
+                $col.Width = New-Object System.Windows.Controls.DataGridLength([double]$entry.Width)
             }
         }
     }
@@ -79,13 +90,12 @@ function Apply-QOTicketsColumnLayout {
     }
 }
 
-# Backwards compat name
+# Backwards compat alias
 function Apply-QOTicketsColumnOrder {
     param(
         [Parameter(Mandatory)]
         $TicketsGrid
     )
-
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
@@ -118,7 +128,12 @@ function Update-QOTicketsGrid {
             [datetime]::TryParse([string]$rawCreated, [ref]$created) | Out-Null
         }
 
-        $createdString = if ($created) { $created.ToString('dd/MM/yyyy h:mm tt') } else { [string]$rawCreated }
+        $createdString = if ($created) {
+            $created.ToString('dd/MM/yyyy h:mm tt')
+        }
+        else {
+            [string]$rawCreated
+        }
 
         [pscustomobject]@{
             Title     = [string]$t.Title
@@ -130,40 +145,42 @@ function Update-QOTicketsGrid {
         }
     }
 
-    # Always bind an array, even for 0 or 1 items
     $script:TicketsGrid.ItemsSource = @($rows)
 }
 
 # -------------------------------------------------------------------
-# Initialise Tickets tab UI
+# Init
 # -------------------------------------------------------------------
 
 function Initialize-QOTicketsUI {
     param(
-        [Parameter(Mandatory = $true)]
-        [object]$TicketsGrid,
+        [Parameter(Mandatory)]
+        $TicketsGrid,
 
-        [Parameter(Mandatory = $true)]
-        [object]$BtnRefreshTickets,
+        [Parameter(Mandatory)]
+        $BtnRefreshTickets,
 
-        [Parameter(Mandatory = $true)]
-        [object]$BtnNewTicket,
+        [Parameter(Mandatory)]
+        $BtnNewTicket,
 
         [Parameter(Mandatory = $false)]
-        [object]$BtnDeleteTicket
+        $BtnDeleteTicket
     )
 
     $script:TicketsGrid = $TicketsGrid
 
+    # Let the grid allow user customisation
     $TicketsGrid.IsReadOnly            = $false
     $TicketsGrid.CanUserReorderColumns = $true
     $TicketsGrid.CanUserResizeColumns  = $true
 
+    # Apply saved layout once the grid is loaded
     $TicketsGrid.Add_Loaded({
         Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
         Update-QOTicketsGrid
     })
 
+    # Save layout when columns are reordered
     $TicketsGrid.Add_ColumnReordered({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
@@ -171,10 +188,20 @@ function Initialize-QOTicketsUI {
         }
     })
 
+    # Save layout when a column is resized
+    $TicketsGrid.Add_ColumnDisplayIndexChanged({
+        param($sender, $eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) {
+            Save-QOTicketsColumnLayout -DataGrid $sender
+        }
+    })
+
+    # Refresh
     $BtnRefreshTickets.Add_Click({
         Update-QOTicketsGrid
     })
 
+    # New test ticket
     $BtnNewTicket.Add_Click({
         try {
             $now = Get-Date
@@ -194,41 +221,39 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-   if ($BtnDeleteTicket) {
-    $BtnDeleteTicket.Add_Click({
-        try {
-            $selectedItems = $script:TicketsGrid.SelectedItems
+    # Delete without confirmation popup
+    if ($BtnDeleteTicket) {
+        $BtnDeleteTicket.Add_Click({
+            try {
+                $selectedItems = $script:TicketsGrid.SelectedItems
+                if (-not $selectedItems -or $selectedItems.Count -lt 1) { return }
 
-            if (-not $selectedItems -or $selectedItems.Count -lt 1) {
-                return
-            }
-
-            $idsToDelete = @()
-
-            foreach ($item in $selectedItems) {
-                if ($null -ne $item -and $item.PSObject.Properties.Name -contains 'Id') {
-                    if (-not [string]::IsNullOrWhiteSpace($item.Id)) {
-                        $idsToDelete += [string]$item.Id
+                $idsToDelete = @()
+                foreach ($item in $selectedItems) {
+                    if ($null -ne $item -and $item.PSObject.Properties.Name -contains 'Id') {
+                        if (-not [string]::IsNullOrWhiteSpace($item.Id)) {
+                            $idsToDelete += [string]$item.Id
+                        }
                     }
                 }
+
+                $idsToDelete = $idsToDelete | Select-Object -Unique
+                if ($idsToDelete.Count -lt 1) { return }
+
+                foreach ($id in $idsToDelete) {
+                    Remove-QOTicket -Id $id | Out-Null
+                }
+            }
+            catch {
+                Write-Warning "Tickets UI: failed to delete ticket(s). $_"
             }
 
-            $idsToDelete = $idsToDelete | Select-Object -Unique
+            Update-QOTicketsGrid
+        })
+    }
 
-            if ($idsToDelete.Count -lt 1) {
-                return
-            }
-
-            foreach ($id in $idsToDelete) {
-                Remove-QOTicket -Id $id | Out-Null
-            }
-        }
-        catch {
-            Write-Warning "Tickets UI: failed to delete ticket(s). $_"
-        }
-
-        Update-QOTicketsGrid
-    })
+    # Initial load (in case Loaded already fired)
+    Update-QOTicketsGrid
 }
 
-Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
+Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
