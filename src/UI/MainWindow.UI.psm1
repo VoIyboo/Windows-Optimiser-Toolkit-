@@ -131,57 +131,6 @@ function Initialize-QOTMainWindow {
     }
 
     # ------------------------------
-    # Settings button (cog) wiring
-    # ------------------------------
-    $BtnSettings     = $window.FindName("BtnSettings")
-    $MainContentHost = $window.FindName("MainContentHost")
-    $MainTabControl  = $window.FindName("MainTabControl")
-
-    function Show-QOTSettingsPage {
-        if (-not $MainContentHost -or -not $MainTabControl) { return }
-        $MainContentHost = $script:MainWindow.FindName("MainContentHost")
-        $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
-        
-        if (-not $MainContentHost -or -not $MainTabControl) { return }
-
-        $script:LastTab = $MainTabControl.SelectedItem
-
-        if (-not $script:SettingsView) {
-            if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
-                Set-QOTStatus "Settings UI not available"
-                return
-            }
-
-            $script:SettingsView = Initialize-QOSettingsUI -Window $window -OnBack {
-                Restore-QOTMainTabs
-            }
-        }
-
-        $MainContentHost.Children.Clear()
-        [void]$MainContentHost.Children.Add($script:SettingsView)
-
-        Set-QOTStatus "Settings"
-    }
-
-    function Restore-QOTMainTabs {
-        if (-not $script:MainWindow) { return }
-
-        $MainContentHost = $script:MainWindow.FindName("MainContentHost")
-        $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
-
-        if (-not $MainContentHost -or -not $MainTabControl) { return }
-
-        $MainContentHost.Children.Clear()
-        [void]$MainContentHost.Children.Add($MainTabControl)
-
-        if ($script:LastTab) {
-            $MainTabControl.SelectedItem = $script:LastTab
-        }
-
-        Set-QOTStatus "Idle"
-    }
-
-    # ------------------------------
     # Settings init (safe)
     # ------------------------------
     if (-not $global:QOSettings) {
@@ -300,6 +249,53 @@ function Set-QOTSummary {
         })
     }
 }
+
+
+function Show-QOTSettingsPage {
+    if (-not $script:MainWindow) { return }
+
+    $MainContentHost = $script:MainWindow.FindName("MainContentHost")
+    $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
+
+    if (-not $MainContentHost -or -not $MainTabControl) { return }
+
+    $script:LastTab = $MainTabControl.SelectedItem
+
+    if (-not $script:SettingsView) {
+        if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
+            Set-QOTStatus "Settings UI not available"
+            return
+        }
+
+        $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow -OnBack {
+            Restore-QOTMainTabs
+        }
+    }
+
+    $MainContentHost.Children.Clear()
+    [void]$MainContentHost.Children.Add($script:SettingsView)
+
+    Set-QOTStatus "Settings"
+}
+
+function Restore-QOTMainTabs {
+    if (-not $script:MainWindow) { return }
+
+    $MainContentHost = $script:MainWindow.FindName("MainContentHost")
+    $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
+
+    if (-not $MainContentHost -or -not $MainTabControl) { return }
+
+    $MainContentHost.Children.Clear()
+    [void]$MainContentHost.Children.Add($MainTabControl)
+
+    if ($script:LastTab) {
+        $MainTabControl.SelectedItem = $script:LastTab
+    }
+
+    Set-QOTStatus "Idle"
+}
+
 
 # -------------------------------------------------------------------
 # EXPORTS
