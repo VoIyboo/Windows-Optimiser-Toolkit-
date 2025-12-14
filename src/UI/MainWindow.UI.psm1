@@ -32,6 +32,7 @@ Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -Err
 # -------------------------------------------------------------------
 # WINDOW LEVEL REFERENCES
 # -------------------------------------------------------------------
+$script:IsSettingsShown = $false
 
 $script:MainWindow   = $null
 $script:StatusLabel  = $null
@@ -144,18 +145,6 @@ function Initialize-QOTMainWindow {
             }
         })
     }
-
-
-    # ------------------------------
-    # Settings button (cog) wiring
-    # ------------------------------
-    $BtnSettings = $window.FindName("BtnSettings")
-    if ($BtnSettings) {
-        $BtnSettings.Add_Click({
-            Show-QOTSettingsPage
-        })
-    }
-
     # ------------------------------
     # Settings init (safe)
     # ------------------------------
@@ -293,6 +282,7 @@ function Show-QOTSettingsPage {
             Set-QOTStatus "Settings UI not available"
             return
         }
+
         $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow
     }
 
@@ -301,11 +291,12 @@ function Show-QOTSettingsPage {
 
     $icon = $BtnSettings.Content
     if ($icon -is [System.Windows.Controls.TextBlock]) {
-        $icon.Text = ""  # Back icon (MDL2 E72B)
+        $icon.Text = [char]0xE72B   # back arrow
     }
-    $BtnSettings.ToolTip = "Back"
 
+    $BtnSettings.ToolTip = "Back"
     $script:IsSettingsShown = $true
+
     Set-QOTStatus "Settings"
 }
 
@@ -327,13 +318,15 @@ function Restore-QOTMainTabs {
 
     $icon = $BtnSettings.Content
     if ($icon -is [System.Windows.Controls.TextBlock]) {
-        $icon.Text = ""  # Cog icon (MDL2 E713)
+        $icon.Text = [char]0xE713   # cog
     }
-    $BtnSettings.ToolTip = "Settings"
 
+    $BtnSettings.ToolTip = "Settings"
     $script:IsSettingsShown = $false
+
     Set-QOTStatus "Idle"
 }
+
 
 # -------------------------------------------------------------------
 # EXPORTS
