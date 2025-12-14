@@ -163,7 +163,7 @@ function Initialize-QOTicketsUI {
         Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
         Update-QOTicketsGrid
     })
-
+   
     $TicketsGrid.Add_ColumnReordered({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
@@ -175,7 +175,7 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    $BtnNewTicket.Add_Click({
+$BtnNewTicket.Add_Click({
         try {
             $now = Get-Date
 
@@ -194,14 +194,18 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
     
-if ($BtnDeleteTicket) {
-    $BtnDeleteTicket.Add_Click({
-        try {
-            $selectedItems = $script:TicketsGrid.SelectedItems
+    if ($BtnDeleteTicket) {
+        $BtnDeleteTicket.Add_Click({
+            try {
+                $selectedItems = $script:TicketsGrid.SelectedItems
+                if (-not $selectedItems -or $selectedItems.Count -lt 1) { return }
 
-            if (-not $selectedItems -or $selectedItems.Count -lt 1) {
-                return
-            }
+                $idsToDelete = @(
+                    $selectedItems |
+                    Where-Object { $_.Id } |
+                    ForEach-Object { $_.Id } |
+                    Select-Object -Unique
+                )
 
             $idsToDelete = @()
 
@@ -213,33 +217,28 @@ if ($BtnDeleteTicket) {
                 }
             }
 
-            $idsToDelete = $idsToDelete | Select-Object -Unique
+ if ($idsToDelete.Count -lt 1) { return }
 
-            if ($idsToDelete.Count -lt 1) {
-                return
+                $confirm = [System.Windows.MessageBox]::Show(
+                    "Delete $($idsToDelete.Count) selected ticket(s)?",
+                    "Confirm eliminating tickets 👀",
+                    [System.Windows.MessageBoxButton]::YesNo,
+                    [System.Windows.MessageBoxImage]::Warning
+                )
+
+                if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
+
+                foreach ($id in $idsToDelete) {
+                    Remove-QOTicket -Id $id | Out-Null
+                }
+            }
+            catch {
+                Write-Warning "Tickets UI: failed to delete ticket(s). $_"
             }
 
-            $confirm = [System.Windows.MessageBox]::Show(
-                "Delete $($idsToDelete.Count) selected ticket(s)?",
-                "Confirm eliminating tickets 👀",
-                [System.Windows.MessageBoxButton]::YesNo,
-                [System.Windows.MessageBoxImage]::Warning
-            )
-
-            if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) {
-                return
-            }
-
-            foreach ($id in $idsToDelete) {
-                Remove-QOTicket -Id $id | Out-Null
-            }
-        }
-        catch {
-            Write-Warning "Tickets UI: failed to delete ticket(s). $_"
-        }
-
-        Update-QOTicketsGrid
-    })
+            Update-QOTicketsGrid
+        })
+    }
 }
 
 
