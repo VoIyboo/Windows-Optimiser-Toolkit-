@@ -131,6 +131,22 @@ function Initialize-QOTMainWindow {
     }
 
     # ------------------------------
+    # Settings button (cog / back) wiring
+    # ------------------------------
+    $BtnSettings = $window.FindName("BtnSettings")
+    if ($BtnSettings) {
+        $BtnSettings.Add_Click({
+            if ($script:IsSettingsShown) {
+                Restore-QOTMainTabs
+            }
+            else {
+                Show-QOTSettingsPage
+            }
+        })
+    }
+
+
+    # ------------------------------
     # Settings button (cog) wiring
     # ------------------------------
     $BtnSettings = $window.FindName("BtnSettings")
