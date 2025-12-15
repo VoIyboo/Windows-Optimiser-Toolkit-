@@ -124,6 +124,24 @@ function Initialize-QOSettingsUI {
     $btnCheck.Margin = "0,0,0,8"
     $panel.Children.Add($btnCheck) | Out-Null
 
+    $btnCheck.Add_Click({
+    try {
+        if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+            Invoke-QOEmailTicketPoll | Out-Null
+        }
+
+        # Refresh tickets grid after polling
+        if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
+            Update-QOTicketsGrid
+        }
+    }
+    catch {
+        Write-Warning "Email check failed: $_"
+    }
+})
+
+
+    
     # List
     $list = New-Object System.Windows.Controls.ListBox
     $list.MinHeight = 140
