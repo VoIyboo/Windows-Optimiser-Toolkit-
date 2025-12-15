@@ -4,6 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1") -Force -ErrorAction SilentlyContinue
 
 function Refresh-MonitoredList {
     param([Parameter(Mandatory)] $ListBox)
@@ -131,15 +132,14 @@ function Initialize-QOSettingsUI {
                 Invoke-QOEmailTicketPoll | Out-Null
             }
     
-            # Refresh tickets tab if the UI function exists
             if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
                 Update-QOTicketsGrid
             }
-        }
-        catch {
+        } catch {
             # keep silent for now
         }
     })
+
     
 
 
