@@ -210,8 +210,11 @@ function Get-QOInboxFolder {
         [Parameter(Mandatory)] [string] $Mailbox
     )
 
-    $mb = ($Mailbox ?? "").Trim()
-    if ([string]::IsNullOrWhiteSpace($mb)) { return $null }
+    $title = $subject
+    if ([string]::IsNullOrWhiteSpace($title)) { $title = "(No subject)" }
+
+    # then use:
+    -Title $title
 
     # If mailbox looks like "me", use default inbox first (this is the reliable path)
     $me = Get-QOCurrentSmtpAddress -Namespace $Namespace
