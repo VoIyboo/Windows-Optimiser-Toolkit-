@@ -19,13 +19,13 @@ function Initialize-QOTicketStorage {
 
     $s = Get-QOSettings
 
-    if ([string]::IsNullOrWhiteSpace([string]$s.TicketStorePath)) {
+    if ([string]::IsNullOrWhiteSpace($s.TicketStorePath)) {
         $dir  = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets"
         $file = Join-Path $dir "Tickets.json"
         $s.TicketStorePath = $file
     }
 
-    if ([string]::IsNullOrWhiteSpace([string]$s.LocalTicketBackupPath)) {
+    if ([string]::IsNullOrWhiteSpace($s.LocalTicketBackupPath)) {
         $s.LocalTicketBackupPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
     }
 
@@ -200,43 +200,28 @@ function Get-QOCurrentSmtpAddress {
     return $null
 }
 
-function Get-QOMailSenderAddress {
-    param([Parameter(Mandatory)] $MailItem)
-
-    # Best effort: returns SMTP where possible
-    try {
-        $addr = [string]$MailItem.SenderEmailAddress
-        if (-not [string]::IsNullOrWhiteSpace($addr)) { return $addr }
-    } catch {}
-
-    try {
-        $name = [string]$MailItem.SenderName
-        if (-not [string]::IsNullOrWhiteSpace($name)) { return $name }
-    } catch {}
-
-    return ""
-}
-
 function Get-QOInboxFolder {
     param(
         [Parameter(Mandatory)] $Namespace,
         [Parameter(Mandatory)] [string] $Mailbox
     )
 
-    $mb = [string]$Mailbox
+    $mb = $Mailbox
     if ($null -eq $mb) { $mb = "" }
     $mb = $mb.Trim()
     if ([string]::IsNullOrWhiteSpace($mb)) { return $null }
 
-    # If mailbox is "me", use default inbox (most reliable)
+    # If mailbox is "me", use default inbox first (most reliable)
     $me = Get-QOCurrentSmtpAddress -Namespace $Namespace
     if ($me) {
-        if ($me.Trim().ToLower() -eq $mb.ToLower()) {
+        $meNorm = $me.Trim().ToLower()
+        $mbNorm = $mb.ToLower()
+        if ($meNorm -eq $mbNorm) {
             try { return $Namespace.GetDefaultFolder(6) } catch {}
         }
     }
 
-    # Try shared default inbox (shared mailbox you have access to)
+    # Shared inbox for that mailbox (shared mailbox you have access to)
     try {
         $r = $Namespace.CreateRecipient($mb)
         $r.Resolve() | Out-Null
@@ -245,7 +230,7 @@ function Get-QOInboxFolder {
         }
     } catch {}
 
-    # Try direct folder access by display name
+    # Fallback: try via namespace folders
     try {
         $root = $Namespace.Folders.Item($mb)
         if ($root) {
@@ -268,16 +253,14 @@ function Invoke-QOEmailTicketPoll {
     $mailboxes = @()
     if ($s.Tickets.EmailIntegration.MonitoredAddresses) {
         $mailboxes = @($s.Tickets.EmailIntegration.MonitoredAddresses) |
-            Where-Object { $_ } |
-            ForEach-Object { "$_".Trim() } |
-            Where-Object { $_ }
+            ForEach-Object { if ($_ -ne $null) { "$_".Trim() } } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
     }
     if ($mailboxes.Count -lt 1) { return @() }
 
     # Ensure per-mailbox state exists
     if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "LastProcessedByMailbox")) {
-        $s.Tickets.EmailIntegration |
-            Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
+        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue (@{}) -Force
     }
 
     $created = @()
@@ -289,25 +272,14 @@ function Invoke-QOEmailTicketPoll {
 
         $key = $mb.Trim().ToLower()
 
-        # Load last processed state
+        # Load last processed timestamp for this mailbox
         $since = $null
-        $lastEntry = $null
         try {
-            $state = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
-            if ($state) {
-                if ($state.PSObject.Properties.Name -contains "LastReceived") {
-                    if ($state.LastReceived) { $since = [datetime]::Parse([string]$state.LastReceived) }
-                }
-                if ($state.PSObject.Properties.Name -contains "LastEntryId") {
-                    $lastEntry = [string]$state.LastEntryId
-                }
-            } else {
-                # Back-compat if it used to be a raw string
-                $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
-                if ($raw -and ($raw -is [string])) { $since = [datetime]::Parse([string]$raw) }
-            }
+            $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox[$key]
+            if ($raw) { $since = [datetime]::Parse([string]$raw) }
         } catch {}
 
+        # First run: look back a bit
         if (-not $since) { $since = (Get-Date).AddDays(-3) }
 
         $inbox = Get-QOInboxFolder -Namespace $ns -Mailbox $mb
@@ -317,49 +289,39 @@ function Invoke-QOEmailTicketPoll {
         try { $items.Sort("[ReceivedTime]", $true) } catch {}
 
         $latestSeen = $since
-        $latestEntry = $lastEntry
 
-        # Outlook COM collections are 1-based
         for ($i = 1; $i -le $items.Count; $i++) {
 
             $mail = $null
             try { $mail = $items.Item($i) } catch { continue }
             if (-not $mail) { continue }
 
-            # Only MailItem class 43
-            try { if ($mail.Class -ne 43) { continue } } catch { continue }
+            try { if ($mail.Class -ne 43) { continue } } catch { continue }  # MailItem only
 
             $rt = $null
             try { $rt = $mail.ReceivedTime } catch { $rt = $null }
             if (-not $rt) { continue }
 
-            # sorted newest-first
-            if ($rt -lt $since) { break }
+            if ($rt -le $since) { break }  # sorted newest-first
 
-            # avoid reprocessing the exact boundary item
-            $entryId = $null
-            try { $entryId = [string]$mail.EntryID } catch { $entryId = $null }
-            if ($rt -eq $since -and $lastEntry -and $entryId -and ($entryId -eq $lastEntry)) {
-                break
-            }
-
-            if ($rt -gt $latestSeen) {
-                $latestSeen = $rt
-                $latestEntry = $entryId
-            }
+            if ($rt -gt $latestSeen) { $latestSeen = $rt }
 
             $subject = ""
             $body    = ""
+            $from    = ""
+
             try { $subject = [string]$mail.Subject } catch {}
             try { $body    = [string]$mail.Body } catch {}
 
-            $title = $subject
-            if ([string]::IsNullOrWhiteSpace($title)) { $title = "(No subject)" }
+            try {
+                $from = [string]$mail.SenderEmailAddress
+                if ([string]::IsNullOrWhiteSpace($from)) { $from = [string]$mail.SenderName }
+            } catch {}
 
-            $from = Get-QOMailSenderAddress -MailItem $mail
+            if ([string]::IsNullOrWhiteSpace($subject)) { $subject = "(No subject)" }
 
             $ticket = New-QOTicket `
-                -Title $title `
+                -Title $subject `
                 -Description $body `
                 -Category "Email" `
                 -Priority "Normal" `
@@ -374,15 +336,8 @@ function Invoke-QOEmailTicketPoll {
             $created += $ticket
         }
 
-        # Save last processed state
-        if ($latestSeen -and ($latestSeen -ge $since)) {
-            $stateObj = [pscustomobject]@{
-                LastReceived = $latestSeen.ToString("o")
-                LastEntryId  = $latestEntry
-            }
-
-            $s.Tickets.EmailIntegration.LastProcessedByMailbox |
-                Add-Member -NotePropertyName $key -NotePropertyValue $stateObj -Force
+        if ($latestSeen -and $latestSeen -gt $since) {
+            $s.Tickets.EmailIntegration.LastProcessedByMailbox[$key] = $latestSeen.ToString("o")
         }
     }
 
