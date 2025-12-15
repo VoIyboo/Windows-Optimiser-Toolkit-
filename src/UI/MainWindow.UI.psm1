@@ -170,7 +170,7 @@ function Initialize-QOTMainWindow {
         })
     }
 
-    return $script:MainWindow
+    return $window
 }
 
 # -------------------------------------------------------------------
@@ -178,8 +178,20 @@ function Initialize-QOTMainWindow {
 # -------------------------------------------------------------------
 
 function Start-QOTMainWindow {
-    $window = Initialize-QOTMainWindow
-    [void]$window.ShowDialog()
+
+    try {
+        $window = Initialize-QOTMainWindow
+
+        if (-not $window) {
+            throw "Initialize-QOTMainWindow returned null. Main window was not created."
+        }
+
+        [void]$window.ShowDialog()
+    }
+    catch {
+        Write-Error "Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
+        throw
+    }
 }
 
 # -------------------------------------------------------------------
