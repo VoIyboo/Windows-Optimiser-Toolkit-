@@ -123,22 +123,24 @@ function Initialize-QOSettingsUI {
     $btnCheck.Width = 160
     $btnCheck.Margin = "0,0,0,8"
     $panel.Children.Add($btnCheck) | Out-Null
-
+    
+    # CHECK EMAIL NOW
     $btnCheck.Add_Click({
-    try {
-        if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
-            Invoke-QOEmailTicketPoll | Out-Null
+        try {
+            if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                Invoke-QOEmailTicketPoll | Out-Null
+            }
+    
+            # Refresh tickets tab if the UI function exists
+            if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
+                Update-QOTicketsGrid
+            }
         }
-
-        # Refresh tickets grid after polling
-        if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
-            Update-QOTicketsGrid
+        catch {
+            # keep silent for now
         }
-    }
-    catch {
-        Write-Warning "Email check failed: $_"
-    }
-})
+    })
+    
 
 
     
