@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")  -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")   -Force -ErrorAction SilentlyContinue
 
 function Refresh-MonitoredList {
     param([Parameter(Mandatory)] $ListBox)
@@ -12,9 +12,13 @@ function Refresh-MonitoredList {
     $ListBox.Items.Clear()
 
     $s = Get-QOSettings
-    if ($s -and $s.Tickets -and $s.Tickets.EmailIntegration -and $s.Tickets.EmailIntegration.MonitoredAddresses) {
+
+    if ($s -and $s.Tickets -and $s.Tickets.EmailIntegration) {
         foreach ($addr in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
-            if ($addr) { [void]$ListBox.Items.Add([string]$addr) }
+            $a = "$addr".Trim()
+            if (-not [string]::IsNullOrWhiteSpace($a)) {
+                [void]$ListBox.Items.Add($a)
+            }
         }
     }
 }
@@ -49,16 +53,13 @@ function Initialize-QOSettingsUI {
 
     $settings = Get-QOSettings
 
-    # Root
     $root = New-Object System.Windows.Controls.Border
     $root.Background = [System.Windows.Media.Brushes]::Transparent
 
-    # Grid
     $grid = New-Object System.Windows.Controls.Grid
     [void]$grid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{ Height = "Auto" }))
     [void]$grid.RowDefinitions.Add((New-Object System.Windows.Controls.RowDefinition -Property @{ Height = "*" }))
 
-    # Title
     $title = New-Object System.Windows.Controls.TextBlock
     $title.Text = "Settings"
     $title.FontSize = 18
@@ -68,12 +69,10 @@ function Initialize-QOSettingsUI {
     [System.Windows.Controls.Grid]::SetRow($title, 0)
     [void]$grid.Children.Add($title)
 
-    # Panel
     $panel = New-Object System.Windows.Controls.StackPanel
     [System.Windows.Controls.Grid]::SetRow($panel, 1)
     [void]$grid.Children.Add($panel)
 
-    # Section header
     $hdr = New-Object System.Windows.Controls.TextBlock
     $hdr.Text = "Ticketing"
     $hdr.FontSize = 14
@@ -82,7 +81,6 @@ function Initialize-QOSettingsUI {
     $hdr.Margin = "0,0,0,8"
     [void]$panel.Children.Add($hdr)
 
-    # Enable checkbox
     $chkEnable = New-Object System.Windows.Controls.CheckBox
     $chkEnable.Content = "Enable email to ticket creation"
     $chkEnable.IsChecked = [bool]$settings.Tickets.EmailIntegration.Enabled
@@ -90,7 +88,6 @@ function Initialize-QOSettingsUI {
     $chkEnable.Margin = "0,0,0,10"
     [void]$panel.Children.Add($chkEnable)
 
-    # Input row
     $row = New-Object System.Windows.Controls.StackPanel
     $row.Orientation = "Horizontal"
     $row.Margin = "0,0,0,8"
@@ -116,14 +113,12 @@ function Initialize-QOSettingsUI {
 
     [void]$panel.Children.Add($row)
 
-    # Check email now button
     $btnCheck = New-Object System.Windows.Controls.Button
     $btnCheck.Content = "Check email now"
     $btnCheck.Width = 160
     $btnCheck.Margin = "0,0,0,8"
     [void]$panel.Children.Add($btnCheck)
 
-    # List
     $list = New-Object System.Windows.Controls.ListBox
     $list.MinHeight = 140
     $list.Background  = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#020617")))
@@ -131,14 +126,12 @@ function Initialize-QOSettingsUI {
     $list.BorderBrush = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#374151")))
     [void]$panel.Children.Add($list)
 
-    # Hint
     $hint = New-Object System.Windows.Controls.TextBlock
     $hint.Text = "Add one or more mailbox addresses. Automatic email polling will be added later."
     $hint.Margin = "0,8,0,0"
     $hint.Foreground = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#9CA3AF")))
     [void]$panel.Children.Add($hint)
 
-    # Initial load list + state
     Refresh-MonitoredList -ListBox $list
 
     Set-EmailControlsEnabledState `
@@ -150,116 +143,99 @@ function Initialize-QOSettingsUI {
         -ListBox $list `
         -HintText $hint
 
-    # Checkbox handlers
     $chkEnable.Add_Checked({
-        try {
-            $s = Get-QOSettings
-            if (-not $s.Tickets) { $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force }
-            if (-not $s.Tickets.EmailIntegration) { $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force }
-            if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
-                $s.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $true -Force
-            } else {
-                $s.Tickets.EmailIntegration.Enabled = $true
-            }
-            Save-QOSettings -Settings $s
-        } catch {}
-
-        Set-EmailControlsEnabledState $true $emailBox $btnAdd $btnRemove $btnCheck $list $hint
+        $s = Get-QOSettings
+        $s.Tickets.EmailIntegration.Enabled = $true
+        Save-QOSettings -Settings $s
+        Set-EmailControlsEnabledState -Enabled $true -EmailBox $emailBox -BtnAdd $btnAdd -BtnRemove $btnRemove -BtnCheck $btnCheck -ListBox $list -HintText $hint
     })
 
     $chkEnable.Add_Unchecked({
-        try {
-            $s = Get-QOSettings
-            if (-not $s.Tickets) { $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force }
-            if (-not $s.Tickets.EmailIntegration) { $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force }
-            if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
-                $s.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false -Force
-            } else {
-                $s.Tickets.EmailIntegration.Enabled = $false
-            }
-            Save-QOSettings -Settings $s
-        } catch {}
-
-        Set-EmailControlsEnabledState $false $emailBox $btnAdd $btnRemove $btnCheck $list $hint
+        $s = Get-QOSettings
+        $s.Tickets.EmailIntegration.Enabled = $false
+        Save-QOSettings -Settings $s
+        Set-EmailControlsEnabledState -Enabled $false -EmailBox $emailBox -BtnAdd $btnAdd -BtnRemove $btnRemove -BtnCheck $btnCheck -ListBox $list -HintText $hint
     })
 
-$btnAdd.Add_Click({
-    try {
-        $addr = $emailBox.Text
-        if ($null -eq $addr) { $addr = "" }
-        $addr = $addr.Trim()
+    $btnAdd.Add_Click({
+        try {
+            $addr = "$($emailBox.Text)".Trim()
 
-        if ([string]::IsNullOrWhiteSpace($addr)) {
-            [System.Windows.MessageBox]::Show("Type an email address first 🙂","Settings")
-            return
+            if ([string]::IsNullOrWhiteSpace($addr)) {
+                $hint.Text = "Type an email address first."
+                return
+            }
+
+            if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+                $hint.Text = "That email address format looks invalid."
+                return
+            }
+
+            $s = Get-QOSettings
+
+            # Defensive: always treat as array
+            $current = @($s.Tickets.EmailIntegration.MonitoredAddresses) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
+            if ($current -notcontains $addr) {
+                $current += $addr
+                $s.Tickets.EmailIntegration.MonitoredAddresses = @($current)
+                Save-QOSettings -Settings $s
+            }
+
+            $emailBox.Text = ""
+            $hint.Text = "Saved."
+            Refresh-MonitoredList -ListBox $list
         }
-
-        if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-            [System.Windows.MessageBox]::Show("That email does not look valid.","Settings")
-            return
+        catch {
+            $hint.Text = "Add failed. Check logs."
         }
+    })
 
-        $s = Get-QOSettings
-
-        if (-not $s.Tickets) { $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force }
-        if (-not $s.Tickets.EmailIntegration) { $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force }
-
-        $ma = $s.Tickets.EmailIntegration.MonitoredAddresses
-        if ($null -eq $ma) {
-            $s.Tickets.EmailIntegration.MonitoredAddresses = @()
-        }
-        elseif ($ma -is [string]) {
-            $t = $ma.Trim()
-            $s.Tickets.EmailIntegration.MonitoredAddresses = if ($t) { @($t) } else { @() }
-        }
-        else {
-            $s.Tickets.EmailIntegration.MonitoredAddresses = @($ma)
-        }
-
-        if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
-            $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
-            Save-QOSettings -Settings $s
-        }
-
-        $emailBox.Text = ""
-        Refresh-MonitoredList -ListBox $list
-    }
-    catch {
-        [System.Windows.MessageBox]::Show("Add failed: $($_.Exception.Message)","Settings")
-    }
-})
-
-
-    # REMOVE
     $btnRemove.Add_Click({
         try {
             $sel = $list.SelectedItem
-            if (-not $sel) { return }
+            if (-not $sel) {
+                $hint.Text = "Select an address to remove."
+                return
+            }
+
+            $remove = "$sel".Trim()
 
             $s = Get-QOSettings
-            if (-not $s.Tickets -or -not $s.Tickets.EmailIntegration) { return }
-            if (-not $s.Tickets.EmailIntegration.MonitoredAddresses) { return }
-
-            $s.Tickets.EmailIntegration.MonitoredAddresses = @(
-                @($s.Tickets.EmailIntegration.MonitoredAddresses) | Where-Object { "$_" -ne "$sel" }
-            )
+            $current = @($s.Tickets.EmailIntegration.MonitoredAddresses) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
+            $s.Tickets.EmailIntegration.MonitoredAddresses = @($current | Where-Object { $_ -ne $remove })
 
             Save-QOSettings -Settings $s
+
+            $hint.Text = "Removed."
             Refresh-MonitoredList -ListBox $list
         }
-        catch { }
+        catch {
+            $hint.Text = "Remove failed. Check logs."
+        }
     })
 
-    # CHECK EMAIL NOW
     $btnCheck.Add_Click({
         try {
             if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
-                Invoke-QOEmailTicketPoll | Out-Null
+                $new = @(Invoke-QOEmailTicketPoll)
+
+                if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
+                    Update-QOTicketsGrid
+                }
+
+                if ($new.Count -gt 0) {
+                    $hint.Text = "Created $($new.Count) ticket(s) from email."
+                } else {
+                    $hint.Text = "No new mail found."
+                }
             }
-            if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
-                Update-QOTicketsGrid
+            else {
+                $hint.Text = "Tickets module not loaded, cannot poll email."
             }
-        } catch { }
+        }
+        catch {
+            $hint.Text = "Email poll failed. Check logs."
+        }
     })
 
     $root.Child = $grid
