@@ -49,20 +49,40 @@ $script:LastTab      = $null
 
 function Set-QOTControlText {
     param(
-        [Parameter(Mandatory)] $Control,
-        [Parameter(Mandatory)] [string] $Value
+        [Parameter(Mandatory)]
+        $Control,
+
+        [Parameter(Mandatory)]
+        [string]$Value
     )
 
     if (-not $Control) { return }
 
-    if ($Control.PSObject.Properties.Name -contains 'Text') {
-        $Control.Text = $Value
-        return
-    }
+    try {
+        if ($Control -is [System.Windows.Controls.TextBlock]) {
+            $Control.Text = $Value
+            return
+        }
 
-    if ($Control.PSObject.Properties.Name -contains 'Content') {
-        $Control.Content = $Value
-        return
+        if ($Control -is [System.Windows.Controls.Label] -or
+            $Control -is [System.Windows.Controls.Button]) {
+            $Control.Content = $Value
+            return
+        }
+
+        $props = $Control.PSObject.Properties.Name
+        if ($props -contains 'Text') {
+            $Control.Text = $Value
+            return
+        }
+
+        if ($props -contains 'Content') {
+            $Control.Content = $Value
+            return
+        }
+    }
+    catch {
+        # never let UI crash on text updates
     }
 }
 
