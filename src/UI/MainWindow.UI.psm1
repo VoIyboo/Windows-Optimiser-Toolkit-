@@ -17,21 +17,22 @@ Import-Module (Join-Path $basePath "Core\Settings.psm1") -Force -ErrorAction Sil
 Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction SilentlyContinue
 
 # UI modules
-Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")       -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1") -Force -ErrorAction SilentlyContinue
 
 # IMPORTANT: If any earlier module (like Settings) defined Initialize-QOTicketsUI,
 # remove it so the correct Tickets UI version can be loaded.
 Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
 
-# Load Tickets UI from the correct location, and do not hide failures.
+# Load Tickets UI from the correct location
 Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
 
 # Settings UI module
-Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
 
 # -------------------------------------------------------------------
 # WINDOW LEVEL REFERENCES
 # -------------------------------------------------------------------
+
 $script:IsSettingsShown = $false
 
 $script:MainWindow   = $null
@@ -42,16 +43,8 @@ $script:RunButton    = $null
 $script:SettingsView = $null
 $script:LastTab      = $null
 
-
 # -------------------------------------------------------------------
 # XAML LOADER
-# -------------------------------------------------------------------
-
-function New-QOTMainWindow {
-
-
-# -------------------------------------------------------------------
-# INIT WINDOW + TABS
 # -------------------------------------------------------------------
 
 function New-QOTMainWindow {
@@ -74,6 +67,7 @@ function New-QOTMainWindow {
             throw "XamlReader returned null (unknown XAML parse failure)."
         }
 
+        # Apply Studio Voly icon (optional)
         $iconPath = Join-Path $PSScriptRoot "icon.ico"
         if (Test-Path -LiteralPath $iconPath) {
             Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
@@ -92,16 +86,45 @@ function New-QOTMainWindow {
     }
 }
 
-    # ------------------------------
+# -------------------------------------------------------------------
+# INIT WINDOW + TABS
+# -------------------------------------------------------------------
+
+function Initialize-QOTMainWindow {
+
+    $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
+    $window   = New-QOTMainWindow -XamlPath $xamlPath
+
+    $script:MainWindow   = $window
+    $script:StatusLabel  = $window.FindName("StatusLabel")
+    $script:SummaryText  = $window.FindName("SummaryText")
+    $script:MainProgress = $window.FindName("MainProgress")
+    $script:RunButton    = $window.FindName("RunButton")
+
+    # Apps Tab
+    $BtnScanApps      = $window.FindName("BtnScanApps")
+    $BtnUninstallApps = $window.FindName("BtnUninstallSelected")
+    $AppsGrid         = $window.FindName("AppsGrid")
+    $InstallGrid      = $window.FindName("InstallGrid")
+
+    if (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue) {
+        if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
+            Initialize-QOTAppsUI `
+                -BtnScanApps          $BtnScanApps `
+                -BtnUninstallSelected $BtnUninstallApps `
+                -AppsGrid             $AppsGrid `
+                -InstallGrid          $InstallGrid
+        }
+    }
+
     # Tickets Tab
-    # ------------------------------
     $TicketsGrid       = $window.FindName("TicketsGrid")
     $BtnNewTicket      = $window.FindName("BtnNewTicket")
     $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
     $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
 
     if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
-        if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets) {
+        if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets -and $BtnDeleteTicket) {
             Initialize-QOTicketsUI `
                 -TicketsGrid       $TicketsGrid `
                 -BtnRefreshTickets $BtnRefreshTickets `
@@ -110,23 +133,16 @@ function New-QOTMainWindow {
         }
     }
 
-    # ------------------------------
-    # Settings button (cog / back) wiring
-    # ------------------------------
+    # Settings button (cog/back) wiring
     $BtnSettings = $window.FindName("BtnSettings")
     if ($BtnSettings) {
         $BtnSettings.Add_Click({
-            if ($script:IsSettingsShown) {
-                Restore-QOTMainTabs
-            }
-            else {
-                Show-QOTSettingsPage
-            }
+            if ($script:IsSettingsShown) { Restore-QOTMainTabs }
+            else { Show-QOTSettingsPage }
         })
     }
-    # ------------------------------
+
     # Settings init (safe)
-    # ------------------------------
     if (-not $global:QOSettings) {
         if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
             $global:QOSettings = Get-QOSettings
@@ -136,35 +152,18 @@ function New-QOTMainWindow {
         }
     }
 
-    # ------------------------------
-    # Ticket storage init (safe)
-    # ------------------------------
-    if (Get-Command Initialize-QOTicketStorage -ErrorAction SilentlyContinue) {
-        Initialize-QOTicketStorage
-    }
-    elseif (Get-Command Initialize-QOTicketsStore -ErrorAction SilentlyContinue) {
-        Initialize-QOTicketsStore
-    }
-
     # Apply preferred start tab
     Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
 
-    # ------------------------------
     # Status bar defaults
-    # ------------------------------
-    if ($script:StatusLabel) {
-        $script:StatusLabel.Text = "Idle"
-    }
-
+    if ($script:StatusLabel) { $script:StatusLabel.Text = "Idle" }
     if ($script:MainProgress) {
         $script:MainProgress.Minimum = 0
         $script:MainProgress.Maximum = 100
         $script:MainProgress.Value   = 0
     }
 
-    # ------------------------------
     # Run button placeholder
-    # ------------------------------
     if ($script:RunButton -and $script:StatusLabel) {
         $script:RunButton.Add_Click({
             $script:StatusLabel.Text = "Run clicked (engine coming soon)"
@@ -174,32 +173,14 @@ function New-QOTMainWindow {
     return $script:MainWindow
 }
 
-
 # -------------------------------------------------------------------
 # SHOW WINDOW
 # -------------------------------------------------------------------
 
 function Start-QOTMainWindow {
-    try {
-        $window = Initialize-QOTMainWindow
-
-        if (-not $window) {
-            throw "Initialize-QOTMainWindow returned null. Window was not created."
-        }
-
-        [void]$window.ShowDialog()
-    }
-    catch {
-        Write-Host ""
-        Write-Host "Startup crash:" -ForegroundColor Red
-        Write-Host $_.Exception.Message -ForegroundColor Red
-        Write-Host ""
-        Write-Host "Stack trace:" -ForegroundColor Yellow
-        Write-Host $_.ScriptStackTrace -ForegroundColor Yellow
-        throw
-    }
+    $window = Initialize-QOTMainWindow
+    [void]$window.ShowDialog()
 }
-
 
 # -------------------------------------------------------------------
 # TAB SELECTION
@@ -236,9 +217,7 @@ function Select-QOTPreferredTab {
 # -------------------------------------------------------------------
 
 function Set-QOTStatus {
-    param(
-        [string]$Text
-    )
+    param([string]$Text)
 
     if ($script:StatusLabel) {
         $script:StatusLabel.Dispatcher.Invoke({
@@ -248,9 +227,7 @@ function Set-QOTStatus {
 }
 
 function Set-QOTSummary {
-    param(
-        [string]$Text
-    )
+    param([string]$Text)
 
     if ($script:SummaryText) {
         $script:SummaryText.Dispatcher.Invoke({
@@ -259,6 +236,9 @@ function Set-QOTSummary {
     }
 }
 
+# -------------------------------------------------------------------
+# SETTINGS VIEW SWAP
+# -------------------------------------------------------------------
 
 function Show-QOTSettingsPage {
     if (-not $script:MainWindow) { return }
@@ -276,20 +256,16 @@ function Show-QOTSettingsPage {
             Set-QOTStatus "Settings UI not available"
             return
         }
-
         $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow
     }
 
     $MainContentHost.Content = $script:SettingsView
 
     $icon = $BtnSettings.Content
-    if ($icon -is [System.Windows.Controls.TextBlock]) {
-        $icon.Text = [char]0xE72B   # back arrow
-    }
+    if ($icon -is [System.Windows.Controls.TextBlock]) { $icon.Text = [char]0xE72B }
 
     $BtnSettings.ToolTip = "Back"
     $script:IsSettingsShown = $true
-
     Set-QOTStatus "Settings"
 }
 
@@ -304,25 +280,20 @@ function Restore-QOTMainTabs {
 
     $MainContentHost.Content = $MainTabControl
 
-    if ($script:LastTab) {
-        $MainTabControl.SelectedItem = $script:LastTab
-    }
+    if ($script:LastTab) { $MainTabControl.SelectedItem = $script:LastTab }
 
     $icon = $BtnSettings.Content
-    if ($icon -is [System.Windows.Controls.TextBlock]) {
-        $icon.Text = [char]0xE713   # cog
-    }
+    if ($icon -is [System.Windows.Controls.TextBlock]) { $icon.Text = [char]0xE713 }
 
     $BtnSettings.ToolTip = "Settings"
     $script:IsSettingsShown = $false
-
     Set-QOTStatus "Idle"
 }
-
 
 # -------------------------------------------------------------------
 # EXPORTS
 # -------------------------------------------------------------------
+
 Export-ModuleMember -Function `
     New-QOTMainWindow, `
     Initialize-QOTMainWindow, `
@@ -332,4 +303,3 @@ Export-ModuleMember -Function `
     Set-QOTSummary, `
     Show-QOTSettingsPage, `
     Restore-QOTMainTabs
-
