@@ -180,21 +180,21 @@ function Remove-QOTicket {
 }
 
 # =====================================================================
-# EMAIL -> TICKET POLLER (OUTLOOK COM)
+# EMAIL -> TICKET POLLER (OUTLOOK COM) + LOGGING
 # =====================================================================
 
-$script:EmailPollLog = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\EmailPoll.log"
+$script:EmailPollLogPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Logs\EmailPoll.log"
 
 function Write-QOEmailPollLog {
-    param([string]$Message)
+    param([Parameter(Mandatory)][string]$Message)
 
     try {
-        $dir = Split-Path -Parent $script:EmailPollLog
+        $dir = Split-Path -Parent $script:EmailPollLogPath
         if (-not (Test-Path -LiteralPath $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
         }
         $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
-        Add-Content -LiteralPath $script:EmailPollLog -Value $line -Encoding UTF8
+        Add-Content -LiteralPath $script:EmailPollLogPath -Value $line -Encoding UTF8
     } catch {}
 }
 
@@ -218,48 +218,58 @@ function Get-QOInboxFolder {
         [Parameter(Mandatory)] [string] $Mailbox
     )
 
-    $mb = ""
-    if ($null -ne $Mailbox) { $mb = [string]$Mailbox }
+    $mb = [string]$Mailbox
+    if ($null -eq $mb) { $mb = "" }
     $mb = $mb.Trim()
+
     if ([string]::IsNullOrWhiteSpace($mb)) { return $null }
 
-    $me = Get-QOCurrentSmtpAddress -Namespace $Namespace
+    $me = $null
+    try { $me = Get-QOCurrentSmtpAddress -Namespace $Namespace } catch {}
 
-    # Always try default inbox first (most reliable)
-    try {
-        if ($me -and ($me.Trim().ToLower() -eq $mb.ToLower())) {
-            Write-QOEmailPollLog "Inbox resolve: using DEFAULT inbox for $mb"
+    # If it's "me", use default Inbox
+    if ($me -and ($me.Trim().ToLower() -eq $mb.ToLower())) {
+        try {
+            Write-QOEmailPollLog "Mailbox ${mb}: using default Inbox (current user match)"
             return $Namespace.GetDefaultFolder(6)
+        } catch {
+            Write-QOEmailPollLog "Mailbox ${mb}: failed default Inbox. $($_.Exception.Message)"
         }
-    } catch {}
+    }
 
-    # Shared inbox path (shared mailbox access)
+    # Shared mailbox (requires you already have permissions)
     try {
         $r = $Namespace.CreateRecipient($mb)
         $null = $r.Resolve()
         if ($r -and $r.Resolved) {
-            Write-QOEmailPollLog "Inbox resolve: using SHARED inbox for $mb"
+            Write-QOEmailPollLog "Mailbox ${mb}: resolved as recipient. Using GetSharedDefaultFolder"
             return $Namespace.GetSharedDefaultFolder($r, 6)
         }
-    } catch {}
+        Write-QOEmailPollLog "Mailbox ${mb}: recipient did not resolve"
+    } catch {
+        Write-QOEmailPollLog "Mailbox ${mb}: CreateRecipient/GetSharedDefaultFolder failed. $($_.Exception.Message)"
+    }
 
-    # Folder tree fallback
+    # Fallback: try namespace root folders
     try {
         $root = $Namespace.Folders.Item($mb)
         if ($root) {
             $inbox = $root.Folders.Item("Inbox")
             if ($inbox) {
-                Write-QOEmailPollLog "Inbox resolve: using TREE inbox for $mb"
+                Write-QOEmailPollLog "Mailbox ${mb}: opened via Namespace.Folders.Item + Inbox"
                 return $inbox
             }
         }
-    } catch {}
+    } catch {
+        Write-QOEmailPollLog "Mailbox ${mb}: Namespace.Folders fallback failed. $($_.Exception.Message)"
+    }
 
-    Write-QOEmailPollLog "Inbox resolve: FAILED for $mb (me=$me)"
     return $null
 }
 
 function Invoke-QOEmailTicketPoll {
+
+    $created = @()
 
     $s = Get-QOSettings
 
@@ -270,9 +280,8 @@ function Invoke-QOEmailTicketPoll {
     $mailboxes = @()
     if ($s.Tickets.EmailIntegration.MonitoredAddresses) {
         $mailboxes = @($s.Tickets.EmailIntegration.MonitoredAddresses) |
-            Where-Object { $_ } |
             ForEach-Object { "$_".Trim() } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            Where-Object { $_ }
     }
 
     if ($mailboxes.Count -lt 1) {
@@ -284,17 +293,16 @@ function Invoke-QOEmailTicketPoll {
         $s.Tickets.EmailIntegration | Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
-    Write-QOEmailPollLog "Poll start. Mailboxes: $($mailboxes -join ', ')"
-
-    $created = @()
-
     $outlook = $null
-    $ns = $null
+    $ns      = $null
+
     try {
+        Write-QOEmailPollLog "Poll start. Mailboxes = $($mailboxes -join ', ')"
         $outlook = New-Object -ComObject Outlook.Application
         $ns      = $outlook.GetNamespace("MAPI")
-    } catch {
-        Write-QOEmailPollLog "Outlook COM failed: $($_.Exception.Message)"
+    }
+    catch {
+        Write-QOEmailPollLog "Outlook COM init failed: $($_.Exception.Message)"
         return @()
     }
 
@@ -310,38 +318,41 @@ function Invoke-QOEmailTicketPoll {
 
         if (-not $since) { $since = (Get-Date).AddDays(-3) }
 
-        Write-QOEmailPollLog "Mailbox $mb since $($since.ToString('o'))"
+        Write-QOEmailPollLog "Mailbox ${mb}: since = $($since.ToString('o'))"
 
         $inbox = Get-QOInboxFolder -Namespace $ns -Mailbox $mb
-        if (-not $inbox) { continue }
+        if (-not $inbox) {
+            Write-QOEmailPollLog "Mailbox ${mb}: inbox not found"
+            continue
+        }
 
         $items = $null
         try { $items = $inbox.Items } catch { $items = $null }
-        if (-not $items) { Write-QOEmailPollLog "Mailbox ${mb}: inbox.Items failed"; continue }
+
+        if (-not $items) {
+            Write-QOEmailPollLog "Mailbox ${mb}: inbox.Items is null"
+            continue
+        }
 
         try { $items.Sort("[ReceivedTime]", $true) } catch {}
 
         $latestSeen = $since
-        $scanLimit = 100
-        $count = 0
+        $newCount = 0
 
         for ($i = 1; $i -le $items.Count; $i++) {
-
-            $count++
-            if ($count -gt $scanLimit) { break }
 
             $mail = $null
             try { $mail = $items.Item($i) } catch { continue }
             if (-not $mail) { continue }
 
-            # MailItem only
+            # Only MailItem (43)
             try { if ($mail.Class -ne 43) { continue } } catch { continue }
 
             $rt = $null
             try { $rt = $mail.ReceivedTime } catch { $rt = $null }
             if (-not $rt) { continue }
 
-            if ($rt -le $since) { break }
+            if ($rt -le $since) { break }  # sorted newest-first
 
             if ($rt -gt $latestSeen) { $latestSeen = $rt }
 
@@ -360,8 +371,6 @@ function Invoke-QOEmailTicketPoll {
             $title = $subject
             if ([string]::IsNullOrWhiteSpace($title)) { $title = "(No subject)" }
 
-            Write-QOEmailPollLog "Creating ticket from email. Mailbox=$mb Received=$($rt.ToString('o')) Subject=$title From=$from"
-
             $ticket = New-QOTicket `
                 -Title $title `
                 -Description $body `
@@ -376,20 +385,31 @@ function Invoke-QOEmailTicketPoll {
 
             Add-QOTicket -Ticket $ticket | Out-Null
             $created += $ticket
+
+            $newCount++
         }
 
         if ($latestSeen -and $latestSeen -gt $since) {
             $s.Tickets.EmailIntegration.LastProcessedByMailbox |
                 Add-Member -NotePropertyName $key -NotePropertyValue ($latestSeen.ToString("o")) -Force
-            Write-QOEmailPollLog "Mailbox $mb updated last processed to $($latestSeen.ToString('o'))"
-        } else {
+        }
+
+        if ($newCount -eq 0) {
             Write-QOEmailPollLog "Mailbox ${mb}: no new mail found"
+        } else {
+            Write-QOEmailPollLog "Mailbox ${mb}: created ${newCount} ticket(s)"
         }
     }
 
-    Save-QOSettings -Settings $s
+    try { Save-QOSettings -Settings $s } catch {}
 
-    Write-QOEmailPollLog "Poll end. Created $($created.Count) ticket(s)."
+    # Cleanup COM
+    try {
+        if ($ns) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ns) }
+        if ($outlook) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($outlook) }
+    } catch {}
+
+    Write-QOEmailPollLog "Poll end. Total created = $($created.Count)"
     return $created
 }
 
