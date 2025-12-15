@@ -189,135 +189,161 @@ function Get-QOTicketById {
 # EMAIL -> TICKET POLLER (OUTLOOK COM)
 # =====================================================================
 
+function Get-QOCurrentSmtpAddress {
+    param([Parameter(Mandatory)] $Namespace)
+
+    try {
+        $ae = $Namespace.CurrentUser.AddressEntry
+        if ($ae) {
+            # Exchange user path
+            $ex = $ae.GetExchangeUser()
+            if ($ex -and $ex.PrimarySmtpAddress) { return $ex.PrimarySmtpAddress }
+        }
+    } catch {}
+
+    return $null
+}
+
+function Get-QOInboxFolder {
+    param(
+        [Parameter(Mandatory)] $Namespace,
+        [Parameter(Mandatory)] [string] $Mailbox
+    )
+
+    $mb = ($Mailbox ?? "").Trim()
+    if ([string]::IsNullOrWhiteSpace($mb)) { return $null }
+
+    # If mailbox looks like "me", use default inbox first (this is the reliable path)
+    $me = Get-QOCurrentSmtpAddress -Namespace $Namespace
+    if ($me -and ($me.Trim().ToLower() -eq $mb.ToLower())) {
+        try { return $Namespace.GetDefaultFolder(6) } catch {}
+    }
+
+    # Try shared inbox for that mailbox (works for shared mailboxes you have access to)
+    try {
+        $r = $Namespace.CreateRecipient($mb)
+        $r.Resolve() | Out-Null
+        if ($r -and $r.Resolved) {
+            return $Namespace.GetSharedDefaultFolder($r, 6)
+        }
+    } catch {}
+
+    # Fallback: try open it via namespace folders (sometimes works depending on profile)
+    try {
+        $root = $Namespace.Folders.Item($mb)
+        if ($root) {
+            $inbox = $root.Folders.Item("Inbox")
+            if ($inbox) { return $inbox }
+        }
+    } catch {}
+
+    return $null
+}
+
 function Invoke-QOEmailTicketPoll {
 
     $s = Get-QOSettings
-    if (-not $s.Tickets -or -not $s.Tickets.EmailIntegration) { return @() }
+
+    if (-not $s.Tickets) { return @() }
+    if (-not $s.Tickets.EmailIntegration) { return @() }
     if (-not [bool]$s.Tickets.EmailIntegration.Enabled) { return @() }
 
-    $mailboxes = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-    if (-not $mailboxes -or $mailboxes.Count -lt 1) { return @() }
+    $mailboxes = @()
+    if ($s.Tickets.EmailIntegration.MonitoredAddresses) {
+        $mailboxes = @($s.Tickets.EmailIntegration.MonitoredAddresses) | Where-Object { $_ } | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
+    }
+    if ($mailboxes.Count -lt 1) { return @() }
 
-    # Ensure state bag exists
+    # Ensure per-mailbox state exists
     if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "LastProcessedByMailbox")) {
         $s.Tickets.EmailIntegration | Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
     $created = @()
 
-    $outlook = $null
-    $ns = $null
+    $outlook = New-Object -ComObject Outlook.Application
+    $ns      = $outlook.GetNamespace("MAPI")
 
-    try {
-        $outlook = New-Object -ComObject Outlook.Application
-        $ns = $outlook.GetNamespace("MAPI")
+    foreach ($mb in $mailboxes) {
 
-        foreach ($mb in $mailboxes) {
+        $key = $mb.Trim().ToLower()
 
-            $mbx = "$mb".Trim()
-            if ([string]::IsNullOrWhiteSpace($mbx)) { continue }
+        # Load last processed timestamp for this mailbox
+        $since = $null
+        try {
+            $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
+            if ($raw) { $since = [datetime]::Parse($raw) }
+        } catch {}
 
-            $key = $mbx.ToLower()
+        # First run: look back a bit so you don’t miss anything
+        if (-not $since) { $since = (Get-Date).AddDays(-3) }
 
-            # Load "since"
-            $since = $null
+        $inbox = Get-QOInboxFolder -Namespace $ns -Mailbox $mb
+        if (-not $inbox) { continue }
+
+        # Pull items newest-first so we can break early once we hit older mail
+        $items = $inbox.Items
+        try { $items.Sort("[ReceivedTime]", $true) } catch {}
+
+        $latestSeen = $since
+
+        for ($i = 1; $i -le $items.Count; $i++) {
+
+            $mail = $null
+            try { $mail = $items.Item($i) } catch { continue }
+            if (-not $mail) { continue }
+
+            # Only MailItem class 43
             try {
-                $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
-                if ($raw) { $since = [datetime]::Parse("$raw") }
+                if ($mail.Class -ne 43) { continue }
+            } catch { continue }
+
+            $rt = $null
+            try { $rt = $mail.ReceivedTime } catch { $rt = $null }
+            if (-not $rt) { continue }
+
+            if ($rt -le $since) { break }  # because we sorted newest-first
+
+            if ($rt -gt $latestSeen) { $latestSeen = $rt }
+
+            $subject = ""
+            $body    = ""
+            $from    = ""
+
+            try { $subject = [string]$mail.Subject } catch {}
+            try { $body    = [string]$mail.Body } catch {}
+
+            # SenderEmailAddress can be "EX" type, still store something useful
+            try {
+                $from = [string]$mail.SenderEmailAddress
+                if ([string]::IsNullOrWhiteSpace($from)) { $from = [string]$mail.SenderName }
             } catch {}
 
-            if (-not $since) { $since = (Get-Date).AddDays(-3) }
+            $ticket = New-QOTicket `
+                -Title ($subject ?? "(No subject)") `
+                -Description $body `
+                -Category "Email" `
+                -Priority "Normal" `
+                -Source "Email" `
+                -RequesterEmail $from `
+                -Tags @("Email", $key)
 
-            # Resolve mailbox
-            $inbox = $null
-            try {
-                # If the monitored address is the current Outlook user, use default inbox
-                $currentSmtp = $null
-                try {
-                    $currentSmtp = "$($ns.CurrentUser.Address)".Trim()
-                } catch {}
+            $ticket.CreatedAt = $rt
+            $ticket.UpdatedAt = $rt
 
-                if ($currentSmtp -and ($currentSmtp.ToLower() -eq $key)) {
-                    $inbox = $ns.GetDefaultFolder(6) # olFolderInbox
-                }
-                else {
-                    $r = $ns.CreateRecipient($mbx)
-                    [void]$r.Resolve()
-                    if (-not $r.Resolved) { continue }
-                    $inbox = $ns.GetSharedDefaultFolder($r, 6) # olFolderInbox
-                }
-            }
-            catch {
-                continue
-            }
-
-            if (-not $inbox) { continue }
-
-            # Pull only MailItems, newest first
-            $items = $null
-            try {
-                $items = $inbox.Items
-                $items.Sort("[ReceivedTime]", $true)
-            } catch {}
-
-            if (-not $items) { continue }
-
-            $maxSeen = $since
-
-            foreach ($item in @($items)) {
-
-                # Only MailItem (Class 43)
-                try {
-                    if ($item.Class -ne 43) { continue }
-                } catch { continue }
-
-                $rt = $null
-                try { $rt = [datetime]$item.ReceivedTime } catch { continue }
-
-                if ($rt -le $since) { break } # sorted desc, can stop here
-
-                if ($rt -gt $maxSeen) { $maxSeen = $rt }
-
-                $subject = ""
-                $body    = ""
-                $from    = $null
-
-                try { $subject = "$($item.Subject)" } catch {}
-                try { $body    = "$($item.Body)" } catch {}
-                try { $from    = "$($item.SenderEmailAddress)" } catch {}
-
-                $ticket = New-QOTicket `
-                    -Title $subject `
-                    -Description $body `
-                    -Category "Email" `
-                    -Priority "Normal" `
-                    -Source "Email" `
-                    -RequesterEmail $from `
-                    -Tags @("Email", $key)
-
-                $ticket.CreatedAt = $rt
-                $ticket.UpdatedAt = $rt
-
-                Add-QOTicket -Ticket $ticket | Out-Null
-                $created += $ticket
-            }
-
-            # Advance watermark (add 1 second to avoid same-timestamp duplicates)
-            $next = $maxSeen.AddSeconds(1)
-            $s.Tickets.EmailIntegration.LastProcessedByMailbox |
-                Add-Member -NotePropertyName $key -NotePropertyValue ($next.ToString("o")) -Force
+            Add-QOTicket -Ticket $ticket | Out-Null
+            $created += $ticket
         }
 
-        Save-QOSettings -Settings $s
-        return $created
+        # Save last processed time for this mailbox
+        if ($latestSeen -and $latestSeen -gt $since) {
+            $s.Tickets.EmailIntegration.LastProcessedByMailbox |
+                Add-Member -NotePropertyName $key -NotePropertyValue ($latestSeen.ToString("o")) -Force
+        }
     }
-    finally {
-        # Best-effort COM cleanup
-        try { if ($ns) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($ns) } } catch {}
-        try { if ($outlook) { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($outlook) } } catch {}
-        [GC]::Collect()
-        [GC]::WaitForPendingFinalizers()
-    }
+
+    Save-QOSettings -Settings $s
+    return $created
 }
 
 # =====================================================================
