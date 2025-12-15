@@ -123,43 +123,29 @@ $grid.Children.Add($panel) | Out-Null
 # ------------------------------
 $chkEnable.Add_Checked({
     $s = Get-QOSettings
-    $s.Tickets.EmailIntegration.Enabled = $true
-    Save-QOSettings -Settings $s
-})
-
-$chkEnable.Add_Unchecked({
-    $s = Get-QOSettings
-    $s.Tickets.EmailIntegration.Enabled = $false
-    Save-QOSettings -Settings $s
-})
-
-$btnAdd.Add_Click({
-    $email = $emailBox.Text.Trim()
-    if (-not $email) { return }
-
-    # basic sanity check
-    if ($email -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
-
-    $s = Get-QOSettings
-
-    if (-not $s.Tickets) {
-        $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{})
-    }
+    if (-not $s.Tickets) { $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) }
     if (-not $s.Tickets.EmailIntegration) {
         $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
             [pscustomobject]@{ Enabled = $false; MonitoredAddresses = @() }
         )
     }
-    if (-not $s.Tickets.EmailIntegration.MonitoredAddresses) {
-        $s.Tickets.EmailIntegration.MonitoredAddresses = @()
+
+    $s.Tickets.EmailIntegration.Enabled = $true
+    Save-QOSettings -Settings $s
+    Refresh-MonitoredList -ListBox $list
+})
+
+$chkEnable.Add_Unchecked({
+    $s = Get-QOSettings
+    if (-not $s.Tickets) { $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) }
+    if (-not $s.Tickets.EmailIntegration) {
+        $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
+            [pscustomobject]@{ Enabled = $false; MonitoredAddresses = @() }
+        )
     }
 
-    if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $email) {
-        $s.Tickets.EmailIntegration.MonitoredAddresses += $email
-        Save-QOSettings -Settings $s
-    }
-
-    $emailBox.Text = ""
+    $s.Tickets.EmailIntegration.Enabled = $false
+    Save-QOSettings -Settings $s
     Refresh-MonitoredList -ListBox $list
 })
 
