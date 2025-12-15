@@ -44,6 +44,29 @@ $script:SettingsView = $null
 $script:LastTab      = $null
 
 # -------------------------------------------------------------------
+# SAFE TEXT SETTER
+# -------------------------------------------------------------------
+
+function Set-QOTControlText {
+    param(
+        [Parameter(Mandatory)] $Control,
+        [Parameter(Mandatory)] [string] $Value
+    )
+
+    if (-not $Control) { return }
+
+    if ($Control.PSObject.Properties.Name -contains 'Text') {
+        $Control.Text = $Value
+        return
+    }
+
+    if ($Control.PSObject.Properties.Name -contains 'Content') {
+        $Control.Content = $Value
+        return
+    }
+}
+
+# -------------------------------------------------------------------
 # XAML LOADER
 # -------------------------------------------------------------------
 
@@ -155,16 +178,17 @@ function Initialize-QOTMainWindow {
 
         Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
 
-        if ($script:StatusLabel) { $script:StatusLabel.Text = "Idle" }
+        Set-QOTControlText -Control $script:StatusLabel -Value "Idle"
+
         if ($script:MainProgress) {
             $script:MainProgress.Minimum = 0
             $script:MainProgress.Maximum = 100
             $script:MainProgress.Value   = 0
         }
 
-        if ($script:RunButton -and $script:StatusLabel) {
+        if ($script:RunButton) {
             $script:RunButton.Add_Click({
-                $script:StatusLabel.Text = "Run clicked (engine coming soon)"
+                Set-QOTControlText -Control $script:StatusLabel -Value "Run clicked (engine coming soon)"
             })
         }
 
@@ -235,7 +259,7 @@ function Set-QOTStatus {
 
     if ($script:StatusLabel) {
         $script:StatusLabel.Dispatcher.Invoke({
-            $script:StatusLabel.Text = $Text
+            Set-QOTControlText -Control $script:StatusLabel -Value $Text
         })
     }
 }
@@ -245,7 +269,7 @@ function Set-QOTSummary {
 
     if ($script:SummaryText) {
         $script:SummaryText.Dispatcher.Invoke({
-            $script:SummaryText.Text = $Text
+            Set-QOTControlText -Control $script:SummaryText -Value $Text
         })
     }
 }
@@ -276,10 +300,7 @@ function Show-QOTSettingsPage {
     $MainContentHost.Content = $script:SettingsView
 
     $icon = $script:MainWindow.FindName("BtnSettingsIcon")
-    if ($icon -and ($icon -is [System.Windows.Controls.TextBlock])) {
-        $icon.Text = [char]0xE72B
-    }
-
+    Set-QOTControlText -Control $icon -Value ([char]0xE72B)
 
     $BtnSettings.ToolTip = "Back"
     $script:IsSettingsShown = $true
@@ -300,10 +321,7 @@ function Restore-QOTMainTabs {
     if ($script:LastTab) { $MainTabControl.SelectedItem = $script:LastTab }
 
     $icon = $script:MainWindow.FindName("BtnSettingsIcon")
-    if ($icon -and ($icon -is [System.Windows.Controls.TextBlock])) {
-        $icon.Text = [char]0xE713
-    }
-
+    Set-QOTControlText -Control $icon -Value ([char]0xE713)
 
     $BtnSettings.ToolTip = "Settings"
     $script:IsSettingsShown = $false
