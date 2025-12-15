@@ -54,34 +54,43 @@ function New-QOTMainWindow {
 # INIT WINDOW + TABS
 # -------------------------------------------------------------------
 
-function Initialize-QOTMainWindow {
+function New-QOTMainWindow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$XamlPath
+    )
 
-    $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
-    $window   = New-QOTMainWindow -XamlPath $xamlPath
-
-    $script:MainWindow   = $window
-    $script:StatusLabel  = $window.FindName("StatusLabel")
-    $script:SummaryText  = $window.FindName("SummaryText")
-    $script:MainProgress = $window.FindName("MainProgress")
-    $script:RunButton    = $window.FindName("RunButton")
-
-    # ------------------------------
-    # Apps Tab
-    # ------------------------------
-    $BtnScanApps        = $window.FindName("BtnScanApps")
-    $BtnUninstallApps   = $window.FindName("BtnUninstallSelected")
-    $AppsGrid           = $window.FindName("AppsGrid")
-    $InstallGrid        = $window.FindName("InstallGrid")
-
-    if (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue) {
-        if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
-            Initialize-QOTAppsUI `
-                -BtnScanApps          $BtnScanApps `
-                -BtnUninstallSelected $BtnUninstallApps `
-                -AppsGrid             $AppsGrid `
-                -InstallGrid          $InstallGrid
-        }
+    if (-not (Test-Path -LiteralPath $XamlPath)) {
+        throw "Main window XAML not found at: $XamlPath"
     }
+
+    try {
+        $xamlText = Get-Content -LiteralPath $XamlPath -Raw
+        $xml      = [xml]$xamlText
+        $reader   = New-Object System.Xml.XmlNodeReader $xml
+        $window   = [Windows.Markup.XamlReader]::Load($reader)
+
+        if (-not $window) {
+            throw "XamlReader returned null (unknown XAML parse failure)."
+        }
+
+        $iconPath = Join-Path $PSScriptRoot "icon.ico"
+        if (Test-Path -LiteralPath $iconPath) {
+            Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
+
+            $bmp = New-Object System.Windows.Media.Imaging.BitmapImage
+            $bmp.BeginInit()
+            $bmp.UriSource = New-Object System.Uri($iconPath, [System.UriKind]::Absolute)
+            $bmp.EndInit()
+            $window.Icon = $bmp
+        }
+
+        return $window
+    }
+    catch {
+        throw "Failed to load MainWindow.xaml. $($_.Exception.Message)"
+    }
+}
 
     # ------------------------------
     # Tickets Tab
