@@ -90,7 +90,6 @@ $panel.Children.Add($inputRow) | Out-Null
 
 $list = New-Object System.Windows.Controls.ListBox
 $list.MinHeight = 140
-$list.ItemsSource = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
 $panel.Children.Add($list) | Out-Null
 
 $hint = New-Object System.Windows.Controls.TextBlock
