@@ -91,86 +91,88 @@ function New-QOTMainWindow {
 # -------------------------------------------------------------------
 
 function Initialize-QOTMainWindow {
+    try {
 
-    $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
-    $window   = New-QOTMainWindow -XamlPath $xamlPath
+        $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
+        $window   = New-QOTMainWindow -XamlPath $xamlPath
 
-    $script:MainWindow   = $window
-    $script:StatusLabel  = $window.FindName("StatusLabel")
-    $script:SummaryText  = $window.FindName("SummaryText")
-    $script:MainProgress = $window.FindName("MainProgress")
-    $script:RunButton    = $window.FindName("RunButton")
+        $script:MainWindow   = $window
+        $script:StatusLabel  = $window.FindName("StatusLabel")
+        $script:SummaryText  = $window.FindName("SummaryText")
+        $script:MainProgress = $window.FindName("MainProgress")
+        $script:RunButton    = $window.FindName("RunButton")
 
-    # Apps Tab
-    $BtnScanApps      = $window.FindName("BtnScanApps")
-    $BtnUninstallApps = $window.FindName("BtnUninstallSelected")
-    $AppsGrid         = $window.FindName("AppsGrid")
-    $InstallGrid      = $window.FindName("InstallGrid")
+        # Apps Tab
+        $BtnScanApps      = $window.FindName("BtnScanApps")
+        $BtnUninstallApps = $window.FindName("BtnUninstallSelected")
+        $AppsGrid         = $window.FindName("AppsGrid")
+        $InstallGrid      = $window.FindName("InstallGrid")
 
-    if (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue) {
-        if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
-            Initialize-QOTAppsUI `
-                -BtnScanApps          $BtnScanApps `
-                -BtnUninstallSelected $BtnUninstallApps `
-                -AppsGrid             $AppsGrid `
-                -InstallGrid          $InstallGrid
+        if (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue) {
+            if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
+                Initialize-QOTAppsUI `
+                    -BtnScanApps          $BtnScanApps `
+                    -BtnUninstallSelected $BtnUninstallApps `
+                    -AppsGrid             $AppsGrid `
+                    -InstallGrid          $InstallGrid
+            }
         }
-    }
 
-    # Tickets Tab
-    $TicketsGrid       = $window.FindName("TicketsGrid")
-    $BtnNewTicket      = $window.FindName("BtnNewTicket")
-    $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
-    $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
+        # Tickets Tab
+        $TicketsGrid       = $window.FindName("TicketsGrid")
+        $BtnNewTicket      = $window.FindName("BtnNewTicket")
+        $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
+        $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
 
-    if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
-        if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets -and $BtnDeleteTicket) {
-            Initialize-QOTicketsUI `
-                -TicketsGrid       $TicketsGrid `
-                -BtnRefreshTickets $BtnRefreshTickets `
-                -BtnNewTicket      $BtnNewTicket `
-                -BtnDeleteTicket   $BtnDeleteTicket
+        if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
+            if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets -and $BtnDeleteTicket) {
+                Initialize-QOTicketsUI `
+                    -TicketsGrid       $TicketsGrid `
+                    -BtnRefreshTickets $BtnRefreshTickets `
+                    -BtnNewTicket      $BtnNewTicket `
+                    -BtnDeleteTicket   $BtnDeleteTicket
+            }
         }
-    }
 
-    # Settings button (cog/back) wiring
-    $BtnSettings = $window.FindName("BtnSettings")
-    if ($BtnSettings) {
-        $BtnSettings.Add_Click({
-            if ($script:IsSettingsShown) { Restore-QOTMainTabs }
-            else { Show-QOTSettingsPage }
-        })
-    }
-
-    # Settings init (safe)
-    if (-not $global:QOSettings) {
-        if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
-            $global:QOSettings = Get-QOSettings
+        # Settings button
+        $BtnSettings = $window.FindName("BtnSettings")
+        if ($BtnSettings) {
+            $BtnSettings.Add_Click({
+                if ($script:IsSettingsShown) { Restore-QOTMainTabs }
+                else { Show-QOTSettingsPage }
+            })
         }
-        else {
-            $global:QOSettings = [pscustomobject]@{ PreferredStartTab = "Cleaning" }
+
+        # Settings init
+        if (-not $global:QOSettings) {
+            if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
+                $global:QOSettings = Get-QOSettings
+            }
+            else {
+                $global:QOSettings = [pscustomobject]@{ PreferredStartTab = "Cleaning" }
+            }
         }
+
+        Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
+
+        if ($script:StatusLabel) { $script:StatusLabel.Text = "Idle" }
+        if ($script:MainProgress) {
+            $script:MainProgress.Minimum = 0
+            $script:MainProgress.Maximum = 100
+            $script:MainProgress.Value   = 0
+        }
+
+        if ($script:RunButton -and $script:StatusLabel) {
+            $script:RunButton.Add_Click({
+                $script:StatusLabel.Text = "Run clicked (engine coming soon)"
+            })
+        }
+
+        return $window
     }
-
-    # Apply preferred start tab
-    Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
-
-    # Status bar defaults
-    if ($script:StatusLabel) { $script:StatusLabel.Text = "Idle" }
-    if ($script:MainProgress) {
-        $script:MainProgress.Minimum = 0
-        $script:MainProgress.Maximum = 100
-        $script:MainProgress.Value   = 0
+    catch {
+        throw "Initialize-QOTMainWindow failed: $($_.Exception.Message)"
     }
-
-    # Run button placeholder
-    if ($script:RunButton -and $script:StatusLabel) {
-        $script:RunButton.Add_Click({
-            $script:StatusLabel.Text = "Run clicked (engine coming soon)"
-        })
-    }
-
-    return $window
 }
 
 # -------------------------------------------------------------------
