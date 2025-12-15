@@ -1,6 +1,8 @@
 # Tickets.UI.psm1
 # UI wiring for the Tickets tab
 
+$ErrorActionPreference = "Stop"
+
 Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
 
@@ -35,8 +37,6 @@ function Save-QOTicketsColumnLayout {
         Sort-Object DisplayIndex |
         ForEach-Object {
             $widthValue = $null
-
-            # DataGridColumn.Width is a DataGridLength, not a double
             try {
                 if ($_.Width -and $_.Width.IsAbsolute) {
                     $widthValue = [double]$_.Width.Value
@@ -80,7 +80,6 @@ function Apply-QOTicketsColumnLayout {
             }
 
             if ($entry.Width -ne $null -and [double]$entry.Width -gt 0) {
-                # Set absolute width
                 $col.Width = New-Object System.Windows.Controls.DataGridLength([double]$entry.Width)
             }
         }
@@ -90,7 +89,6 @@ function Apply-QOTicketsColumnLayout {
     }
 }
 
-# Backwards compat alias
 function Apply-QOTicketsColumnOrder {
     param(
         [Parameter(Mandatory)]
@@ -148,6 +146,29 @@ function Update-QOTicketsGrid {
     $script:TicketsGrid.ItemsSource = @($rows)
 }
 
+function Select-QOTicketRowById {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Id
+    )
+
+    if (-not $script:TicketsGrid) { return }
+    if ([string]::IsNullOrWhiteSpace($Id)) { return }
+
+    $match = $null
+    foreach ($item in $script:TicketsGrid.Items) {
+        if ($null -eq $item) { continue }
+        if ($item.PSObject.Properties.Name -contains "Id") {
+            if ([string]$item.Id -eq $Id) { $match = $item; break }
+        }
+    }
+
+    if ($match) {
+        $script:TicketsGrid.SelectedItem = $match
+        $script:TicketsGrid.ScrollIntoView($match) | Out-Null
+    }
+}
+
 # -------------------------------------------------------------------
 # Init
 # -------------------------------------------------------------------
@@ -169,10 +190,16 @@ function Initialize-QOTicketsUI {
 
     $script:TicketsGrid = $TicketsGrid
 
-    # Let the grid allow user customisation
+    # Grid behaviour
     $TicketsGrid.IsReadOnly            = $false
     $TicketsGrid.CanUserReorderColumns = $true
     $TicketsGrid.CanUserResizeColumns  = $true
+
+    # Make multi select + delete actually usable
+    try {
+        $TicketsGrid.SelectionUnit = "FullRow"
+        $TicketsGrid.SelectionMode = "Extended"
+    } catch { }
 
     # Apply saved layout once the grid is loaded
     $TicketsGrid.Add_Loaded({
@@ -188,7 +215,7 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # Save layout when a column is resized
+    # Save layout when a column DisplayIndex changes
     $TicketsGrid.Add_ColumnDisplayIndexChanged({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
@@ -196,9 +223,27 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # Refresh
+    # Refresh (NOW also polls Outlook and creates tickets)
     $BtnRefreshTickets.Add_Click({
+        $created = @()
+
+        try {
+            if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                $created = @(Invoke-QOEmailTicketPoll)
+            }
+        }
+        catch {
+            Write-Warning "Tickets UI: email poll failed. $_"
+        }
+
         Update-QOTicketsGrid
+
+        if ($created -and $created.Count -gt 0) {
+            $newest = $created | Sort-Object CreatedAt -Descending | Select-Object -First 1
+            if ($newest -and $newest.Id) {
+                Select-QOTicketRowById -Id ([string]$newest.Id)
+            }
+        }
     })
 
     # New test ticket
@@ -241,7 +286,9 @@ function Initialize-QOTicketsUI {
                 if ($idsToDelete.Count -lt 1) { return }
 
                 foreach ($id in $idsToDelete) {
-                    Remove-QOTicket -Id $id | Out-Null
+                    if (Get-Command Remove-QOTicket -ErrorAction SilentlyContinue) {
+                        Remove-QOTicket -Id $id | Out-Null
+                    }
                 }
             }
             catch {
@@ -252,7 +299,6 @@ function Initialize-QOTicketsUI {
         })
     }
 
-    # Initial load (in case Loaded already fired)
     Update-QOTicketsGrid
 }
 
