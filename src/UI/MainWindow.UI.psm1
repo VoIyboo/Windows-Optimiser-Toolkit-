@@ -312,8 +312,8 @@ function Show-QOTSettingsPage {
 
     $MainContentHost.Content = $script:SettingsView
 
-    $icon = $script:MainWindow.FindName("BtnSettingsIcon")
-    Set-QOTControlText -Control $icon -Value ([char]0xE72B)
+    $icon = $BtnSettings.Content -as [System.Windows.Controls.TextBlock]
+    if ($icon) { $icon.Text = [char]0xE72B }
 
     $BtnSettings.ToolTip = "Back"
     $script:IsSettingsShown = $true
@@ -333,8 +333,8 @@ function Restore-QOTMainTabs {
 
     if ($script:LastTab) { $MainTabControl.SelectedItem = $script:LastTab }
 
-    $icon = $script:MainWindow.FindName("BtnSettingsIcon")
-    Set-QOTControlText -Control $icon -Value ([char]0xE713)
+    $icon = $BtnSettings.Content -as [System.Windows.Controls.TextBlock]
+    if ($icon) { $icon.Text = [char]0xE713 }
 
     $BtnSettings.ToolTip = "Settings"
     $script:IsSettingsShown = $false
