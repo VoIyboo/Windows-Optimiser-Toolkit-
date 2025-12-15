@@ -211,9 +211,12 @@ function Initialize-QOSettingsUI {
     # Add button: call core helper to validate, dedupe, save
     $btnAdd.Add_Click({
         try {
-            $addr = ($emailBox.Text ?? "").Trim()
+            $addrRaw = $emailBox.Text
+            if ($null -eq $addrRaw) { $addrRaw = "" }
+    
+            $addr = $addrRaw.Trim()
             if ([string]::IsNullOrWhiteSpace($addr)) { return }
-
+    
             if (Get-Command Add-QOMonitoredEmailAddress -ErrorAction SilentlyContinue) {
                 $added = Add-QOMonitoredEmailAddress -Address $addr
                 if ($added) {
@@ -222,9 +225,10 @@ function Initialize-QOSettingsUI {
                 }
                 return
             }
-
+    
             # Fallback if helper is missing
             if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
+    
             $s = Get-QOSettings
             if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
                 $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
