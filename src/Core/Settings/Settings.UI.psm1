@@ -101,22 +101,27 @@ function Initialize-QOSettingsUI {
     # Helpers
     # ------------------------------
     function Ensure-TicketEmailDefaults {
-        param($s)
+    param($settings)
 
-        if (-not $s.Tickets) {
-            $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
-        }
-        if (-not $s.Tickets.EmailIntegration) {
-            $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
-                [pscustomobject]@{ Enabled = $false; MonitoredAddresses = @() }
-            ) -Force
-        }
-        if ($null -eq $s.Tickets.EmailIntegration.MonitoredAddresses) {
-            $s.Tickets.EmailIntegration.MonitoredAddresses = @()
-        }
-
-        return $s
+    if (-not $settings.Tickets) {
+        $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{})
     }
+
+    if (-not $settings.Tickets.EmailIntegration) {
+        $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
+            [pscustomobject]@{
+                Enabled            = $false
+                MonitoredAddresses = @()
+            }
+        )
+    }
+
+    if (-not $settings.Tickets.EmailIntegration.MonitoredAddresses) {
+        $settings.Tickets.EmailIntegration.MonitoredAddresses = @()
+    }
+
+    return $settings
+}
 
     function Refresh-MonitoredList {
         param($ListBox)
