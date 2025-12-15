@@ -179,11 +179,11 @@
         <!-- Main tabs -->
         <ContentControl Grid.Row="1" Margin="10" x:Name="MainContentHost">
             <TabControl x:Name="MainTabControl" Background="#0F172A">
-<TabControl x:Name="MainTabControl"
-            Background="#0F172A"
-            BorderBrush="#111827"
-            BorderThickness="1"
-            Padding="0">
+            <TabControl x:Name="MainTabControl"
+                    Background="#0F172A"
+                    BorderBrush="#111827"
+                    BorderThickness="1"
+                    Padding="0">
 
             <!-- Tweaks & Cleaning -->
             <TabItem x:Name="TabCleaning" Header="Tweaks &amp; Cleaning">
