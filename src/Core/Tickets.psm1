@@ -269,6 +269,105 @@ function Add-QOTicket {
     return $Ticket
 }
 
+
+
+
+
+
+
+function New-QOTicketFromEmail {
+    <#
+        Creates a new ticket from an email payload.
+
+        Important notes:
+        - This does NOT poll mailboxes. It only converts a provided email into a ticket.
+        - It uses Settings.json to confirm EmailIntegration.Enabled is on.
+        - It currently treats MonitoredAddresses as an allowlist for the sender address.
+          If later you decide MonitoredAddresses means "mailboxes to watch", we will adjust this check.
+    #>
+
+    param(
+        [Parameter(Mandatory)] [string] $From,
+        [Parameter(Mandatory)] [string] $Subject,
+        [Parameter()]          [string] $Body = "",
+        [Parameter()]          $ReceivedAt = (Get-Date)   # Allow DateTime or string
+    )
+
+    # Load settings (this module currently has its own Get-QOSettings helper)
+    $settings = Get-QOSettings
+
+    # Validate settings structure
+    if (-not $settings) { throw "Settings could not be loaded." }
+    if (-not $settings.PSObject.Properties.Name -contains "Tickets") { throw "Tickets settings missing." }
+    if (-not $settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration") { throw "EmailIntegration settings missing." }
+    if (-not $settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled") { throw "EmailIntegration.Enabled missing." }
+
+    # Respect the feature toggle
+    if (-not [bool]$settings.Tickets.EmailIntegration.Enabled) {
+        throw "Email to ticket is disabled in Settings."
+    }
+
+    # Normalise allowed list to an array
+    $allowed = @()
+    if ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses") {
+        if ($null -ne $settings.Tickets.EmailIntegration.MonitoredAddresses) {
+            $allowed = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
+        }
+    }
+
+    # Optional sender allowlist behaviour:
+    # If the allowed list has entries, require the sender to be in it.
+    if ($allowed.Count -gt 0) {
+        $allowedNorm = $allowed | ForEach-Object { "$_".Trim().ToLower() }
+        $fromNorm = $From.Trim().ToLower()
+
+        if ($allowedNorm -notcontains $fromNorm) {
+            throw "From address not in monitored list."
+        }
+    }
+
+    # Parse ReceivedAt safely into a DateTime
+    $receivedDt = $null
+    if ($ReceivedAt -is [datetime]) {
+        $receivedDt = $ReceivedAt
+    }
+    else {
+        try {
+            $receivedDt = [datetime]::Parse("$ReceivedAt")
+        }
+        catch {
+            $receivedDt = Get-Date
+        }
+    }
+
+    # Build a ticket using your existing model function so schema stays consistent
+    $ticket = New-QOTicket `
+        -Title $Subject `
+        -Description $Body `
+        -Category 'Email' `
+        -Priority 'Normal' `
+        -Source 'Email' `
+        -RequesterEmail $From `
+        -RequesterName $null `
+        -Tags @("Email")
+
+    # Override timestamps to match the email received time
+    $ticket.CreatedAt = $receivedDt
+    $ticket.UpdatedAt = $receivedDt
+
+    # Store it
+    Add-QOTicket -Ticket $ticket | Out-Null
+
+    return $ticket
+}
+
+
+
+
+
+
+
+
 function Get-QOTicketById {
     param(
         [Parameter(Mandatory)]
@@ -382,4 +481,5 @@ Export-ModuleMember -Function `
     Get-QOTicketById, `
     Set-QOTicketStatus, `
     Set-QOTicketTitle, `
-    Remove-QOTicket
+    Remove-QOTicket, `
+    New-QOTicketFromEmail
