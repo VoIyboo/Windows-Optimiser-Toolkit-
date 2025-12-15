@@ -223,28 +223,51 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # Refresh (NOW also polls Outlook and creates tickets)
+    #    # Refresh (also poll email first, so the refresh button becomes useful)
     $BtnRefreshTickets.Add_Click({
-        $created = @()
-
         try {
             if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
-                $created = @(Invoke-QOEmailTicketPoll)
+                Invoke-QOEmailTicketPoll | Out-Null
             }
-        }
-        catch {
-            Write-Warning "Tickets UI: email poll failed. $_"
-        }
+        } catch {}
 
         Update-QOTicketsGrid
-
-        if ($created -and $created.Count -gt 0) {
-            $newest = $created | Sort-Object CreatedAt -Descending | Select-Object -First 1
-            if ($newest -and $newest.Id) {
-                Select-QOTicketRowById -Id ([string]$newest.Id)
-            }
-        }
     })
+
+    # Delete without confirmation popup (supports multi-select)
+    if ($BtnDeleteTicket) {
+
+        # Make sure multi-select works
+        try { $script:TicketsGrid.SelectionMode = 'Extended' } catch {}
+
+        $BtnDeleteTicket.Add_Click({
+            try {
+                $selectedItems = @($script:TicketsGrid.SelectedItems)
+                if (-not $selectedItems -or $selectedItems.Count -lt 1) { return }
+
+                $idsToDelete = @(
+                    foreach ($item in $selectedItems) {
+                        if ($null -ne $item -and ($item.PSObject.Properties.Name -contains 'Id')) {
+                            if (-not [string]::IsNullOrWhiteSpace($item.Id)) { [string]$item.Id }
+                        }
+                    }
+                ) | Select-Object -Unique
+
+                if (-not $idsToDelete -or $idsToDelete.Count -lt 1) { return }
+
+                foreach ($id in $idsToDelete) {
+                    if (Get-Command Remove-QOTicket -ErrorAction SilentlyContinue) {
+                        Remove-QOTicket -Id $id | Out-Null
+                    }
+                }
+            }
+            catch {
+                Write-Warning "Tickets UI: failed to delete ticket(s). $_"
+            }
+
+            Update-QOTicketsGrid
+        })
+    }
 
     # New test ticket
     $BtnNewTicket.Add_Click({
