@@ -138,20 +138,31 @@ $btnAdd.Add_Click({
     if (-not $email) { return }
 
     # basic sanity check
-    if ($email -notmatch '.+@.+\..+') { return }
+    if ($email -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
 
     $s = Get-QOSettings
+
+    if (-not $s.Tickets) {
+        $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{})
+    }
+    if (-not $s.Tickets.EmailIntegration) {
+        $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
+            [pscustomobject]@{ Enabled = $false; MonitoredAddresses = @() }
+        )
+    }
+    if (-not $s.Tickets.EmailIntegration.MonitoredAddresses) {
+        $s.Tickets.EmailIntegration.MonitoredAddresses = @()
+    }
 
     if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $email) {
         $s.Tickets.EmailIntegration.MonitoredAddresses += $email
         Save-QOSettings -Settings $s
-        $list.ItemsSource = $null
-        $list.ItemsSource = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-
     }
 
     $emailBox.Text = ""
+    Refresh-MonitoredList -ListBox $list
 })
+
 
 
     $root.Child = $grid
