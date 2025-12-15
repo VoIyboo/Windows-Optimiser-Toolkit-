@@ -27,7 +27,7 @@ Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
 Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
 
 # Settings UI module
-Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction SilentlyContinue
 
 # -------------------------------------------------------------------
 # WINDOW LEVEL REFERENCES
@@ -346,11 +346,13 @@ function Restore-QOTMainTabs {
 # -------------------------------------------------------------------
 # EXPORTS
 # -------------------------------------------------------------------
-
 Export-ModuleMember -Function `
     New-QOTMainWindow, `
     Initialize-QOTMainWindow, `
     Start-QOTMainWindow, `
     Select-QOTPreferredTab, `
     Set-QOTStatus, `
-    Set-QOTSummary
+    Set-QOTSummary, `
+    Show-QOTSettingsPage, `
+    Restore-QOTMainTabs
+
