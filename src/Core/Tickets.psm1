@@ -317,7 +317,7 @@ function Invoke-QOEmailTicketPoll {
 
         $items = $null
         try { $items = $inbox.Items } catch { $items = $null }
-        if (-not $items) { Write-QOEmailPollLog "Mailbox $mb: inbox.Items failed"; continue }
+        if (-not $items) { Write-QOEmailPollLog "Mailbox ${mb}: inbox.Items failed"; continue }
 
         try { $items.Sort("[ReceivedTime]", $true) } catch {}
 
@@ -383,7 +383,7 @@ function Invoke-QOEmailTicketPoll {
                 Add-Member -NotePropertyName $key -NotePropertyValue ($latestSeen.ToString("o")) -Force
             Write-QOEmailPollLog "Mailbox $mb updated last processed to $($latestSeen.ToString('o'))"
         } else {
-            Write-QOEmailPollLog "Mailbox $mb: no new mail found"
+            Write-QOEmailPollLog "Mailbox ${mb}: no new mail found"
         }
     }
 
