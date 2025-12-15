@@ -444,7 +444,7 @@
                 </Grid>
             </TabItem>
 
-        </TabControl>
+        </ContentControl>
         </Grid>
 
         <!-- Status bar -->
