@@ -151,13 +151,16 @@
                         Background="Transparent"
                         BorderBrush="{StaticResource BorderBrush}"
                         ToolTip="Settings">
-                    <TextBlock FontFamily="Segoe MDL2 Assets"
+                
+                    <TextBlock x:Name="BtnSettingsIcon"
+                               FontFamily="Segoe MDL2 Assets"
                                FontSize="16"
                                Foreground="{StaticResource TextSubtle}"
                                Text="&#xE713;"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                 </Button>
+
 
                 <!-- App title -->
                 <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
