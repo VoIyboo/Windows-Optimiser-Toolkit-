@@ -49,41 +49,36 @@ $script:LastTab      = $null
 
 function Set-QOTControlText {
     param(
-        [Parameter(Mandatory)]
-        $Control,
-
-        [Parameter(Mandatory)]
-        [string]$Value
+        [Parameter(Mandatory)] $Control,
+        [Parameter(Mandatory)] [string] $Value
     )
 
     if (-not $Control) { return }
 
     try {
-        if ($Control -is [System.Windows.Controls.TextBlock]) {
+        # Most common: TextBlock / TextBox
+        if ($Control -is [System.Windows.Controls.TextBlock] -or
+            $Control -is [System.Windows.Controls.TextBox]) {
             $Control.Text = $Value
             return
         }
 
+        # Label + most WPF content controls
         if ($Control -is [System.Windows.Controls.Label] -or
-            $Control -is [System.Windows.Controls.Button]) {
+            $Control -is [System.Windows.Controls.ContentControl]) {
             $Control.Content = $Value
             return
         }
 
-        $props = $Control.PSObject.Properties.Name
-        if ($props -contains 'Text') {
+        # Fallback: try Text, then Content
+        $m = $Control | Get-Member -Name Text -MemberType Property -ErrorAction SilentlyContinue
+        if ($m) {
             $Control.Text = $Value
             return
         }
+    } catch {}
 
-        if ($props -contains 'Content') {
-            $Control.Content = $Value
-            return
-        }
-    }
-    catch {
-        # never let UI crash on text updates
-    }
+    try { $Control.Content = $Value } catch {}
 }
 
 # -------------------------------------------------------------------
