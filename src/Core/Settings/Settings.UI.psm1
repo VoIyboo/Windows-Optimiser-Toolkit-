@@ -75,6 +75,13 @@ function Initialize-QOSettingsUI {
     $btnAdd.Content = "Add"
     $btnAdd.Width   = 90
     [void]$inputRow.Children.Add($btnAdd)
+    
+    $btnRemove = New-Object System.Windows.Controls.Button
+    $btnRemove.Content = "Remove"
+    $btnRemove.Width   = 90
+    $btnRemove.Margin  = "8,0,0,0"
+    [void]$inputRow.Children.Add($btnRemove)
+
 
     [void]$panel.Children.Add($inputRow)
 
@@ -148,26 +155,21 @@ function Initialize-QOSettingsUI {
     })
 
     $btnAdd.Add_Click({
-        $email = $emailBox.Text.Trim()
-        if (-not $email) { return }
+    $email = $emailBox.Text.Trim()
+    if (-not $email) { return }
 
-        # basic sanity check
-        if ($email -notmatch '.+@.+\..+') { return }
+    if ($email -notmatch '.+@.+\..+') { return }
 
-        $s = Ensure-TicketEmailDefaults (Get-QOSettings)
+    $s = Ensure-TicketEmailDefaults (Get-QOSettings)
 
-        if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $email) {
-            $s.Tickets.EmailIntegration.MonitoredAddresses += $email
-            Save-QOSettings -Settings $s
-            Refresh-MonitoredList -ListBox $list
-        }
+    if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $email) {
+        $s.Tickets.EmailIntegration.MonitoredAddresses += $email
+        Save-QOSettings -Settings $s
+        Refresh-MonitoredList -ListBox $list
+    }
 
-        $emailBox.Text = ""
-    })
+    $emailBox.Text = ""
+})
 
-    # Finish
-    $root.Child = $grid
-    return $root
-}
 
 Export-ModuleMember -Function Initialize-QOSettingsUI
