@@ -49,9 +49,22 @@ function Get-QOSettings {
     $settings = $json | ConvertFrom-Json
 
     # ------------------------------
-    # Backward compatibility guards (Tickets email integration)
+    # Backward compatibility guards
     # ------------------------------
+    if (-not ($settings.PSObject.Properties.Name -contains "PreferredStartTab")) {
+        $settings | Add-Member -NotePropertyName PreferredStartTab -NotePropertyValue $defaults.PreferredStartTab
+    }
+    if (-not ($settings.PSObject.Properties.Name -contains "TicketsColumnLayout")) {
+        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
+    }
+    if (-not ($settings.PSObject.Properties.Name -contains "TicketStorePath")) {
+        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
+    }
+    if (-not ($settings.PSObject.Properties.Name -contains "LocalTicketBackupPath")) {
+        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
+    }
 
+    # Tickets.EmailIntegration (email-to-ticket)
     if (-not ($settings.PSObject.Properties.Name -contains "Tickets")) {
         $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{})
     }
@@ -68,41 +81,12 @@ function Get-QOSettings {
         $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @()
     }
 
-    # Ensure it's always an array
+    # Ensure MonitoredAddresses is always an array
     if ($null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
         $settings.Tickets.EmailIntegration.MonitoredAddresses = @()
     }
     elseif ($settings.Tickets.EmailIntegration.MonitoredAddresses -is [string]) {
         $settings.Tickets.EmailIntegration.MonitoredAddresses = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
-    }
-
-
-    if (-not ($settings.PSObject.Properties.Name -contains "Tickets")) {
-        $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue (
-            [PSCustomObject]@{
-                EmailIntegration = [PSCustomObject]@{
-                    Enabled            = $false
-                    MonitoredAddresses = @()
-                }
-            }
-        )
-    }
-
-    if (-not ($settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
-        $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
-            [PSCustomObject]@{
-                Enabled            = $false
-                MonitoredAddresses = @()
-            }
-        )
-    }
-
-    if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
-        $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false
-    }
-
-    if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
-        $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @()
     }
 
     return $settings
