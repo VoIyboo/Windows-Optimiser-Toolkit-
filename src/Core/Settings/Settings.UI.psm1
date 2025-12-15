@@ -28,7 +28,9 @@ function Initialize-QOSettingsUI {
     [System.Windows.Controls.Grid]::SetRow($title, 0)
     $grid.Children.Add($title) | Out-Null
 
-    # ------------------------------
+    return $root
+}
+# ------------------------------
 # Ticketing settings UI
 # ------------------------------
 if (-not (Get-Command Get-QOSettings -ErrorAction SilentlyContinue)) {
