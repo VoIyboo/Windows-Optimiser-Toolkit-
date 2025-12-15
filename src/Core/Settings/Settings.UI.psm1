@@ -213,34 +213,42 @@ function Initialize-QOSettingsUI {
         }
     })
 
-    $btnRemove.Add_Click({
-        $sel = $list.SelectedItem
-        if (-not $sel) { return }
+   $btnAdd.Add_Click({
+    try {
+        $addr = [string]$emailBox.Text
+        if ($null -eq $addr) { $addr = "" }
+        $addr = $addr.Trim()
 
-        $s = Ensure-QOTicketEmailDefaults (Get-QOSettings)
-        $s.Tickets.EmailIntegration.MonitoredAddresses = @(
-            @($s.Tickets.EmailIntegration.MonitoredAddresses) |
-            ForEach-Object { "$_".Trim() } |
-            Where-Object { $_ -and $_ -ne "$sel" }
-        )
+        if ([string]::IsNullOrWhiteSpace($addr)) { return }
+        if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
 
-        Save-QOSettings -Settings $s
+        $s = Get-QOSettings
+
+        # Ensure the whole tree exists
+        if (-not $s.Tickets) {
+            $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+        if (-not $s.Tickets.EmailIntegration) {
+            $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+        if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
+            $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
+        }
+
+        # Normalise to an array no matter what
+        $s.Tickets.EmailIntegration.MonitoredAddresses = @($s.Tickets.EmailIntegration.MonitoredAddresses)
+
+        if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
+            $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
+            Save-QOSettings -Settings $s
+        }
+
+        $emailBox.Text = ""
         Refresh-MonitoredList -ListBox $list
-    })
-
-    $btnCheck.Add_Click({
-        try {
-            if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
-                Invoke-QOEmailTicketPoll | Out-Null
-            }
-            if (Get-Command Update-QOTicketsGrid -ErrorAction SilentlyContinue) {
-                Update-QOTicketsGrid
-            }
-        } catch {}
-    })
-
-    $root.Child = $grid
-    return $root
-}
+    }
+    catch {
+        Write-Host "Add address failed: $($_.Exception.Message)"
+    }
+})
 
 Export-ModuleMember -Function Initialize-QOSettingsUI
