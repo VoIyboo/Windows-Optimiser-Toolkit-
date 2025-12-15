@@ -4,7 +4,9 @@
 $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")  -Force -ErrorAction SilentlyContinue
+Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")  -Force -ErrorAction Stop
+
+
 
 function Refresh-MonitoredList {
     param([Parameter(Mandatory)] $ListBox)
