@@ -92,6 +92,24 @@ $list = New-Object System.Windows.Controls.ListBox
 $list.MinHeight = 140
 $panel.Children.Add($list) | Out-Null
 
+function Refresh-MonitoredList {
+    param($ListBox)
+
+    $ListBox.Items.Clear()
+    $s = Get-QOSettings
+
+    foreach ($addr in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
+        if ($addr) {
+            [void]$ListBox.Items.Add($addr)
+        }
+    }
+}
+
+# Initial load
+Refresh-MonitoredList -ListBox $list
+
+
+
 $hint = New-Object System.Windows.Controls.TextBlock
 $hint.Text = "Add one or more mailbox addresses. Automatic email polling will be added later."
 $hint.Margin = "0,8,0,0"
