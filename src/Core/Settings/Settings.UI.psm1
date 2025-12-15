@@ -183,41 +183,52 @@ function Initialize-QOSettingsUI {
         Set-EmailControlsEnabledState $false $emailBox $btnAdd $btnRemove $btnCheck $list $hint
     })
 
-    # ADD
-    $btnAdd.Add_Click({
-        try {
-            $addr = [string]$emailBox.Text
-            if ($null -eq $addr) { $addr = "" }
-            $addr = $addr.Trim()
+$btnAdd.Add_Click({
+    try {
+        $addr = $emailBox.Text
+        if ($null -eq $addr) { $addr = "" }
+        $addr = $addr.Trim()
 
-            if ([string]::IsNullOrWhiteSpace($addr)) { return }
-            if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
-
-            $s = Get-QOSettings
-
-            if (-not $s.Tickets) {
-                $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
-            }
-            if (-not $s.Tickets.EmailIntegration) {
-                $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
-            }
-            if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
-                $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
-            }
-
-            $s.Tickets.EmailIntegration.MonitoredAddresses = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-
-            if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
-                $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
-            }
-
-            Save-QOSettings -Settings $s
-
-            $emailBox.Text = ""
-            Refresh-MonitoredList -ListBox $list
+        if ([string]::IsNullOrWhiteSpace($addr)) {
+            [System.Windows.MessageBox]::Show("Type an email address first 🙂","Settings")
+            return
         }
-        catch { }
-    })
+
+        if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
+            [System.Windows.MessageBox]::Show("That email does not look valid.","Settings")
+            return
+        }
+
+        $s = Get-QOSettings
+
+        if (-not $s.Tickets) { $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force }
+        if (-not $s.Tickets.EmailIntegration) { $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force }
+
+        $ma = $s.Tickets.EmailIntegration.MonitoredAddresses
+        if ($null -eq $ma) {
+            $s.Tickets.EmailIntegration.MonitoredAddresses = @()
+        }
+        elseif ($ma -is [string]) {
+            $t = $ma.Trim()
+            $s.Tickets.EmailIntegration.MonitoredAddresses = if ($t) { @($t) } else { @() }
+        }
+        else {
+            $s.Tickets.EmailIntegration.MonitoredAddresses = @($ma)
+        }
+
+        if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
+            $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
+            Save-QOSettings -Settings $s
+        }
+
+        $emailBox.Text = ""
+        Refresh-MonitoredList -ListBox $list
+    }
+    catch {
+        [System.Windows.MessageBox]::Show("Add failed: $($_.Exception.Message)","Settings")
+    }
+})
+
 
     # REMOVE
     $btnRemove.Add_Click({
