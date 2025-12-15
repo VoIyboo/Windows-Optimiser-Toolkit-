@@ -1,74 +1,13 @@
 # Tickets.psm1
-# Storage and basic model for Studio Voly Ticketing System
+# Storage + email ingestion for Quinn Optimiser Toolkit
 
-# Import Settings module (even though we have local helpers here)
+$ErrorActionPreference = "Stop"
+
+# Import shared settings
 Import-Module "$PSScriptRoot\Settings.psm1" -Force
 
 # =====================================================================
-# SETTINGS ENGINE (LOCAL TO TICKETS MODULE)
-# =====================================================================
-
-# Path for settings.json
-$script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
-
-function Get-QOSettings {
-    if (-not (Test-Path $script:QOSettingsPath)) {
-
-        $default = [PSCustomObject]@{
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
-        }
-
-        $dir = Split-Path $script:QOSettingsPath
-        if (-not (Test-Path $dir)) {
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        }
-
-        $default | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
-        return $default
-    }
-
-    $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
-    if (-not $json) {
-        return [PSCustomObject]@{
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
-        }
-    }
-
-    $settings = $json | ConvertFrom-Json
-
-    if (-not $settings.PSObject.Properties.Name -contains 'TicketsColumnLayout') {
-        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
-    }
-    if (-not $settings.PSObject.Properties.Name -contains 'TicketStorePath') {
-        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
-    }
-    if (-not $settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath') {
-        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
-    }
-
-    return $settings
-}
-
-function Save-QOSettings {
-    param(
-        [Parameter(Mandatory)]
-        $Settings
-    )
-
-    $dir = Split-Path $script:QOSettingsPath
-    if (-not (Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-
-    $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
-}
-
-# =====================================================================
-# TICKET STORAGE PATHS
+# STORAGE PATHS
 # =====================================================================
 
 $script:TicketStorePath  = $null
@@ -76,58 +15,38 @@ $script:TicketBackupPath = $null
 
 function Initialize-QOTicketStorage {
 
-    if ($script:TicketStorePath -and $script:TicketBackupPath) {
-        return
+    if ($script:TicketStorePath -and $script:TicketBackupPath) { return }
+
+    $s = Get-QOSettings
+
+    if ([string]::IsNullOrWhiteSpace($s.TicketStorePath)) {
+        $dir  = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets"
+        $file = Join-Path $dir "Tickets.json"
+        $s.TicketStorePath = $file
     }
 
-    # Load settings
-    $settings = Get-QOSettings
-
-    # Ensure the properties exist on the settings object
-    if (-not ($settings.PSObject.Properties.Name -contains 'TicketStorePath')) {
-        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
+    if ([string]::IsNullOrWhiteSpace($s.LocalTicketBackupPath)) {
+        $s.LocalTicketBackupPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
     }
 
-    if (-not ($settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath')) {
-        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
-    }
+    Save-QOSettings -Settings $s
 
-    # Default primary store:
-    #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Tickets.json
-    if ([string]::IsNullOrWhiteSpace($settings.TicketStorePath)) {
-        $defaultTicketsDir  = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\Tickets'
-        $defaultTicketsFile = Join-Path $defaultTicketsDir 'Tickets.json'
-        $settings.TicketStorePath = $defaultTicketsFile
-    }
+    $script:TicketStorePath  = $s.TicketStorePath
+    $script:TicketBackupPath = $s.LocalTicketBackupPath
 
-    # Default backup folder:
-    #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Backups
-    if ([string]::IsNullOrWhiteSpace($settings.LocalTicketBackupPath)) {
-        $defaultBackupDir = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\Tickets\Backups'
-        $settings.LocalTicketBackupPath = $defaultBackupDir
-    }
-
-    # Persist any new defaults back to settings.json
-    Save-QOSettings -Settings $settings
-
-    # Cache
-    $script:TicketStorePath  = $settings.TicketStorePath
-    $script:TicketBackupPath = $settings.LocalTicketBackupPath
-
-    # Ensure directories
     $storeDir = Split-Path -Parent $script:TicketStorePath
-    if (-not (Test-Path -LiteralPath $storeDir)) {
+    if (-not (Test-Path $storeDir)) {
         New-Item -ItemType Directory -Path $storeDir -Force | Out-Null
     }
 
-    if (-not (Test-Path -LiteralPath $script:TicketBackupPath)) {
+    if (-not (Test-Path $script:TicketBackupPath)) {
         New-Item -ItemType Directory -Path $script:TicketBackupPath -Force | Out-Null
     }
 
-    # Ensure main tickets file
-    if (-not (Test-Path -LiteralPath $script:TicketStorePath)) {
-        $db = New-QODefaultTicketDatabase
-        $db | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
+    if (-not (Test-Path $script:TicketStorePath)) {
+        New-QODefaultTicketDatabase |
+            ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
     }
 }
 
@@ -147,325 +66,147 @@ function Get-QOTickets {
     Initialize-QOTicketStorage
 
     try {
-        $json = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop
-        if ([string]::IsNullOrWhiteSpace($json)) {
-            return New-QODefaultTicketDatabase
-        }
-
-        $db = $json | ConvertFrom-Json
-
-        if (-not $db.PSObject.Properties.Name.Contains('SchemaVersion')) {
-            $db | Add-Member -NotePropertyName 'SchemaVersion' -NotePropertyValue 1
-        }
-        if (-not $db.PSObject.Properties.Name.Contains('Tickets')) {
-            $db | Add-Member -NotePropertyName 'Tickets' -NotePropertyValue @()
-        }
-
-        if ($db.Tickets -isnot [System.Collections.IEnumerable]) {
-            $db.Tickets = @($db.Tickets)
-        }
-
+        $json = Get-Content $script:TicketStorePath -Raw
+        $db   = $json | ConvertFrom-Json
+        if (-not $db.Tickets) { $db.Tickets = @() }
         return $db
     }
     catch {
-        try {
-            if (Test-Path -LiteralPath $script:TicketStorePath) {
-                $backupName = Join-Path $script:TicketBackupPath ("Tickets_corrupt_{0}.json" -f (Get-Date -Format 'yyyyMMddHHmmss'))
-                Copy-Item -LiteralPath $script:TicketStorePath $backupName -ErrorAction SilentlyContinue
-            }
-        } catch {}
-
         $db = New-QODefaultTicketDatabase
-        $db | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
+        $db | ConvertTo-Json -Depth 6 | Set-Content $script:TicketStorePath
         return $db
     }
 }
 
 function Save-QOTickets {
-    param(
-        [Parameter(Mandatory)]
-        $TicketsDb
-    )
+    param([Parameter(Mandatory)] $TicketsDb)
 
     Initialize-QOTicketStorage
 
-    $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
+    $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content $script:TicketStorePath
 
     try {
-        $stamp      = Get-Date -Format 'yyyyMMddHHmmss'
-        $backupName = Join-Path $script:TicketBackupPath ("Tickets_{0}.json" -f $stamp)
-        $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $backupName -Encoding UTF8
+        $stamp = Get-Date -Format "yyyyMMddHHmmss"
+        $backup = Join-Path $script:TicketBackupPath "Tickets_$stamp.json"
+        $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content $backup
     } catch {}
 }
 
 # =====================================================================
-# TICKET CRUD
+# TICKET MODEL + CRUD
 # =====================================================================
 
 function New-QOTicket {
     param(
-        [Parameter(Mandatory)]
         [string]$Title,
-
-        [string]$Description = '',
-        [string]$Category    = 'General',
-        [string]$Priority    = 'Normal',
-        [string]$Source      = 'Manual',
-        [string]$RequesterName  = $null,
+        [string]$Description = "",
+        [string]$Category = "General",
+        [string]$Priority = "Normal",
+        [string]$Source = "Manual",
         [string]$RequesterEmail = $null,
-        [string[]]$Tags         = @()
+        [string[]]$Tags = @()
     )
 
-    $now      = Get-Date
-    $ticketId = [guid]::NewGuid().ToString()
-    $user     = $env:USERNAME
-
-    $history = @(
-        [pscustomobject]@{
-            At            = $now
-            Action        = 'Created'
-            ByUserName    = $user
-            ByDisplayName = $user
-            FromStatus    = $null
-            ToStatus      = 'New'
-            Notes         = 'Ticket created'
-        }
-    )
-
+    $now = Get-Date
     [pscustomobject]@{
-        Id             = $ticketId
+        Id             = [guid]::NewGuid().ToString()
         CreatedAt      = $now
         UpdatedAt      = $now
-        Status         = 'New'
+        Status         = "New"
         Priority       = $Priority
         Category       = $Category
         Title          = $Title
         Description    = $Description
         Source         = $Source
-        RequesterName  = $RequesterName
         RequesterEmail = $RequesterEmail
         Tags           = $Tags
-        History        = $history
+        History        = @(
+            [pscustomobject]@{
+                At     = $now
+                Action = "Created"
+            }
+        )
     }
 }
 
 function Add-QOTicket {
-    param(
-        [Parameter(Mandatory)]
-        $Ticket
-    )
+    param([Parameter(Mandatory)] $Ticket)
 
     $db = Get-QOTickets
-
-    $tickets = @()
-    if ($db.Tickets) {
-        $tickets = @($db.Tickets)
-    }
-
-    $tickets += $Ticket
-    $db.Tickets = $tickets
-
+    $db.Tickets = @($db.Tickets) + $Ticket
     Save-QOTickets -TicketsDb $db
     return $Ticket
 }
 
+# =====================================================================
+# EMAIL → TICKET POLLER (OUTLOOK)
+# =====================================================================
 
+function Invoke-QOEmailTicketPoll {
 
+    $s = Get-QOSettings
+    if (-not $s.Tickets.EmailIntegration.Enabled) { return @() }
 
+    if (-not $s.Tickets.EmailIntegration.MonitoredAddresses) { return @() }
 
-
-
-function New-QOTicketFromEmail {
-    <#
-        Creates a new ticket from an email payload.
-
-        Important notes:
-        - This does NOT poll mailboxes. It only converts a provided email into a ticket.
-        - It uses Settings.json to confirm EmailIntegration.Enabled is on.
-        - It currently treats MonitoredAddresses as an allowlist for the sender address.
-          If later you decide MonitoredAddresses means "mailboxes to watch", we will adjust this check.
-    #>
-
-    param(
-        [Parameter(Mandatory)] [string] $From,
-        [Parameter(Mandatory)] [string] $Subject,
-        [Parameter()]          [string] $Body = "",
-        [Parameter()]          $ReceivedAt = (Get-Date)   # Allow DateTime or string
-    )
-
-    # Load settings (this module currently has its own Get-QOSettings helper)
-    $settings = Get-QOSettings
-
-    # Validate settings structure
-    if (-not $settings) { throw "Settings could not be loaded." }
-    if (-not $settings.PSObject.Properties.Name -contains "Tickets") { throw "Tickets settings missing." }
-    if (-not $settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration") { throw "EmailIntegration settings missing." }
-    if (-not $settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled") { throw "EmailIntegration.Enabled missing." }
-
-    # Respect the feature toggle
-    if (-not [bool]$settings.Tickets.EmailIntegration.Enabled) {
-        throw "Email to ticket is disabled in Settings."
+    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "LastProcessedByMailbox")) {
+        $s.Tickets.EmailIntegration |
+            Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
-    # Normalise allowed list to an array
-    $allowed = @()
-    if ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses") {
-        if ($null -ne $settings.Tickets.EmailIntegration.MonitoredAddresses) {
-            $allowed = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
-        }
-    }
+    $created = @()
 
-    # Optional sender allowlist behaviour:
-    # If the allowed list has entries, require the sender to be in it.
-    if ($allowed.Count -gt 0) {
-        $allowedNorm = $allowed | ForEach-Object { "$_".Trim().ToLower() }
-        $fromNorm = $From.Trim().ToLower()
+    $outlook = New-Object -ComObject Outlook.Application
+    $ns = $outlook.GetNamespace("MAPI")
 
-        if ($allowedNorm -notcontains $fromNorm) {
-            throw "From address not in monitored list."
-        }
-    }
+    foreach ($mb in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
 
-    # Parse ReceivedAt safely into a DateTime
-    $receivedDt = $null
-    if ($ReceivedAt -is [datetime]) {
-        $receivedDt = $ReceivedAt
-    }
-    else {
+        $key = $mb.Trim().ToLower()
+
+        $since = $null
         try {
-            $receivedDt = [datetime]::Parse("$ReceivedAt")
+            $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
+            if ($raw) { $since = [datetime]::Parse($raw) }
+        } catch {}
+
+        if (-not $since) { $since = (Get-Date).AddDays(-3) }
+
+        try {
+            $r = $ns.CreateRecipient($mb)
+            $r.Resolve()
+            if (-not $r.Resolved) { continue }
+            $inbox = $ns.GetSharedDefaultFolder($r, 6)
         }
-        catch {
-            $receivedDt = Get-Date
+        catch { continue }
+
+        foreach ($mail in @($inbox.Items)) {
+
+            if (-not $mail.ReceivedTime) { continue }
+            if ($mail.ReceivedTime -le $since) { continue }
+
+            $ticket = New-QOTicket `
+                -Title $mail.Subject `
+                -Description $mail.Body `
+                -Category "Email" `
+                -Priority "Normal" `
+                -Source "Email" `
+                -RequesterEmail $mail.SenderEmailAddress `
+                -Tags @("Email",$key)
+
+            $ticket.CreatedAt = $mail.ReceivedTime
+            $ticket.UpdatedAt = $mail.ReceivedTime
+
+            Add-QOTicket -Ticket $ticket | Out-Null
+            $created += $ticket
+
+            $s.Tickets.EmailIntegration.LastProcessedByMailbox |
+                Add-Member -NotePropertyName $key -NotePropertyValue ($mail.ReceivedTime.ToString("o")) -Force
         }
     }
 
-    # Build a ticket using your existing model function so schema stays consistent
-    $ticket = New-QOTicket `
-        -Title $Subject `
-        -Description $Body `
-        -Category 'Email' `
-        -Priority 'Normal' `
-        -Source 'Email' `
-        -RequesterEmail $From `
-        -RequesterName $null `
-        -Tags @("Email")
-
-    # Override timestamps to match the email received time
-    $ticket.CreatedAt = $receivedDt
-    $ticket.UpdatedAt = $receivedDt
-
-    # Store it
-    Add-QOTicket -Ticket $ticket | Out-Null
-
-    return $ticket
+    Save-QOSettings -Settings $s
+    return $created
 }
-
-
-
-
-
-
-
-
-function Get-QOTicketById {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id
-    )
-
-    $db = Get-QOTickets
-    $tickets = $db.Tickets
-
-    $tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
-}
-
-function Set-QOTicketStatus {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id,
-        [Parameter(Mandatory)]
-        [string]$Status,
-        [string]$Notes = ''
-    )
-
-    $db = Get-QOTickets
-    $ticket = Get-QOTicketById -Id $Id
-    if (-not $ticket) { throw "Ticket with Id '$Id' not found." }
-
-    $now = Get-Date
-
-    $oldStatus = $ticket.Status
-    $ticket.Status    = $Status
-    $ticket.UpdatedAt = $now
-
-    if (-not $ticket.FirstResponseAt -and $Status -ne 'New') {
-        $ticket.FirstResponseAt = $now
-    }
-
-    if ($Status -eq 'Resolved' -and -not $ticket.ResolvedAt) {
-        $ticket.ResolvedAt = $now
-    }
-
-    $user = $env:USERNAME
-
-    $ticket.History += [pscustomobject]@{
-        At            = $now
-        Action        = 'StatusChanged'
-        ByUserName    = $user
-        ByDisplayName = $user
-        FromStatus    = $oldStatus
-        ToStatus      = $Status
-        Notes         = $Notes
-    }
-
-    Save-QOTickets -TicketsDb $db
-    return $ticket
-}
-
-function Set-QOTicketTitle {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id,
-        [Parameter(Mandatory)]
-        [string]$Title
-    )
-
-    $db = Get-QOTickets
-    $ticket = Get-QOTicketById -Id $Id
-    if (-not $ticket) { throw "Ticket with Id '$Id' not found." }
-
-    $ticket.Title     = $Title
-    $ticket.UpdatedAt = Get-Date
-
-    Save-QOTickets -TicketsDb $db
-    return $ticket
-}
-
-
-function Remove-QOTicket {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id
-    )
-
-    $db = Get-QOTickets
-
-    $tickets = if ($db.Tickets) { @($db.Tickets) } else { @() }
-
-    $beforeCount = $tickets.Count
-
-    # Remove matching ticket
-    $tickets = @($tickets | Where-Object { $_.Id -ne $Id })
-
-    $db.Tickets = $tickets
-    Save-QOTickets -TicketsDb $db
-
-    # Return true if something was removed
-    return ($beforeCount -ne $tickets.Count)
-}
-
-
 
 # =====================================================================
 # EXPORTS
@@ -473,13 +214,8 @@ function Remove-QOTicket {
 
 Export-ModuleMember -Function `
     Initialize-QOTicketStorage, `
-    New-QODefaultTicketDatabase, `
     Get-QOTickets, `
     Save-QOTickets, `
     New-QOTicket, `
     Add-QOTicket, `
-    Get-QOTicketById, `
-    Set-QOTicketStatus, `
-    Set-QOTicketTitle, `
-    Remove-QOTicket, `
-    New-QOTicketFromEmail
+    Invoke-QOEmailTicketPoll
