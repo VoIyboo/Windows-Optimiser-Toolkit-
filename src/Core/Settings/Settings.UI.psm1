@@ -1,5 +1,4 @@
-Import-Module "$PSScriptRoot\..\Settings.psm1" -Force -ErrorAction SilentlyContinue
-
+Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
 
 
 $ErrorActionPreference = "Stop"
@@ -32,7 +31,24 @@ function Initialize-QOSettingsUI {
     # ------------------------------
 # Ticketing settings UI
 # ------------------------------
+if (-not (Get-Command Get-QOSettings -ErrorAction SilentlyContinue)) {
+    throw "Settings UI: Get-QOSettings not available. Core Settings.psm1 did not import."
+}
+
 $settings = Get-QOSettings
+
+if (-not $settings.Tickets) {
+    $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+}
+if (-not $settings.Tickets.EmailIntegration) {
+    $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue (
+        [pscustomobject]@{ Enabled = $false; MonitoredAddresses = @() }
+    ) -Force
+}
+if ($null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
+    $settings.Tickets.EmailIntegration.MonitoredAddresses = @()
+}
+
 
 $panel = New-Object System.Windows.Controls.StackPanel
 $panel.Margin = "0,0,0,0"
@@ -110,7 +126,9 @@ $btnAdd.Add_Click({
     if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $email) {
         $s.Tickets.EmailIntegration.MonitoredAddresses += $email
         Save-QOSettings -Settings $s
+        $list.ItemsSource = $null
         $list.ItemsSource = @($s.Tickets.EmailIntegration.MonitoredAddresses)
+
     }
 
     $emailBox.Text = ""
