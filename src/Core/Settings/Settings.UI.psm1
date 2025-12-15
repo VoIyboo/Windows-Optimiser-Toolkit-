@@ -147,19 +147,22 @@ function Initialize-QOSettingsUI {
     })
 
     # ADD
-    $btnAdd.Add_Click({
-        $addr = ($emailBox.Text ?? "").Trim()
-        if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
+$btnAdd.Add_Click({
+    $addr = $emailBox.Text
+    if ($null -eq $addr) { $addr = "" }
+    $addr = $addr.Trim()
 
-        $s = Get-QOSettings
-        if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
-            $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
-            Save-QOSettings -Settings $s
-        }
+    if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { return }
 
-        $emailBox.Text = ""
-        Refresh-MonitoredList -ListBox $list
-    })
+    $s = Get-QOSettings
+    if ($s.Tickets.EmailIntegration.MonitoredAddresses -notcontains $addr) {
+        $s.Tickets.EmailIntegration.MonitoredAddresses += $addr
+        Save-QOSettings -Settings $s
+    }
+
+    $emailBox.Text = ""
+    Refresh-MonitoredList -ListBox $list
+})
 
     # REMOVE
     $btnRemove.Add_Click({
