@@ -117,8 +117,9 @@
             <Setter Property="Padding" Value="10,4" />
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#FFFFFF" />
-                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                    <Setter Property="Background" Value="#020617" />
+                    <Setter Property="Foreground" Value="White" />
+
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -177,7 +178,11 @@
 
         <!-- Main tabs -->
         <ContentControl Grid.Row="1" Margin="10" x:Name="MainContentHost">
-            <TabControl x:Name="MainTabControl">
+            <TabControl x:Name="MainTabControl"
+            Background="#0F172A"
+            BorderBrush="#111827"
+            BorderThickness="1"
+            Padding="0">
 
             <!-- Tweaks & Cleaning -->
             <TabItem x:Name="TabCleaning" Header="Tweaks &amp; Cleaning">
@@ -333,7 +338,7 @@
             <!-- Advanced -->
             <TabItem x:Name="TabAdvanced" Header="Advanced">
                 <Grid Margin="5,10,5,5">
-                    <GroupBox Header="Advanced features (placeholder)">
+                    <GroupBox Header="Advanced features (placeholder)" Margin="0">
                         <TextBlock Text="Advanced cleaning and network / services tools will appear here."
                                    Foreground="{StaticResource TextSubtle}"
                                    TextWrapping="Wrap" />
