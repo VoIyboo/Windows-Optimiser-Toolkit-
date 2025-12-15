@@ -19,13 +19,13 @@ function Initialize-QOTicketStorage {
 
     $s = Get-QOSettings
 
-    if ([string]::IsNullOrWhiteSpace($s.TicketStorePath)) {
+    if ([string]::IsNullOrWhiteSpace([string]$s.TicketStorePath)) {
         $dir  = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets"
         $file = Join-Path $dir "Tickets.json"
         $s.TicketStorePath = $file
     }
 
-    if ([string]::IsNullOrWhiteSpace($s.LocalTicketBackupPath)) {
+    if ([string]::IsNullOrWhiteSpace([string]$s.LocalTicketBackupPath)) {
         $s.LocalTicketBackupPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
     }
 
@@ -78,13 +78,10 @@ function Get-QOTickets {
             $db | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
         }
 
-        # Normalise to array
         $db.Tickets = @($db.Tickets)
-
         return $db
     }
     catch {
-        # If corrupted, back it up then reset
         try {
             $stamp = Get-Date -Format "yyyyMMddHHmmss"
             $bad   = Join-Path $script:TicketBackupPath "Tickets_corrupt_$stamp.json"
@@ -189,37 +186,66 @@ function Get-QOTicketById {
 # EMAIL -> TICKET POLLER (OUTLOOK COM)
 # =====================================================================
 
+function Get-QOCurrentSmtpAddress {
+    param([Parameter(Mandatory)] $Namespace)
+
+    try {
+        $ae = $Namespace.CurrentUser.AddressEntry
+        if ($ae) {
+            $ex = $ae.GetExchangeUser()
+            if ($ex -and $ex.PrimarySmtpAddress) { return [string]$ex.PrimarySmtpAddress }
+        }
+    } catch {}
+
+    return $null
+}
+
+function Get-QOMailSenderAddress {
+    param([Parameter(Mandatory)] $MailItem)
+
+    # Best effort: returns SMTP where possible
+    try {
+        $addr = [string]$MailItem.SenderEmailAddress
+        if (-not [string]::IsNullOrWhiteSpace($addr)) { return $addr }
+    } catch {}
+
+    try {
+        $name = [string]$MailItem.SenderName
+        if (-not [string]::IsNullOrWhiteSpace($name)) { return $name }
+    } catch {}
+
+    return ""
+}
+
 function Get-QOInboxFolder {
     param(
         [Parameter(Mandatory)] $Namespace,
         [Parameter(Mandatory)] [string] $Mailbox
     )
 
-    $mb = $Mailbox
+    $mb = [string]$Mailbox
     if ($null -eq $mb) { $mb = "" }
-    $mb = "$mb".Trim()
+    $mb = $mb.Trim()
     if ([string]::IsNullOrWhiteSpace($mb)) { return $null }
 
-    # If mailbox is "me", use default inbox
+    # If mailbox is "me", use default inbox (most reliable)
     $me = Get-QOCurrentSmtpAddress -Namespace $Namespace
     if ($me) {
-        $meNorm = "$me".Trim().ToLower()
-        $mbNorm = "$mb".Trim().ToLower()
-        if ($meNorm -eq $mbNorm) {
+        if ($me.Trim().ToLower() -eq $mb.ToLower()) {
             try { return $Namespace.GetDefaultFolder(6) } catch {}
         }
     }
 
-    # Shared mailbox inbox (most reliable for shared mailboxes)
+    # Try shared default inbox (shared mailbox you have access to)
     try {
         $r = $Namespace.CreateRecipient($mb)
-        $null = $r.Resolve()
+        $r.Resolve() | Out-Null
         if ($r -and $r.Resolved) {
             return $Namespace.GetSharedDefaultFolder($r, 6)
         }
     } catch {}
 
-    # Fallback: try mailbox root then Inbox
+    # Try direct folder access by display name
     try {
         $root = $Namespace.Folders.Item($mb)
         if ($root) {
@@ -244,12 +270,14 @@ function Invoke-QOEmailTicketPoll {
         $mailboxes = @($s.Tickets.EmailIntegration.MonitoredAddresses) |
             Where-Object { $_ } |
             ForEach-Object { "$_".Trim() } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+            Where-Object { $_ }
     }
     if ($mailboxes.Count -lt 1) { return @() }
 
+    # Ensure per-mailbox state exists
     if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "LastProcessedByMailbox")) {
-        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
+        $s.Tickets.EmailIntegration |
+            Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
     $created = @()
@@ -259,12 +287,25 @@ function Invoke-QOEmailTicketPoll {
 
     foreach ($mb in $mailboxes) {
 
-        $key = "$mb".Trim().ToLower()
+        $key = $mb.Trim().ToLower()
 
+        # Load last processed state
         $since = $null
+        $lastEntry = $null
         try {
-            $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
-            if ($raw) { $since = [datetime]::Parse($raw) }
+            $state = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
+            if ($state) {
+                if ($state.PSObject.Properties.Name -contains "LastReceived") {
+                    if ($state.LastReceived) { $since = [datetime]::Parse([string]$state.LastReceived) }
+                }
+                if ($state.PSObject.Properties.Name -contains "LastEntryId") {
+                    $lastEntry = [string]$state.LastEntryId
+                }
+            } else {
+                # Back-compat if it used to be a raw string
+                $raw = $s.Tickets.EmailIntegration.LastProcessedByMailbox.$key
+                if ($raw -and ($raw -is [string])) { $since = [datetime]::Parse([string]$raw) }
+            }
         } catch {}
 
         if (-not $since) { $since = (Get-Date).AddDays(-3) }
@@ -276,37 +317,46 @@ function Invoke-QOEmailTicketPoll {
         try { $items.Sort("[ReceivedTime]", $true) } catch {}
 
         $latestSeen = $since
+        $latestEntry = $lastEntry
 
+        # Outlook COM collections are 1-based
         for ($i = 1; $i -le $items.Count; $i++) {
 
             $mail = $null
             try { $mail = $items.Item($i) } catch { continue }
             if (-not $mail) { continue }
 
+            # Only MailItem class 43
             try { if ($mail.Class -ne 43) { continue } } catch { continue }
 
             $rt = $null
             try { $rt = $mail.ReceivedTime } catch { $rt = $null }
             if (-not $rt) { continue }
 
-            if ($rt -le $since) { break }
+            # sorted newest-first
+            if ($rt -lt $since) { break }
 
-            if ($rt -gt $latestSeen) { $latestSeen = $rt }
+            # avoid reprocessing the exact boundary item
+            $entryId = $null
+            try { $entryId = [string]$mail.EntryID } catch { $entryId = $null }
+            if ($rt -eq $since -and $lastEntry -and $entryId -and ($entryId -eq $lastEntry)) {
+                break
+            }
+
+            if ($rt -gt $latestSeen) {
+                $latestSeen = $rt
+                $latestEntry = $entryId
+            }
 
             $subject = ""
             $body    = ""
-            $from    = ""
-
             try { $subject = [string]$mail.Subject } catch {}
             try { $body    = [string]$mail.Body } catch {}
 
-            try {
-                $from = [string]$mail.SenderEmailAddress
-                if ([string]::IsNullOrWhiteSpace($from)) { $from = [string]$mail.SenderName }
-            } catch {}
-
             $title = $subject
             if ([string]::IsNullOrWhiteSpace($title)) { $title = "(No subject)" }
+
+            $from = Get-QOMailSenderAddress -MailItem $mail
 
             $ticket = New-QOTicket `
                 -Title $title `
@@ -324,14 +374,20 @@ function Invoke-QOEmailTicketPoll {
             $created += $ticket
         }
 
-        if ($latestSeen -and $latestSeen -gt $since) {
+        # Save last processed state
+        if ($latestSeen -and ($latestSeen -ge $since)) {
+            $stateObj = [pscustomobject]@{
+                LastReceived = $latestSeen.ToString("o")
+                LastEntryId  = $latestEntry
+            }
+
             $s.Tickets.EmailIntegration.LastProcessedByMailbox |
-                Add-Member -NotePropertyName $key -NotePropertyValue ($latestSeen.ToString("o")) -Force
+                Add-Member -NotePropertyName $key -NotePropertyValue $stateObj -Force
         }
     }
 
     Save-QOSettings -Settings $s
-    return @($created)
+    return $created
 }
 
 # =====================================================================
