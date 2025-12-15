@@ -48,36 +48,6 @@ $script:LastTab      = $null
 # -------------------------------------------------------------------
 
 function New-QOTMainWindow {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$XamlPath
-    )
-
-
-    if (-not (Test-Path -LiteralPath $XamlPath)) {
-        throw "Main window XAML not found at: $XamlPath"
-    }
-
-    $xamlText = Get-Content -LiteralPath $XamlPath -Raw
-    $xml      = [xml]$xamlText
-    $reader   = New-Object System.Xml.XmlNodeReader $xml
-    $window   = [Windows.Markup.XamlReader]::Load($reader)
-
-    # Apply Studio Voly icon (optional)
-    $iconPath = Join-Path $PSScriptRoot "icon.ico"
-    if (Test-Path -LiteralPath $iconPath) {
-        Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
-
-        $bmp = New-Object System.Windows.Media.Imaging.BitmapImage
-        $bmp.BeginInit()
-        $bmp.UriSource = New-Object System.Uri($iconPath, [System.UriKind]::Absolute)
-        $bmp.EndInit()
-
-        $window.Icon = $bmp
-    }
-
-    return $window
-}
 
 
 # -------------------------------------------------------------------
