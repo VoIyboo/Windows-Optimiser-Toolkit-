@@ -323,8 +323,7 @@ function Restore-QOTMainTabs {
 
     if (-not $MainContentHost -or -not $MainTabControl -or -not $BtnSettings) { return }
 
-    $MainContentHost.Children.Clear()
-    [void]$MainContentHost.Children.Add($MainTabControl)
+    $MainContentHost.Content = $MainTabControl
 
     if ($script:LastTab) {
         $MainTabControl.SelectedItem = $script:LastTab
