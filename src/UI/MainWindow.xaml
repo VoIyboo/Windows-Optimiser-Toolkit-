@@ -407,9 +407,21 @@
                             </Grid>
                         </GroupBox.Header>
 
-                        <Grid Margin="4">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                        
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,8">
+                                <Button x:Name="BtnNewTicket" Content="New Ticket" MinWidth="110" />
+                                <Button x:Name="BtnRefreshTickets" Content="Refresh" MinWidth="90" />
+                                <Button x:Name="BtnDeleteTicket" Content="Delete Selected" MinWidth="130" />
+                            </StackPanel>
+
                             <DataGrid x:Name="TicketsGrid"
-                                      Margin="0,4,0,8"
+                                      Grid.Row="1"
+                                      Margin="0"
                                       AutoGenerateColumns="False"
                                       HeadersVisibility="Column"
                                       IsReadOnly="False"
@@ -446,6 +458,7 @@
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>
+
                     </GroupBox>
                 </Grid>
             </TabItem>
