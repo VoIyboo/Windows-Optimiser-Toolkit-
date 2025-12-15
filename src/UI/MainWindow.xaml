@@ -178,7 +178,7 @@
 
         <!-- Main tabs -->
         <ContentControl Grid.Row="1" Margin="10" x:Name="MainContentHost">
-            <TabControl x:Name="MainTabControl"
+            <TabControl x:Name="MainTabControl" Background="#0F172A">
             Background="#0F172A"
             BorderBrush="#111827"
             BorderThickness="1"
@@ -349,7 +349,7 @@
             <!-- Tickets -->
             <TabItem x:Name="TabTickets" Header="Tickets">
                 <Grid Margin="5,10,5,5">
-                    <GroupBox>
+                    <GroupBox Margin="0">
                         <GroupBox.Header>
                             <Grid>
                                 <Grid.ColumnDefinitions>
