@@ -301,8 +301,7 @@ function Show-QOTSettingsPage {
         $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow
     }
 
-    $MainContentHost.Children.Clear()
-    [void]$MainContentHost.Children.Add($script:SettingsView)
+    $MainContentHost.Content = $script:SettingsView
 
     $icon = $BtnSettings.Content
     if ($icon -is [System.Windows.Controls.TextBlock]) {
