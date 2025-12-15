@@ -201,9 +201,24 @@ function Initialize-QOTMainWindow {
 # -------------------------------------------------------------------
 
 function Start-QOTMainWindow {
+    try {
+        $window = Initialize-QOTMainWindow
 
-    $window = Initialize-QOTMainWindow
-    [void]$window.ShowDialog()
+        if (-not $window) {
+            throw "Initialize-QOTMainWindow returned null. Window was not created."
+        }
+
+        [void]$window.ShowDialog()
+    }
+    catch {
+        Write-Host ""
+        Write-Host "Startup crash:" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Stack trace:" -ForegroundColor Yellow
+        Write-Host $_.ScriptStackTrace -ForegroundColor Yellow
+        throw
+    }
 }
 
 
