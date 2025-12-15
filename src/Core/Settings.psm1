@@ -5,6 +5,47 @@ $ErrorActionPreference = "Stop"
 
 $script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
 
+function Repair-QOSettingsShape {
+    param([Parameter(Mandatory)] $s)
+
+    if (-not $s) { return $s }
+
+    if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
+        $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+
+    if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
+        $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+
+    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
+        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false -Force
+    }
+
+    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
+        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
+    }
+
+    $ma = $s.Tickets.EmailIntegration.MonitoredAddresses
+
+    if ($null -eq $ma) {
+        $s.Tickets.EmailIntegration.MonitoredAddresses = @()
+    }
+    elseif ($ma -is [string]) {
+        $trim = $ma.Trim()
+        $s.Tickets.EmailIntegration.MonitoredAddresses = if ($trim) { @($trim) } else { @() }
+    }
+    else {
+        $s.Tickets.EmailIntegration.MonitoredAddresses = @($ma) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
+    }
+
+    return $s
+}
+
+
+
+
+
 function Get-QOSettings {
 
     # ------------------------------
@@ -88,7 +129,6 @@ function Get-QOSettings {
     elseif ($settings.Tickets.EmailIntegration.MonitoredAddresses -is [string]) {
         $settings.Tickets.EmailIntegration.MonitoredAddresses = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
     }
-
     return $settings
 }
 
@@ -102,6 +142,8 @@ function Save-QOSettings {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
+
+    $Settings = Repair-QOSettingsShape -s $Settings
 
     $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
 }
