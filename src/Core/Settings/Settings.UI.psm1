@@ -172,7 +172,7 @@ function Initialize-QOSettingsUI {
     [void]$panel.Children.Add($list)
 
     $hint = New-Object System.Windows.Controls.TextBlock
-    $hint.Text = "Add one or more mailbox addresses. Automatic email polling will be added later."
+    Set-QOTControlTextSafe -Control $hint -Value "Add one or more mailbox addresses. Automatic email polling will be added later."
     $hint.Margin = "0,8,0,0"
     $hint.Foreground = (New-Object System.Windows.Media.SolidColorBrush ([System.Windows.Media.ColorConverter]::ConvertFromString("#9CA3AF")))
     [void]$panel.Children.Add($hint)
@@ -207,12 +207,12 @@ function Initialize-QOSettingsUI {
             $addr = "$($emailBox.Text)".Trim()
 
             if ([string]::IsNullOrWhiteSpace($addr)) {
-                $hint.Text = "Type an email address first."
+                 "Type an email address first."
                 return
             }
 
             if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-                $hint.Text = "That email address format looks invalid."
+                 "That email address format looks invalid."
                 return
             }
 
@@ -227,11 +227,11 @@ function Initialize-QOSettingsUI {
             }
 
             $emailBox.Text = ""
-            $hint.Text = "Saved."
+             "Saved."
             Refresh-MonitoredList -ListBox $list
         }
         catch {
-            $hint.Text = "Add failed. Check logs."
+             "Add failed. Check logs."
         }
     })
 
@@ -239,7 +239,7 @@ function Initialize-QOSettingsUI {
         try {
             $sel = $list.SelectedItem
             if (-not $sel) {
-                $hint.Text = "Select an address to remove."
+                 "Select an address to remove."
                 return
             }
 
@@ -251,11 +251,11 @@ function Initialize-QOSettingsUI {
 
             Save-QOSettings -Settings $s
 
-            $hint.Text = "Removed."
+             "Removed."
             Refresh-MonitoredList -ListBox $list
         }
         catch {
-            $hint.Text = "Remove failed. Check logs."
+             "Remove failed. Check logs."
         }
     })
 
@@ -269,17 +269,17 @@ function Initialize-QOSettingsUI {
                 }
 
                 if ($new.Count -gt 0) {
-                    $hint.Text = "Created $($new.Count) ticket(s) from email."
+                     "Created $($new.Count) ticket(s) from email."
                 } else {
-                    $hint.Text = "No new mail found."
+                     "No new mail found."
                 }
             }
             else {
-                $hint.Text = "Tickets module not loaded, cannot poll email."
+                 "Tickets module not loaded, cannot poll email."
             }
         }
         catch {
-            $hint.Text = "Email poll failed. Check logs."
+             "Email poll failed. Check logs."
         }
     })
 
