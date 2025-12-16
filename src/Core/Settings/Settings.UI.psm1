@@ -6,6 +6,51 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")   -Force -ErrorAction SilentlyContinue
 
+# -------------------------------------------------------------------
+# SAFE CONTROL TEXT SETTER
+# Prevents crashes when using Label vs TextBlock vs TextBox
+# -------------------------------------------------------------------
+function Set-QOTControlTextSafe {
+    param(
+        [Parameter(Mandatory)] $Control,
+        [Parameter(Mandatory)] [string] $Value
+    )
+
+    if (-not $Control) { return }
+
+    try {
+        # TextBlock / TextBox
+        if ($Control -is [System.Windows.Controls.TextBlock] -or
+            $Control -is [System.Windows.Controls.TextBox]) {
+            $Control.Text = $Value
+            return
+        }
+
+        # Label / ContentControl
+        if ($Control -is [System.Windows.Controls.Label] -or
+            $Control -is [System.Windows.Controls.ContentControl]) {
+            $Control.Content = $Value
+            return
+        }
+
+        # Fallback by property existence
+        if ($Control.PSObject.Properties.Name -contains 'Text') {
+            $Control.Text = $Value
+            return
+        }
+        if ($Control.PSObject.Properties.Name -contains 'Content') {
+            $Control.Content = $Value
+            return
+        }
+    }
+    catch {
+        # Never crash Settings UI
+    }
+}
+
+
+
+
 function Refresh-MonitoredList {
     param([Parameter(Mandatory)] $ListBox)
 
