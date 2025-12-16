@@ -8,7 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-# Absolute fallback so logging root can be set even if Logging.psm1 fails to import
+# Absolute fallback so Set-QLogRoot always exists, even if Logging.psm1 fails to import
 function global:Set-QLogRoot {
     param([string]$Root)
     $Global:QOTLogRoot = $Root
