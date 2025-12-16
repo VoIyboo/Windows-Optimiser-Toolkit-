@@ -26,6 +26,99 @@ function Ensure-QOTicketsStoreDirectory {
     }
     return $path
 }
+# =====================================================================
+# AGENT PRESENCE (who has connected to the shared Tickets folder)
+# =====================================================================
+
+function Get-QOAgentsStorePath {
+    # Agents.json lives next to Tickets.json in the same folder
+    $ticketsPath = Get-QOTicketsStorePath
+    $dir = Split-Path $ticketsPath -Parent
+    return (Join-Path $dir "Agents.json")
+}
+
+function Get-QOAgents {
+    $path = Get-QOAgentsStorePath
+
+    if (-not (Test-Path $path)) {
+        return @()
+    }
+
+    $raw = Get-Content -Path $path -Raw -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+
+    try {
+        $data = $raw | ConvertFrom-Json
+        return @($data)
+    } catch {
+        return @()
+    }
+}
+
+function Save-QOAgents {
+    param(
+        [Parameter(Mandatory)]
+        $Agents
+    )
+
+    $path = Get-QOAgentsStorePath
+    $dir = Split-Path $path -Parent
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    @($Agents) | ConvertTo-Json -Depth 6 | Set-Content -Path $path -Encoding UTF8
+}
+
+function Get-QOCurrentTechIdentity {
+    # TechId should be stable across machines for the same user (domain\user)
+    $techId = $env:USERNAME
+    try {
+        $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        if ($id -and $id.Name) { $techId = $id.Name }
+    } catch { }
+
+    # Friendly display name (fallbacks are fine)
+    $display = $env:USERNAME
+    try {
+        $display = [System.Globalization.CultureInfo]::CurrentCulture.TextInfo.ToTitleCase($env:USERNAME)
+    } catch { }
+
+    $pc = $env:COMPUTERNAME
+
+    [pscustomobject]@{
+        TechId       = [string]$techId
+        DisplayName  = [string]$display
+        ComputerName = [string]$pc
+    }
+}
+
+function Register-QOAgentPresence {
+    $me = Get-QOCurrentTechIdentity
+    $agents = @(Get-QOAgents)
+
+    $now = (Get-Date).ToString("o")
+
+    $existing = $agents | Where-Object { [string]$_.TechId -eq $me.TechId } | Select-Object -First 1
+    if ($existing) {
+        $existing.DisplayName  = $me.DisplayName
+        $existing.ComputerName = $me.ComputerName
+        $existing.LastSeenUtc  = $now
+    } else {
+        $agents += [pscustomobject]@{
+            TechId       = $me.TechId
+            DisplayName  = $me.DisplayName
+            ComputerName = $me.ComputerName
+            LastSeenUtc  = $now
+        }
+    }
+
+    Save-QOAgents -Agents $agents
+    return $agents
+}
+
+
+
 
 function Get-QOTickets {
     $path = Ensure-QOTicketsStoreDirectory
