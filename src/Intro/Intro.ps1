@@ -24,7 +24,7 @@ $script:QOTLogPath = $LogPath
 # ------------------------------
 # Fallback logging functions (only used if Logging.psm1 fails)
 # ------------------------------
-function global:Write-QLog {
+function Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
@@ -42,19 +42,20 @@ function global:Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
-Write-Host "DEBUG: Set-QLogRoot command = $((Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) -ne $null)"
-Write-Host "DEBUG: Loaded modules = $((Get-Module | Select-Object -ExpandProperty Name) -join ', ')"
-Get-Command Set-QLogRoot -All | Out-Host
-
-function global:Set-QLogRoot {
+function Set-QLogRoot {
     param([Parameter(Mandatory)][string]$Root)
-    $Global:QOTLogRoot = $Root
+    $script:QLogRoot = $Root
 }
 
-function global:Start-QLogSession {
+function Start-QLogSession {
     param([string]$Prefix = "QuinnOptimiserToolkit")
     Write-QLog "Log session started (fallback)." "INFO"
 }
+
+
+Write-Host "DEBUG: Set-QLogRoot command = $((Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) -ne $null)"
+
+Get-Command Set-QLogRoot -All | Out-Host
 
 # Silence noisy module import warnings
 $oldWarningPreference = $WarningPreference
@@ -133,6 +134,9 @@ Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAct
 
 # Initialise config and logging
 $cfg = Initialize-QOTConfig -RootPath $rootPath
+
+Write-Host "DEBUG: Set-QLogRoot available right before call = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
+
 Set-QLogRoot -Root $cfg.LogsRoot
 Start-QLogSession
 
