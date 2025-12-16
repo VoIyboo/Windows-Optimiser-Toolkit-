@@ -371,15 +371,17 @@ $rowDetailsXaml = @"
           Padding="10"
           HorizontalAlignment="Stretch">
     <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled"
-                  PanningMode="VerticalFirst"
-                  CanContentScroll="False"
-                  MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}">
+              HorizontalScrollBarVisibility="Disabled"
+              PanningMode="VerticalFirst"
+              CanContentScroll="False"
+              MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
+              HorizontalAlignment="Stretch">
       <TextBlock Text="{Binding EmailBody}"
-                 Foreground="White"
-                 TextWrapping="Wrap"
-                 FontSize="13"
-                 LineHeight="18"/>
+             Foreground="White"
+             TextWrapping="Wrap"
+             FontSize="13"
+             LineHeight="18"
+             HorizontalAlignment="Stretch"/>
     </ScrollViewer>
   </Border>
 </DataTemplate>
