@@ -171,89 +171,48 @@ function Collapse-AllTicketDetails {
     } catch { }
 }
 
-# Adds an expander arrow column at the far right (▸ / ▾)
 function Ensure-QOTicketsExpanderColumn {
     param([Parameter(Mandatory)] $Grid)
 
     $existing = $Grid.Columns | Where-Object { [string]$_.Header -eq " " } | Select-Object -First 1
     if ($existing) { return }
 
-   $rowDetailsXaml = @"
+$xaml = @"
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Border Margin="10,4,10,10"
-          CornerRadius="6"
-          BorderThickness="1"
-          BorderBrush="#374151"
-          Background="#020617"
-          Padding="10"
-          HorizontalAlignment="Stretch">
-    <Grid>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-      </Grid.RowDefinitions>
-
-      <TextBox Grid.Row="0"
-               Text="{Binding EmailBody}"
-               IsReadOnly="True"
-               Background="Transparent"
-               BorderThickness="0"
-               Foreground="White"
-               TextWrapping="Wrap"
-               AcceptsReturn="True"
-               VerticalScrollBarVisibility="Auto"
-               HorizontalScrollBarVisibility="Disabled"
-               MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
-               HorizontalAlignment="Stretch"/>
-
-      <Thumb Grid.Row="1"
-             Tag="RowDetailsResizer"
-             Height="6"
-             Margin="0,8,0,0"
-             Cursor="SizeNS"
-             Background="#374151"/>
-    </Grid>
-  </Border>
+  <Button Width="28" Height="22" Padding="0" Margin="2" Focusable="False"
+          Tag="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}}">
+    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" Foreground="White">
+      <TextBlock.Style>
+        <Style TargetType="{x:Type TextBlock}">
+          <Setter Property="Text" Value="▸"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=DetailsVisibility}" Value="Visible">
+              <Setter Property="Text" Value="▾"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </TextBlock.Style>
+    </TextBlock>
+  </Button>
 </DataTemplate>
 "@
 
+    try {
+        $template = [System.Windows.Markup.XamlReader]::Parse($xaml)
 
-    $sr = [System.IO.StringReader]::new($xaml)
-    $xr = [System.Xml.XmlReader]::Create($sr)
-    $template = [System.Windows.Markup.XamlReader]::Parse($xaml)
+        $col = New-Object System.Windows.Controls.DataGridTemplateColumn
+        $col.Header = " "
+        $col.Width  = New-Object System.Windows.Controls.DataGridLength(34)
+        $col.CanUserReorder = $false
+        $col.CanUserResize  = $false
+        $col.CellTemplate   = $template
 
-
-    $col = New-Object System.Windows.Controls.DataGridTemplateColumn
-    $col.Header = " "
-    $col.Width  = New-Object System.Windows.Controls.DataGridLength(34)
-    $col.CanUserReorder = $false
-    $col.CanUserResize  = $false
-    $col.CellTemplate   = $template
-
-    [void]$Grid.Columns.Add($col)
-}
-
-function Wire-QOTicketsExpanderClicks {
-    param([Parameter(Mandatory)] $Grid)
-
-    $Grid.AddHandler(
-        [System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,
-        [System.Windows.RoutedEventHandler]{
-            param($sender, $e)
-            try {
-                $btn = $e.OriginalSource -as [System.Windows.Controls.Button]
-                if (-not $btn) { return }
-
-                $row = $btn.Tag -as [System.Windows.Controls.DataGridRow]
-                if (-not $row) { return }
-
-                Toggle-TicketRowDetails -RowItem $row.Item
-                $e.Handled = $true
-            } catch { }
-        },
-        $true
-    )
+        [void]$Grid.Columns.Add($col)
+    }
+    catch {
+        Write-Warning "Tickets UI: failed to build expander column template. $_"
+    }
 }
 
 # -------------------------------------------------------------------
