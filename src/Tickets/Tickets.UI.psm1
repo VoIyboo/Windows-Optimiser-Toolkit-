@@ -490,9 +490,16 @@ $rowDetailsXaml = @"
     }
 
     $TicketsGrid.Add_Loaded({
-        Update-QOTicketsGrid
-        Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
-    })
+
+    try {
+        if (Get-Command Register-QOAgentPresence -ErrorAction SilentlyContinue) {
+            Register-QOAgentPresence | Out-Null
+        }
+    } catch { }
+
+    Update-QOTicketsGrid
+    Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+})
 
     $TicketsGrid.Add_ColumnReordered({
         param($sender, $eventArgs)
