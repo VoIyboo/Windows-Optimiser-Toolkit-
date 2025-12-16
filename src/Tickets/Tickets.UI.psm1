@@ -309,6 +309,7 @@ function Update-QOTicketsGrid {
             Priority  = [string]$t.Priority
             Id        = [string]$t.Id
             EmailBody = (Get-QOTicketBodyText -Ticket $t)
+            AssignedTo = [string]$t.AssignedTo
         }
     }
 
