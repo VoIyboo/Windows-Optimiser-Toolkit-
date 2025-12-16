@@ -464,7 +464,6 @@ $settings.TicketsColumnLayout = @(
     ForEach-Object {
         $widthValue = $null
         try {
-            # Force current rendered width into absolute value
             $actualWidth = $_.ActualWidth
             if ($actualWidth -gt 0) {
                 $widthValue = [double]$actualWidth
@@ -479,5 +478,6 @@ $settings.TicketsColumnLayout = @(
     }
 )
 
+Save-QOSettings -Settings $settings
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
