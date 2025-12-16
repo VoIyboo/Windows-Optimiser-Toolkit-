@@ -82,6 +82,8 @@ function New-QOTicket {
         Priority    = $Priority
         Status      = "New"
         CreatedAt   = (Get-Date).ToString("o")
+        AssignedTo   = 'Unassigned'
+        AssignedToId = $null
     }
 }
 
