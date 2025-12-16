@@ -219,7 +219,7 @@ function Ensure-QOTicketsExpanderColumn {
 "@
 
 
-    $sr = New-Object System.IO.StringReader $xaml
+    $sr = [System.IO.StringReader]::new($xaml)
     $xr = [System.Xml.XmlReader]::Create($sr)
     $template = [System.Windows.Markup.XamlReader]::Load($xr)
 
