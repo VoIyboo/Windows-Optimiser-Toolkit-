@@ -46,7 +46,6 @@ $script:LastTab      = $null
 # -------------------------------------------------------------------
 # SAFE TEXT SETTER
 # -------------------------------------------------------------------
-
 function Set-QOTControlText {
     param(
         [Parameter(Mandatory)] $Control,
@@ -56,31 +55,34 @@ function Set-QOTControlText {
     if (-not $Control) { return }
 
     try {
-        # Most common: TextBlock / TextBox
         if ($Control -is [System.Windows.Controls.TextBlock] -or
             $Control -is [System.Windows.Controls.TextBox]) {
             $Control.Text = $Value
             return
         }
 
-        # Label + most WPF content controls
         if ($Control -is [System.Windows.Controls.Label] -or
             $Control -is [System.Windows.Controls.ContentControl]) {
             $Control.Content = $Value
             return
         }
 
-        # Fallback: try Text, then Content
-        $m = $Control | Get-Member -Name Text -MemberType Property -ErrorAction SilentlyContinue
-        if ($m) {
+        # Last-resort: if it actually has a Text property, set it
+        if ($Control.PSObject.Properties.Name -contains 'Text') {
             $Control.Text = $Value
             return
         }
-    } catch {}
 
-    try { $Control.Content = $Value } catch {}
+        # Or if it has Content
+        if ($Control.PSObject.Properties.Name -contains 'Content') {
+            $Control.Content = $Value
+            return
+        }
+    }
+    catch {
+        # swallow, do not crash UI thread
+    }
 }
-
 # -------------------------------------------------------------------
 # XAML LOADER
 # -------------------------------------------------------------------
