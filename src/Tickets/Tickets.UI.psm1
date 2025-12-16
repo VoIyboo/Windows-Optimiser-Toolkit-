@@ -359,37 +359,61 @@ function Initialize-QOTicketsUI {
     Ensure-QOTicketsExpanderColumn -Grid $TicketsGrid
     Wire-QOTicketsExpanderClicks   -Grid $TicketsGrid
 
-    # RowDetails template with resizer thumb
+# RowDetails template with resizer thumb
 $rowDetailsXaml = @"
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-        <Border Margin="10,4,10,10"
-                CornerRadius="6"
-                BorderThickness="1"
-                BorderBrush="#374151"
-                Background="#020617"
-                Padding="10"
-                HorizontalAlignment="Stretch">
-        
-          <ScrollViewer VerticalScrollBarVisibility="Auto"
-                        HorizontalScrollBarVisibility="Disabled"
-                        PanningMode="VerticalFirst"
-                        CanContentScroll="False"
-                        MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
-                        Width="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=ActualWidth}"
-                        HorizontalAlignment="Stretch">
-        
-            <TextBlock Text="{Binding EmailBody}"
-                       Foreground="White"
-                       TextWrapping="Wrap"
-                       FontSize="13"
-                       LineHeight="18"
-                       HorizontalAlignment="Stretch"/>
-        
-          </ScrollViewer>
-        </Border>
+  <Border Margin="10,4,10,10"
+          CornerRadius="6"
+          BorderThickness="1"
+          BorderBrush="#374151"
+          Background="#020617"
+          Padding="10"
+          HorizontalAlignment="Stretch">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <!-- Email body -->
+      <ScrollViewer Grid.Row="0"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled"
+                    PanningMode="VerticalFirst"
+                    CanContentScroll="False"
+                    MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
+                    Width="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=ActualWidth}"
+                    HorizontalAlignment="Stretch">
+        <TextBlock Text="{Binding EmailBody}"
+                   Foreground="White"
+                   TextWrapping="Wrap"
+                   FontSize="13"
+                   LineHeight="18"
+                   HorizontalAlignment="Stretch"/>
+      </ScrollViewer>
+
+      <!-- Drag handle -->
+      <Thumb Grid.Row="1"
+             Tag="RowDetailsResizer"
+             Height="10"
+             Margin="0,8,0,0"
+             Cursor="SizeNS"
+             Opacity="0.6">
+        <Thumb.Template>
+          <ControlTemplate TargetType="Thumb">
+            <Border Height="10"
+                    CornerRadius="4"
+                    Background="#374151"/>
+          </ControlTemplate>
+        </Thumb.Template>
+      </Thumb>
+
+    </Grid>
+  </Border>
 </DataTemplate>
 "@
+
 
 
     try {
