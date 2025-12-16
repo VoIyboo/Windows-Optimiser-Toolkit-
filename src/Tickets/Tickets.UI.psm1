@@ -221,7 +221,7 @@ function Ensure-QOTicketsExpanderColumn {
 
     $sr = [System.IO.StringReader]::new($xaml)
     $xr = [System.Xml.XmlReader]::Create($sr)
-    $template = [System.Windows.Markup.XamlReader]::Load($xr)
+    $template = [System.Windows.Markup.XamlReader]::Parse($xaml)
 
 
     $col = New-Object System.Windows.Controls.DataGridTemplateColumn
