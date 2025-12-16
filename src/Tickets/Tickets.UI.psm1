@@ -358,35 +358,21 @@ $rowDetailsXaml = @"
           Background="#020617"
           Padding="10"
           HorizontalAlignment="Stretch">
-    <Grid>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
-        <RowDefinition Height="Auto"/>
-      </Grid.RowDefinitions>
-
-      <TextBox Grid.Row="0"
-               Text="{Binding EmailBody}"
-               IsReadOnly="True"
-               Background="Transparent"
-               BorderThickness="0"
-               Foreground="White"
-               TextWrapping="Wrap"
-               AcceptsReturn="True"
-               VerticalScrollBarVisibility="Auto"
-               HorizontalScrollBarVisibility="Disabled"
-               MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
-               HorizontalAlignment="Stretch"/>
-
-      <Thumb Grid.Row="1"
-             Tag="RowDetailsResizer"
-             Height="6"
-             Margin="0,8,0,0"
-             Cursor="SizeNS"
-             Background="#374151"/>
-    </Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  PanningMode="VerticalFirst"
+                  CanContentScroll="False"
+                  MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}">
+      <TextBlock Text="{Binding EmailBody}"
+                 Foreground="White"
+                 TextWrapping="Wrap"
+                 FontSize="13"
+                 LineHeight="18"/>
+    </ScrollViewer>
   </Border>
 </DataTemplate>
 "@
+
 
     try {
         $TicketsGrid.RowDetailsTemplate = [System.Windows.Markup.XamlReader]::Parse($rowDetailsXaml)
