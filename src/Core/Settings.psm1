@@ -10,24 +10,41 @@ function Repair-QOSettingsShape {
 
     if (-not $s) { return $s }
 
+    # Root level defaults
+    if (-not ($s.PSObject.Properties.Name -contains "PreferredStartTab")) {
+        $s | Add-Member -NotePropertyName PreferredStartTab -NotePropertyValue "Cleaning" -Force
+    }
+    if (-not ($s.PSObject.Properties.Name -contains "TicketsColumnLayout")) {
+        $s | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @() -Force
+    }
+    if (-not ($s.PSObject.Properties.Name -contains "TicketStorePath")) {
+        $s | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null -Force
+    }
+    if (-not ($s.PSObject.Properties.Name -contains "LocalTicketBackupPath")) {
+        $s | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null -Force
+    }
+
+    # Tickets container
     if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
         $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
+    # EmailIntegration container
     if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
         $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
     }
 
+    # Enabled
     if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
         $s.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false -Force
     }
 
+    # MonitoredAddresses (ALWAYS an array of strings)
     if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
         $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
     }
 
     $ma = $s.Tickets.EmailIntegration.MonitoredAddresses
-
     if ($null -eq $ma) {
         $s.Tickets.EmailIntegration.MonitoredAddresses = @()
     }
@@ -36,52 +53,49 @@ function Repair-QOSettingsShape {
         $s.Tickets.EmailIntegration.MonitoredAddresses = if ($trim) { @($trim) } else { @() }
     }
     else {
-        $s.Tickets.EmailIntegration.MonitoredAddresses = @($ma) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
+        $s.Tickets.EmailIntegration.MonitoredAddresses =
+            @($ma) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
+    }
+
+    # LastProcessedByMailbox (ensure it exists and is an object)
+    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "LastProcessedByMailbox")) {
+        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    if ($null -eq $s.Tickets.EmailIntegration.LastProcessedByMailbox) {
+        $s.Tickets.EmailIntegration.LastProcessedByMailbox = [pscustomobject]@{}
     }
 
     return $s
 }
 
-
-
-
-
 function Get-QOSettings {
 
-    # ------------------------------
-    # Defaults (single source of truth)
-    # ------------------------------
-    $defaults = [PSCustomObject]@{
+    $defaults = [pscustomobject]@{
         PreferredStartTab     = "Cleaning"
         TicketsColumnLayout   = @()
         TicketStorePath       = $null
         LocalTicketBackupPath = $null
-
-        Tickets = [PSCustomObject]@{
-            EmailIntegration = [PSCustomObject]@{
-                Enabled            = $false
-                MonitoredAddresses = @()
+        Tickets              = [pscustomobject]@{
+            EmailIntegration = [pscustomobject]@{
+                Enabled              = $false
+                MonitoredAddresses   = @()
+                LastProcessedByMailbox = [pscustomobject]@{}
             }
         }
     }
 
-    # ------------------------------
-    # First run: create settings.json
-    # ------------------------------
-    if (-not (Test-Path $script:QOSettingsPath)) {
-
+    # First run
+    if (-not (Test-Path -LiteralPath $script:QOSettingsPath)) {
         $dir = Split-Path $script:QOSettingsPath
-        if (-not (Test-Path $dir)) {
+        if (-not (Test-Path -LiteralPath $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
         }
 
-        $defaults | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+        $defaults | ConvertTo-Json -Depth 8 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
         return $defaults
     }
 
-    # ------------------------------
-    # Read existing settings.json
-    # ------------------------------
+    # Read existing
     $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
     if (-not $json) {
         return $defaults
@@ -89,46 +103,9 @@ function Get-QOSettings {
 
     $settings = $json | ConvertFrom-Json
 
-    # ------------------------------
-    # Backward compatibility guards
-    # ------------------------------
-    if (-not ($settings.PSObject.Properties.Name -contains "PreferredStartTab")) {
-        $settings | Add-Member -NotePropertyName PreferredStartTab -NotePropertyValue $defaults.PreferredStartTab
-    }
-    if (-not ($settings.PSObject.Properties.Name -contains "TicketsColumnLayout")) {
-        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
-    }
-    if (-not ($settings.PSObject.Properties.Name -contains "TicketStorePath")) {
-        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
-    }
-    if (-not ($settings.PSObject.Properties.Name -contains "LocalTicketBackupPath")) {
-        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
-    }
+    # IMPORTANT: always repair shape on load
+    $settings = Repair-QOSettingsShape -s $settings
 
-    # Tickets.EmailIntegration (email-to-ticket)
-    if (-not ($settings.PSObject.Properties.Name -contains "Tickets")) {
-        $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{})
-    }
-
-    if (-not ($settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
-        $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{})
-    }
-
-    if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
-        $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false
-    }
-
-    if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
-        $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @()
-    }
-
-    # Ensure MonitoredAddresses is always an array
-    if ($null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
-        $settings.Tickets.EmailIntegration.MonitoredAddresses = @()
-    }
-    elseif ($settings.Tickets.EmailIntegration.MonitoredAddresses -is [string]) {
-        $settings.Tickets.EmailIntegration.MonitoredAddresses = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
-    }
     return $settings
 }
 
@@ -139,13 +116,13 @@ function Save-QOSettings {
     )
 
     $dir = Split-Path $script:QOSettingsPath
-    if (-not (Test-Path $dir)) {
+    if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
     $Settings = Repair-QOSettingsShape -s $Settings
 
-    $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+    $Settings | ConvertTo-Json -Depth 8 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
 }
 
 Export-ModuleMember -Function Get-QOSettings, Save-QOSettings
