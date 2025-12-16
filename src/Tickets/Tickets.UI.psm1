@@ -315,6 +315,37 @@ function Update-QOTicketsGrid {
     $script:TicketsGrid.ItemsSource = @($rows)
 }
 
+function Set-QORowDetailsHeight {
+    param(
+        [Parameter(Mandatory)] [double] $NewHeight
+    )
+
+    $h = [Math]::Round($NewHeight)
+
+    # Hard clamp
+    if ($h -lt $script:RowDetailsHeightMin) { $h = $script:RowDetailsHeightMin }
+    if ($h -gt $script:RowDetailsHeightMax) { $h = $script:RowDetailsHeightMax }
+
+    $script:RowDetailsHeight = $h
+
+    # Drive XAML binding through grid Tag
+    try {
+        if ($script:TicketsGrid) {
+            $script:TicketsGrid.Tag = $script:RowDetailsHeight
+        }
+    } catch { }
+}
+
+function Save-QORowDetailsHeightSetting {
+    try {
+        $s = Get-QOSettings
+        $s | Add-Member -NotePropertyName TicketsRowDetailsHeight -NotePropertyValue ([double]$script:RowDetailsHeight) -Force
+        Save-QOSettings -Settings $s
+    } catch { }
+}
+
+
+
 # -------------------------------------------------------------------
 # Init
 # -------------------------------------------------------------------
