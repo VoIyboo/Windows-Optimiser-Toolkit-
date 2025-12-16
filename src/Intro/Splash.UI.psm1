@@ -47,16 +47,19 @@ function Update-QOTSplashStatus {
 
     try {
         $label = $Window.FindName("SplashStatusText")
-        if ($label) {
-            if ($label -is [System.Windows.Controls.TextBlock] -or $label -is [System.Windows.Controls.TextBox]) {
-                $label.Text = $Text
-            } else {
-                $label.Content = $Text
-            }
-}
+        if (-not $label) { return }
+
+        if ($label -is [System.Windows.Controls.TextBlock] -or
+            $label -is [System.Windows.Controls.TextBox]) {
+            $label.Text = $Text
+        }
+        else {
+            $label.Content = $Text
+        }
     }
     catch { }
 }
+
 
 # Updates progress bar value
 function Update-QOTSplashProgress {
