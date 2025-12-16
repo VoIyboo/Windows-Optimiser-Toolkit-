@@ -120,7 +120,11 @@ Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAct
 
 # Initialise config and logging
 $cfg = Initialize-QOTConfig -RootPath $rootPath
-Set-QLogRoot -Root $cfg.LogsRoot
+
+Write-Host "DEBUG Set-QLogRoot exists? $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
+
+
+Set-QLogRoot $cfg.LogsRoot
 Start-QLogSession
 
 Write-QLog "Intro starting. Root path: $rootPath" "INFO"
