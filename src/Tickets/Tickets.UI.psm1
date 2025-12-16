@@ -36,14 +36,20 @@ function Save-QOTicketsColumnLayout {
         ForEach-Object {
             $widthValue = $null
             try {
-                # Force current rendered width into absolute value
+                # Always store the actual rendered width (works even for Auto/*)
                 $actualWidth = $_.ActualWidth
                 if ($actualWidth -gt 0) {
                     $widthValue = [double]$actualWidth
                 }
             } catch { }
-               
-                    
+
+            [pscustomobject]@{
+                Header       = $_.Header.ToString()
+                DisplayIndex = $_.DisplayIndex
+                Width        = $widthValue
+            }
+        }
+    )
 
     Save-QOSettings -Settings $settings
 }
@@ -84,36 +90,6 @@ function Apply-QOTicketsColumnOrder {
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
-# Watches DataGridColumn.Width changes and saves layout
-function Wire-QOTicketsColumnWidthWatcher {
-    param([Parameter(Mandatory)] $Grid)
-
-    if (-not $script:QOColumnWidthWatch) {
-        $script:QOColumnWidthWatch = @{}
-    }
-
-    $dpd = [System.ComponentModel.DependencyPropertyDescriptor]::FromProperty(
-        [System.Windows.Controls.DataGridColumn]::WidthProperty,
-        [System.Windows.Controls.DataGridColumn]
-    )
-
-    foreach ($col in @($Grid.Columns)) {
-
-        if ($script:QOColumnWidthWatch.ContainsKey($col)) { continue }
-
-        $handler = [System.EventHandler]{
-            param($s, $e)
-            try {
-                if (-not $script:TicketsColumnLayoutApplying) {
-                    Save-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
-                }
-            } catch { }
-        }
-
-        $dpd.AddValueChanged($col, $handler)
-        $script:QOColumnWidthWatch[$col] = $handler
-    }
-}
 
 # -------------------------------------------------------------------
 # Helpers
