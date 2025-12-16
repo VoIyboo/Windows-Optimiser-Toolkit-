@@ -9,34 +9,41 @@ param(
 
 $ErrorActionPreference = "Stop"
 # Absolute fallback so Set-QLogRoot always exists, even if Logging.psm1 fails to import
+# Absolute fallback so logging always works, even during bootstrap
 function global:Set-QLogRoot {
     param([string]$Root)
     $Global:QOTLogRoot = $Root
 }
 
-# Basic fallback so Write-QLog exists if logging module did not import
 if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
     function global:Write-QLog {
         param(
             [string]$Message,
             [string]$Level = "INFO"
         )
-        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+        $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $line = "[$ts] [$Level] $Message"
+
         try {
-            if ($script:QOTLogPath) { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 }
+            if ($script:QOTLogPath) {
+                $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
+            }
         } catch { }
-        if (-not $Quiet) { Write-Host $line }
+
+        if (-not $Quiet) {
+            Write-Host $line
+        }
     }
 }
 
-# Basic fallback so Start-QLogSession exists
 if (-not (Get-Command Start-QLogSession -ErrorAction SilentlyContinue)) {
     function global:Start-QLogSession {
         param([string]$Prefix = "QuinnOptimiserToolkit")
-        Write-QLog "Log session started (fallback in Intro.ps1)." "INFO"
+        Write-QLog "Log session started (fallback)." "INFO"
     }
 }
+
 
 # ------------------------------
 # Logging setup
