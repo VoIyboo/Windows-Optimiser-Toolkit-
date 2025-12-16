@@ -117,4 +117,79 @@ function Remove-QOTicket {
     return $false
 }
 
+function Get-QOAgentsDirectory {
+    # Ticket store path is the full json file path
+    $ticketsJsonPath = Ensure-QOTicketsStoreDirectory
+    $rootDir = Split-Path $ticketsJsonPath -Parent
+
+    $agentsDir = Join-Path $rootDir "Agents"
+    if (-not (Test-Path $agentsDir)) {
+        New-Item -ItemType Directory -Path $agentsDir -Force | Out-Null
+    }
+    return $agentsDir
+}
+
+function Get-QOCurrentAgentInfo {
+    $sid = $null
+    try {
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    } catch { }
+
+    $displayName = $env:USERNAME
+    try {
+        $u = Get-CimInstance Win32_UserAccount -Filter "Name='$env:USERNAME'" -ErrorAction Stop | Select-Object -First 1
+        if ($u -and $u.FullName) { $displayName = [string]$u.FullName }
+    } catch { }
+
+    [pscustomobject]@{
+        Sid         = [string]$sid
+        Username    = [string]$env:USERNAME
+        DisplayName = [string]$displayName
+        MachineName = [string]$env:COMPUTERNAME
+        LastSeenUtc = (Get-Date).ToUniversalTime().ToString("o")
+    }
+}
+
+function Register-QOAgentPresence {
+    try {
+        $dir = Get-QOAgentsDirectory
+        $me = Get-QOCurrentAgentInfo
+
+        if ([string]::IsNullOrWhiteSpace($me.Sid)) {
+            $me | Add-Member -NotePropertyName Sid -NotePropertyValue ("USER_" + $me.Username) -Force
+        }
+
+        $path = Join-Path $dir ($me.Sid + ".json")
+
+        # Atomic write to avoid half-written JSON
+        $tmp = $path + ".tmp"
+        $me | ConvertTo-Json -Depth 6 | Set-Content -Path $tmp -Encoding UTF8
+        Move-Item -Path $tmp -Destination $path -Force
+
+        return $me
+    } catch {
+        return $null
+    }
+}
+
+function Get-QOKnownAgents {
+    try {
+        $dir = Get-QOAgentsDirectory
+        $files = Get-ChildItem -Path $dir -Filter "*.json" -File -ErrorAction SilentlyContinue
+        if (-not $files) { return @() }
+
+        $agents = foreach ($f in $files) {
+            try {
+                Get-Content -Path $f.FullName -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            } catch { }
+        }
+
+        return @($agents | Where-Object { $_ -and $_.DisplayName } | Sort-Object DisplayName)
+    } catch {
+        return @()
+    }
+}
+
+
+
 Export-ModuleMember -Function Get-QOTickets, Add-QOTicket, Remove-QOTicket, New-QOTicket
