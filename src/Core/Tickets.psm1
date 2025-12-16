@@ -3,7 +3,6 @@
 
 $ErrorActionPreference = "Stop"
 
-Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
 
 $script:TicketsColumnLayoutApplying = $false
