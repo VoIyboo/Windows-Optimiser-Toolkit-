@@ -32,6 +32,7 @@ $WarningPreference = 'SilentlyContinue'
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 # Work out repo root:
+# Work out repo root:
 $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
 # Paths to core modules
@@ -39,10 +40,10 @@ $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
 $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
 $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
-# Import core modules (logging module may or may not export helpers)
-Import-Module $configModule  -Force -ErrorAction SilentlyContinue
-Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
-Import-Module $engineModule  -Force -ErrorAction SilentlyContinue
+# Import core modules (best effort)
+if (Test-Path -LiteralPath $configModule)  { Import-Module $configModule  -Force -ErrorAction SilentlyContinue }
+if (Test-Path -LiteralPath $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
+if (Test-Path -LiteralPath $engineModule)  { Import-Module $engineModule  -Force -ErrorAction SilentlyContinue }
 
 # ------------------------------
 # Safety net logging fallbacks
@@ -63,9 +64,7 @@ if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
             }
         } catch { }
 
-        if (-not $Quiet) {
-            Write-Host $line
-        }
+        if (-not $Quiet) { Write-Host $line }
     }
 }
 
