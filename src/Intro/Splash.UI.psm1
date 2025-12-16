@@ -47,7 +47,13 @@ function Update-QOTSplashStatus {
 
     try {
         $label = $Window.FindName("SplashStatusText")
-        if ($label) { $label.Text = $Text }
+        if ($label) {
+            if ($label -is [System.Windows.Controls.TextBlock] -or $label -is [System.Windows.Controls.TextBox]) {
+                $label.Text = $Text
+            } else {
+                $label.Content = $Text
+            }
+}
     }
     catch { }
 }
