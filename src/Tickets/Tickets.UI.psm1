@@ -36,21 +36,14 @@ function Save-QOTicketsColumnLayout {
         ForEach-Object {
             $widthValue = $null
             try {
-                try {
-                    # Force current rendered width into absolute value
-                    $actualWidth = $_.ActualWidth
-                    if ($actualWidth -gt 0) {
-                        $widthValue = [double]$actualWidth
-                    }
-                } catch { }
-
-            [pscustomobject]@{
-                Header       = $_.Header.ToString()
-                DisplayIndex = $_.DisplayIndex
-                Width        = $widthValue
-            }
-        }
-    )
+                # Force current rendered width into absolute value
+                $actualWidth = $_.ActualWidth
+                if ($actualWidth -gt 0) {
+                    $widthValue = [double]$actualWidth
+                }
+            } catch { }
+               
+                    
 
     Save-QOSettings -Settings $settings
 }
