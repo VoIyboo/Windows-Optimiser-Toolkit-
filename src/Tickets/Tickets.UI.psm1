@@ -88,6 +88,37 @@ function Apply-QOTicketsColumnOrder {
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
+# Watches DataGridColumn.Width changes and saves layout
+function Wire-QOTicketsColumnWidthWatcher {
+    param([Parameter(Mandatory)] $Grid)
+
+    if (-not $script:QOColumnWidthWatch) {
+        $script:QOColumnWidthWatch = @{}
+    }
+
+    $dpd = [System.ComponentModel.DependencyPropertyDescriptor]::FromProperty(
+        [System.Windows.Controls.DataGridColumn]::WidthProperty,
+        [System.Windows.Controls.DataGridColumn]
+    )
+
+    foreach ($col in @($Grid.Columns)) {
+
+        if ($script:QOColumnWidthWatch.ContainsKey($col)) { continue }
+
+        $handler = [System.EventHandler]{
+            param($s, $e)
+            try {
+                if (-not $script:TicketsColumnLayoutApplying) {
+                    Save-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+                }
+            } catch { }
+        }
+
+        $dpd.AddValueChanged($col, $handler)
+        $script:QOColumnWidthWatch[$col] = $handler
+    }
+}
+
 # -------------------------------------------------------------------
 # Helpers
 # -------------------------------------------------------------------
@@ -336,8 +367,9 @@ function Initialize-QOTicketsUI {
     }
 
     $TicketsGrid.Add_Loaded({
-        Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
         Update-QOTicketsGrid
+        Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+        Wire-QOTicketsColumnWidthWatcher -Grid $script:TicketsGrid
     })
 
     $TicketsGrid.Add_ColumnReordered({
@@ -349,19 +381,6 @@ function Initialize-QOTicketsUI {
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) { Save-QOTicketsColumnLayout -DataGrid $sender }
     })
-    # Save when user resizes columns (dragging header dividers)
-    $TicketsGrid.AddHandler(
-        [System.Windows.Controls.DataGridColumn]::WidthProperty,
-        [System.Windows.DependencyPropertyChangedEventHandler]{
-            param($sender, $e)
-            try {
-                if (-not $script:TicketsColumnLayoutApplying) {
-                    Save-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
-                }
-            } catch { }
-        }
-    )
-
 
     # Keep details state correct when rows are realised
     $TicketsGrid.Add_LoadingRow({
