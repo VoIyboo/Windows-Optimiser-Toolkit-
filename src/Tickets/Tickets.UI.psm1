@@ -349,6 +349,22 @@ function Initialize-QOTicketsUI {
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) { Save-QOTicketsColumnLayout -DataGrid $sender }
     })
+    # Save when user resizes columns (dragging header dividers)
+    $TicketsGrid.AddHandler(
+        [System.Windows.Controls.DataGrid]::ColumnWidthChangedEvent,
+        [System.Windows.RoutedEventHandler]{
+            param($sender, $e)
+            try {
+                if (-not $script:TicketsColumnLayoutApplying) {
+                    Save-QOTicketsColumnLayout -DataGrid $sender
+                }
+            } catch { }
+        },
+        $true
+    )
+
+
+
 
     # Keep details state correct when rows are realised
     $TicketsGrid.Add_LoadingRow({
