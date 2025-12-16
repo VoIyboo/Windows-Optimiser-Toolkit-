@@ -458,25 +458,26 @@ function Initialize-QOTicketsUI {
         })
     }
 
-    # New test ticket
-    $BtnNewTicket.Add_Click({
+$settings.TicketsColumnLayout = @(
+    $DataGrid.Columns |
+    Sort-Object DisplayIndex |
+    ForEach-Object {
+        $widthValue = $null
         try {
-            $now = Get-Date
-            $ticket = New-QOTicket `
-                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
-                -Description "Test ticket created from the UI." `
-                -Category "Testing" `
-                -Priority "Low"
+            # Force current rendered width into absolute value
+            $actualWidth = $_.ActualWidth
+            if ($actualWidth -gt 0) {
+                $widthValue = [double]$actualWidth
+            }
+        } catch { }
 
-            Add-QOTicket -Ticket $ticket | Out-Null
+        [pscustomobject]@{
+            Header       = $_.Header.ToString()
+            DisplayIndex = $_.DisplayIndex
+            Width        = $widthValue
         }
-        catch {
-            Write-Warning "Tickets UI: failed to create test ticket. $_"
-        }
-        Update-QOTicketsGrid
-    })
+    }
+)
 
-    Update-QOTicketsGrid
-}
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
