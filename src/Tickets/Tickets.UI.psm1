@@ -1,5 +1,5 @@
 # Tickets.UI.psm1
-# UI wiring for the Tickets tab
+# UI wiring for the Tickets tab (with View action + RowDetails)
 
 $ErrorActionPreference = "Stop"
 
@@ -12,6 +12,7 @@ Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
 
 $script:TicketsColumnLayoutApplying = $false
 $script:TicketsGrid                 = $null
+$script:TicketsUIHandlersHooked     = $false
 
 # -------------------------------------------------------------------
 # Column layout helpers (order + width)
@@ -95,6 +96,160 @@ function Apply-QOTicketsColumnOrder {
         $TicketsGrid
     )
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
+}
+
+# -------------------------------------------------------------------
+# View action + RowDetails
+# -------------------------------------------------------------------
+
+function Ensure-QOTTicketsRowDetails {
+    param(
+        [Parameter(Mandatory)]
+        $TicketsGrid
+    )
+
+    try {
+        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Out-Null
+    } catch { }
+
+    if (-not $TicketsGrid) { return }
+
+    if ($TicketsGrid.RowDetailsTemplate) { return }
+
+    $detailsXaml = @"
+<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Margin="8,4,8,10" Padding="10" CornerRadius="6" Background="#020617" BorderBrush="#374151" BorderThickness="1">
+        <StackPanel>
+            <TextBlock Text="Ticket details" Foreground="White" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="120"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Title:" Foreground="#9CA3AF" Margin="0,0,8,4"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Title}" Foreground="White" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Created:" Foreground="#9CA3AF" Margin="0,0,8,4"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding CreatedAt}" Foreground="White" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Status:" Foreground="#9CA3AF" Margin="0,0,8,4"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Status}" Foreground="White" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Priority:" Foreground="#9CA3AF" Margin="0,0,8,4"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Priority}" Foreground="White" Margin="0,0,0,4"/>
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Category:" Foreground="#9CA3AF" Margin="0,0,8,0"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Category}" Foreground="White"/>
+            </Grid>
+
+            <Border Margin="0,10,0,0" Padding="8" CornerRadius="6" Background="#0F172A" BorderBrush="#374151" BorderThickness="1">
+                <TextBlock Text="Email body and thread view comes next. This panel is the foundation."
+                           Foreground="#9CA3AF" TextWrapping="Wrap"/>
+            </Border>
+        </StackPanel>
+    </Border>
+</DataTemplate>
+"@
+
+    try {
+        $xml = [xml]$detailsXaml
+        $reader = New-Object System.Xml.XmlNodeReader $xml
+        $template = [System.Windows.Markup.XamlReader]::Load($reader)
+        $TicketsGrid.RowDetailsTemplate = $template
+        $TicketsGrid.RowDetailsVisibilityMode = "VisibleWhenSelected"
+    } catch {
+        Write-Warning "Tickets UI: failed to set RowDetailsTemplate. $_"
+    }
+}
+
+function Ensure-QOTTicketsActionsColumn {
+    param(
+        [Parameter(Mandatory)]
+        $TicketsGrid
+    )
+
+    if (-not $TicketsGrid) { return }
+
+    # Already present
+    foreach ($c in @($TicketsGrid.Columns)) {
+        if ($c -and $c.Header -and $c.Header.ToString() -eq "Actions") { return }
+    }
+
+    try {
+        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Out-Null
+    } catch { }
+
+    $cellTemplateXaml = @"
+<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Button Name="BtnViewTicket"
+            Content="View"
+            Padding="10,4"
+            Margin="4,0,4,0"
+            Tag="{Binding Id}"/>
+</DataTemplate>
+"@
+
+    try {
+        $xml = [xml]$cellTemplateXaml
+        $reader = New-Object System.Xml.XmlNodeReader $xml
+        $cellTemplate = [System.Windows.Markup.XamlReader]::Load($reader)
+
+        $col = New-Object System.Windows.Controls.DataGridTemplateColumn
+        $col.Header = "Actions"
+        $col.CellTemplate = $cellTemplate
+        $col.CanUserReorder = $true
+        $col.CanUserResize = $true
+        $col.IsReadOnly = $true
+        $col.Width = New-Object System.Windows.Controls.DataGridLength(90)
+
+        [void]$TicketsGrid.Columns.Add($col)
+    } catch {
+        Write-Warning "Tickets UI: failed to add Actions column. $_"
+    }
+}
+
+function Hook-QOTTicketsViewHandler {
+    param(
+        [Parameter(Mandatory)]
+        $TicketsGrid
+    )
+
+    if (-not $TicketsGrid) { return }
+    if ($script:TicketsUIHandlersHooked) { return }
+
+    $script:TicketsUIHandlersHooked = $true
+
+    # Catch clicks on the View button inside the DataGrid
+    $TicketsGrid.AddHandler(
+        [System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,
+        [System.Windows.RoutedEventHandler]{
+            param($sender, $e)
+
+            try {
+                $btn = $e.OriginalSource -as [System.Windows.Controls.Button]
+                if (-not $btn) { return }
+                if ($btn.Name -ne "BtnViewTicket") { return }
+
+                $id = "$($btn.Tag)".Trim()
+                if ([string]::IsNullOrWhiteSpace($id)) { return }
+
+                Select-QOTicketRowById -Id $id
+
+                # If already selected, nudge the details refresh
+                try { $sender.UpdateLayout() | Out-Null } catch { }
+            } catch { }
+        }
+    )
 }
 
 # -------------------------------------------------------------------
@@ -195,11 +350,16 @@ function Initialize-QOTicketsUI {
     $TicketsGrid.CanUserReorderColumns = $true
     $TicketsGrid.CanUserResizeColumns  = $true
 
-    # Make multi select + delete actually usable
+    # Multi select
     try {
         $TicketsGrid.SelectionUnit = "FullRow"
         $TicketsGrid.SelectionMode = "Extended"
     } catch { }
+
+    # Add View + RowDetails
+    Ensure-QOTTicketsActionsColumn -TicketsGrid $TicketsGrid
+    Ensure-QOTTicketsRowDetails    -TicketsGrid $TicketsGrid
+    Hook-QOTTicketsViewHandler     -TicketsGrid $TicketsGrid
 
     # Apply saved layout once the grid is loaded
     $TicketsGrid.Add_Loaded({
@@ -223,22 +383,19 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    #    # Refresh (also poll email first, so the refresh button becomes useful)
+    # Refresh (poll email first if available)
     $BtnRefreshTickets.Add_Click({
         try {
             if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
                 Invoke-QOEmailTicketPoll | Out-Null
             }
-        } catch {}
+        } catch { }
 
         Update-QOTicketsGrid
     })
 
-    # Delete without confirmation popup (supports multi-select)
+    # Delete (supports multi select)
     if ($BtnDeleteTicket) {
-
-        # Make sure multi-select works
-        try { $script:TicketsGrid.SelectionMode = 'Extended' } catch {}
 
         $BtnDeleteTicket.Add_Click({
             try {
@@ -288,39 +445,6 @@ function Initialize-QOTicketsUI {
 
         Update-QOTicketsGrid
     })
-
-    # Delete without confirmation popup
-    if ($BtnDeleteTicket) {
-        $BtnDeleteTicket.Add_Click({
-            try {
-                $selectedItems = $script:TicketsGrid.SelectedItems
-                if (-not $selectedItems -or $selectedItems.Count -lt 1) { return }
-
-                $idsToDelete = @()
-                foreach ($item in $selectedItems) {
-                    if ($null -ne $item -and $item.PSObject.Properties.Name -contains 'Id') {
-                        if (-not [string]::IsNullOrWhiteSpace($item.Id)) {
-                            $idsToDelete += [string]$item.Id
-                        }
-                    }
-                }
-
-                $idsToDelete = $idsToDelete | Select-Object -Unique
-                if ($idsToDelete.Count -lt 1) { return }
-
-                foreach ($id in $idsToDelete) {
-                    if (Get-Command Remove-QOTicket -ErrorAction SilentlyContinue) {
-                        Remove-QOTicket -Id $id | Out-Null
-                    }
-                }
-            }
-            catch {
-                Write-Warning "Tickets UI: failed to delete ticket(s). $_"
-            }
-
-            Update-QOTicketsGrid
-        })
-    }
 
     Update-QOTicketsGrid
 }
