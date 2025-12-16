@@ -42,6 +42,10 @@ function global:Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
+Write-Host "DEBUG: Set-QLogRoot command = $((Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) -ne $null)"
+Write-Host "DEBUG: Loaded modules = $((Get-Module | Select-Object -ExpandProperty Name) -join ', ')"
+Get-Command Set-QLogRoot -All | Out-Host
+
 function global:Set-QLogRoot {
     param([Parameter(Mandatory)][string]$Root)
     $Global:QOTLogRoot = $Root
