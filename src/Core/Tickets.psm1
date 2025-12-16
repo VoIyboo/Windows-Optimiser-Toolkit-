@@ -342,4 +342,5 @@ function Initialize-QOTicketsUI {
     Update-QOTicketsGrid
 }
 
-Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
+Export-ModuleMember -Function Get-QOTickets, Add-QOTicket, Remove-QOTicket, New-QOTicket
+
