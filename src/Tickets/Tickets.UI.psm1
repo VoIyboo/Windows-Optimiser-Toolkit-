@@ -36,7 +36,7 @@ function Save-QOTicketsColumnLayout {
         ForEach-Object {
             $widthValue = $null
             try {
-                # Always store the actual rendered width (works even for Auto/*)
+                # Always store rendered width, even if column uses Auto/*
                 $actualWidth = $_.ActualWidth
                 if ($actualWidth -gt 0) {
                     $widthValue = [double]$actualWidth
@@ -89,7 +89,6 @@ function Apply-QOTicketsColumnOrder {
     param([Parameter(Mandatory)] $TicketsGrid)
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
-
 
 # -------------------------------------------------------------------
 # Helpers
@@ -341,7 +340,6 @@ function Initialize-QOTicketsUI {
     $TicketsGrid.Add_Loaded({
         Update-QOTicketsGrid
         Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
-        Wire-QOTicketsColumnWidthWatcher -Grid $script:TicketsGrid
     })
 
     $TicketsGrid.Add_ColumnReordered({
@@ -352,6 +350,15 @@ function Initialize-QOTicketsUI {
     $TicketsGrid.Add_ColumnDisplayIndexChanged({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) { Save-QOTicketsColumnLayout -DataGrid $sender }
+    })
+
+    # Save layout after mouse drag resizing finishes
+    $TicketsGrid.Add_PreviewMouseLeftButtonUp({
+        try {
+            if (-not $script:TicketsColumnLayoutApplying) {
+                Save-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+            }
+        } catch { }
     })
 
     # Keep details state correct when rows are realised
@@ -434,26 +441,25 @@ function Initialize-QOTicketsUI {
         })
     }
 
-$settings.TicketsColumnLayout = @(
-    $DataGrid.Columns |
-    Sort-Object DisplayIndex |
-    ForEach-Object {
-        $widthValue = $null
+    # New test ticket
+    $BtnNewTicket.Add_Click({
         try {
-            $actualWidth = $_.ActualWidth
-            if ($actualWidth -gt 0) {
-                $widthValue = [double]$actualWidth
-            }
-        } catch { }
+            $now = Get-Date
+            $ticket = New-QOTicket `
+                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                -Description "Test ticket created from the UI." `
+                -Category "Testing" `
+                -Priority "Low"
 
-        [pscustomobject]@{
-            Header       = $_.Header.ToString()
-            DisplayIndex = $_.DisplayIndex
-            Width        = $widthValue
+            Add-QOTicket -Ticket $ticket | Out-Null
         }
-    }
-)
+        catch {
+            Write-Warning "Tickets UI: failed to create test ticket. $_"
+        }
+        Update-QOTicketsGrid
+    })
 
-Save-QOSettings -Settings $settings
+    Update-QOTicketsGrid
+}
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
