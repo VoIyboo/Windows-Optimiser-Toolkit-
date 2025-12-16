@@ -122,10 +122,14 @@ if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
         Start-QOTMainWindow
     }
     catch {
-        Write-QLog "UI failed to start: $($_.Exception.Message)" "ERROR"
+        Write-QLog "UI failed to start (full exception): $($_.Exception.ToString())" "ERROR"
+    
+        if ($_.Exception.InnerException) {
+            Write-QLog "UI failed to start (inner exception): $($_.Exception.InnerException.ToString())" "ERROR"
+        }
+    
         throw
     }
-}
 
 Export-ModuleMember -Function `
     Start-QOTMain, `
