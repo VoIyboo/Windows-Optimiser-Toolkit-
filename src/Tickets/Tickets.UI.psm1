@@ -1,5 +1,5 @@
 # Tickets.UI.psm1
-# UI wiring for the Tickets tab (with toggleable row details)
+# UI wiring for the Tickets tab (RowDetails email body viewer)
 
 $ErrorActionPreference = "Stop"
 
@@ -11,6 +11,9 @@ Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
 # -------------------------------------------------------------------
 $script:TicketsColumnLayoutApplying = $false
 $script:TicketsGrid                 = $null
+
+# Track which ticket IDs are expanded
+$script:ExpandedTicketIds = New-Object 'System.Collections.Generic.HashSet[string]'
 
 # -------------------------------------------------------------------
 # Column layout helpers (order + width)
@@ -64,7 +67,6 @@ function Apply-QOTicketsColumnLayout {
             $col = $DataGrid.Columns |
                 Where-Object { $_.Header.ToString() -eq $header } |
                 Select-Object -First 1
-
             if (-not $col) { continue }
 
             if ($entry.DisplayIndex -ne $null -and [int]$entry.DisplayIndex -ge 0) {
@@ -84,6 +86,96 @@ function Apply-QOTicketsColumnLayout {
 function Apply-QOTicketsColumnOrder {
     param([Parameter(Mandatory)] $TicketsGrid)
     Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
+}
+
+# -------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------
+function Get-QOTicketBodyText {
+    param([Parameter(Mandatory)] $Ticket)
+
+    # Try the most likely fields in order
+    foreach ($name in @('EmailBody', 'Body', 'Description', 'RawBody', 'PlainTextBody')) {
+        if ($Ticket.PSObject.Properties.Name -contains $name) {
+            $val = $Ticket.$name
+            if ($val) { return [string]$val }
+        }
+    }
+
+    return ""
+}
+
+function Get-RowItemIdSafe {
+    param($RowItem)
+    if ($null -eq $RowItem) { return $null }
+    if ($RowItem.PSObject.Properties.Name -contains 'Id') {
+        $id = [string]$RowItem.Id
+        if (-not [string]::IsNullOrWhiteSpace($id)) { return $id }
+    }
+    return $null
+}
+
+function Set-RowDetailsState {
+    param(
+        [Parameter(Mandatory)] [System.Windows.Controls.DataGridRow] $Row,
+        [Parameter(Mandatory)] [bool] $Expanded
+    )
+
+    try {
+        $Row.DetailsVisibility = if ($Expanded) { 'Visible' } else { 'Collapsed' }
+    } catch { }
+
+    # If the clicked button exists in the visual tree, update its label
+    # (We do best-effort only, no crashes)
+    try {
+        $presenter = $Row.Presenter
+    } catch { }
+
+    try {
+        # Find a Button inside the row that currently says View/Hide
+        $btn = $null
+        $find = {
+            param($dep)
+            if ($null -eq $dep) { return $null }
+            $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($dep)
+            for ($i=0; $i -lt $count; $i++) {
+                $child = [System.Windows.Media.VisualTreeHelper]::GetChild($dep, $i)
+                if ($child -is [System.Windows.Controls.Button]) {
+                    if ($child.Content -in @('View','Hide')) { return $child }
+                }
+                $hit = & $find $child
+                if ($hit) { return $hit }
+            }
+            return $null
+        }
+
+        $btn = & $find $Row
+        if ($btn) {
+            $btn.Content = if ($Expanded) { 'Hide' } else { 'View' }
+        }
+    } catch { }
+}
+
+function Toggle-TicketRowDetails {
+    param([Parameter(Mandatory)] $RowItem)
+
+    $id = Get-RowItemIdSafe -RowItem $RowItem
+    if (-not $id) { return }
+
+    if ($script:ExpandedTicketIds.Contains($id)) {
+        [void]$script:ExpandedTicketIds.Remove($id)
+    } else {
+        [void]$script:ExpandedTicketIds.Add($id)
+    }
+
+    # Update the actual row UI now
+    try {
+        $row = $script:TicketsGrid.ItemContainerGenerator.ContainerFromItem($RowItem)
+        if ($row -is [System.Windows.Controls.DataGridRow]) {
+            $expanded = $script:ExpandedTicketIds.Contains($id)
+            Set-RowDetailsState -Row $row -Expanded $expanded
+        }
+    } catch { }
 }
 
 # -------------------------------------------------------------------
@@ -117,181 +209,32 @@ function Update-QOTicketsGrid {
         $createdString = if ($created) { $created.ToString('dd/MM/yyyy h:mm tt') } else { [string]$rawCreated }
 
         [pscustomobject]@{
-            Title       = [string]$t.Title
-            CreatedAt   = $createdString
-            Status      = [string]$t.Status
-            Priority    = [string]$t.Priority
-            Category    = [string]$t.Category
-            Description = [string]$t.Description
-            Id          = [string]$t.Id
+            Title     = [string]$t.Title
+            CreatedAt = $createdString
+            Status    = [string]$t.Status
+            Priority  = [string]$t.Priority
+            Category  = [string]$t.Category
+            Id        = [string]$t.Id
+
+            # What RowDetails shows
+            EmailBody = (Get-QOTicketBodyText -Ticket $t)
         }
     }
 
     $script:TicketsGrid.ItemsSource = @($rows)
-}
 
-function Select-QOTicketRowById {
-    param([Parameter(Mandatory)] [string]$Id)
-
-    if (-not $script:TicketsGrid) { return }
-    if ([string]::IsNullOrWhiteSpace($Id)) { return }
-
-    $match = $null
-    foreach ($item in $script:TicketsGrid.Items) {
-        if ($null -eq $item) { continue }
-        if ($item.PSObject.Properties.Name -contains "Id") {
-            if ([string]$item.Id -eq $Id) { $match = $item; break }
+    # Re-apply expanded states after refresh
+    try {
+        foreach ($item in $script:TicketsGrid.Items) {
+            $id = Get-RowItemIdSafe -RowItem $item
+            if (-not $id) { continue }
+            $row = $script:TicketsGrid.ItemContainerGenerator.ContainerFromItem($item)
+            if ($row -is [System.Windows.Controls.DataGridRow]) {
+                $expanded = $script:ExpandedTicketIds.Contains($id)
+                Set-RowDetailsState -Row $row -Expanded $expanded
+            }
         }
-    }
-
-    if ($match) {
-        $script:TicketsGrid.SelectedItem = $match
-        $script:TicketsGrid.ScrollIntoView($match) | Out-Null
-    }
-}
-
-# -------------------------------------------------------------------
-# Details view (RowDetailsTemplate + toggle)
-# -------------------------------------------------------------------
-function Ensure-QOTicketsRowDetails {
-    param([Parameter(Mandatory)] $Grid)
-
-    if (-not $Grid.RowDetailsTemplate) {
-
-        $xaml = @"
-<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-    <Border Margin="10,8,10,8"
-            Padding="10"
-            CornerRadius="6"
-            BorderThickness="1"
-            BorderBrush="#374151"
-            Background="#020617">
-
-        <DockPanel LastChildFill="True">
-
-            <TextBlock DockPanel.Dock="Top"
-                       Text="Email body"
-                       Foreground="White"
-                       FontSize="14"
-                       FontWeight="SemiBold"
-                       Margin="0,0,0,8"/>
-
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-
-                <TextBlock Text="{Binding Description}"
-                           Foreground="White"
-                           TextWrapping="Wrap"
-                           FontSize="12"/>
-
-            </ScrollViewer>
-
-        </DockPanel>
-    </Border>
-</DataTemplate>
-"@
-
-
-        $sr = New-Object System.IO.StringReader($xaml)
-        $xr = New-Object System.Xml.XmlTextReader($sr)
-        $template = [System.Windows.Markup.XamlReader]::Load($xr)
-        $Grid.RowDetailsTemplate = $template
-    }
-
-    # Do not auto open on selection
-    $Grid.RowDetailsVisibilityMode = [System.Windows.Controls.DataGridRowDetailsVisibilityMode]::Collapsed
-}
-
-function Toggle-QOTicketDetailsForItem {
-    param(
-        [Parameter(Mandatory)] $Grid,
-        [Parameter(Mandatory)] $Item
-    )
-
-    if (-not $Item) { return }
-
-    $row = $Grid.ItemContainerGenerator.ContainerFromItem($Item)
-    if (-not $row) {
-        $Grid.UpdateLayout()
-        $Grid.ScrollIntoView($Item)
-        $row = $Grid.ItemContainerGenerator.ContainerFromItem($Item)
-    }
-    if (-not $row) { return }
-
-    $current = $row.DetailsVisibility
-    if ($current -eq [System.Windows.Visibility]::Visible) {
-        $row.DetailsVisibility = [System.Windows.Visibility]::Collapsed
-    }
-    else {
-        $row.DetailsVisibility = [System.Windows.Visibility]::Visible
-    }
-}
-
-function Ensure-QOTicketsActionsColumn {
-    param([Parameter(Mandatory)] $Grid)
-
-    $already = $false
-    foreach ($c in @($Grid.Columns)) {
-        if ($c -and $c.Header -and $c.Header.ToString() -eq "Actions") {
-            $already = $true
-            break
-        }
-    }
-    if ($already) { return }
-
-    $templateXaml = @"
-<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-    <Button Content="View" Padding="10,4" MinWidth="70" Tag="{Binding}">
-        <Button.Style>
-            <Style TargetType="Button">
-                <Setter Property="Background" Value="#2563EB"/>
-                <Setter Property="Foreground" Value="White"/>
-                <Setter Property="BorderBrush" Value="#1E3A8A"/>
-                <Setter Property="BorderThickness" Value="0"/>
-            </Style>
-        </Button.Style>
-    </Button>
-</DataTemplate>
-"@
-
-    $sr = New-Object System.IO.StringReader($templateXaml)
-    $xr = New-Object System.Xml.XmlTextReader($sr)
-    $cellTemplate = [System.Windows.Markup.XamlReader]::Load($xr)
-
-    $col = New-Object System.Windows.Controls.DataGridTemplateColumn
-    $col.Header = "Actions"
-    $col.CellTemplate = $cellTemplate
-    $col.Width = New-Object System.Windows.Controls.DataGridLength(90)
-
-    [void]$Grid.Columns.Add($col)
-}
-
-function Wire-QOTicketsActionsClick {
-    param([Parameter(Mandatory)] $Grid)
-
-    # Only wire once
-    if ($Grid.Tag -eq "QOT_ACTIONS_WIRED") { return }
-    $Grid.Tag = "QOT_ACTIONS_WIRED"
-
-    $Grid.AddHandler(
-        [System.Windows.Controls.Button]::ClickEvent,
-        [System.Windows.RoutedEventHandler]{
-            param($sender, $e)
-
-            $btn = $e.OriginalSource
-            if (-not ($btn -is [System.Windows.Controls.Button])) { return }
-            if ($btn.Content -ne "View") { return }
-
-            $item = $btn.Tag
-            if (-not $item) { return }
-
-            # Keep selection in sync
-            $script:TicketsGrid.SelectedItem = $item
-            Toggle-QOTicketDetailsForItem -Grid $script:TicketsGrid -Item $item
-
-            $e.Handled = $true
-        }
-    )
+    } catch { }
 }
 
 # -------------------------------------------------------------------
@@ -305,8 +248,6 @@ function Initialize-QOTicketsUI {
         [Parameter(Mandatory = $false)] $BtnDeleteTicket
     )
 
-    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
-
     $script:TicketsGrid = $TicketsGrid
 
     # Grid behaviour
@@ -319,9 +260,46 @@ function Initialize-QOTicketsUI {
         $TicketsGrid.SelectionMode = "Extended"
     } catch { }
 
-    Ensure-QOTicketsRowDetails -Grid $TicketsGrid
-    Ensure-QOTicketsActionsColumn -Grid $TicketsGrid
-    Wire-QOTicketsActionsClick -Grid $TicketsGrid
+    # RowDetails: default collapsed, we will toggle per row
+    try {
+        $TicketsGrid.RowDetailsVisibilityMode = 'Collapsed'
+    } catch { }
+
+    # RowDetailsTemplate: fixed height, wrapping, no visible scrollbars
+    # Still scrollable using mouse wheel inside the body.
+    $rowDetailsXaml = @"
+<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <Border Margin="10,4,10,10"
+          CornerRadius="6"
+          BorderThickness="1"
+          BorderBrush="#374151"
+          Background="#020617"
+          Padding="10">
+    <ScrollViewer VerticalScrollBarVisibility="Hidden"
+                  HorizontalScrollBarVisibility="Disabled"
+                  PanningMode="VerticalOnly">
+      <TextBox Text="{Binding EmailBody}"
+               IsReadOnly="True"
+               Background="Transparent"
+               BorderThickness="0"
+               Foreground="White"
+               TextWrapping="Wrap"
+               AcceptsReturn="True"
+               VerticalScrollBarVisibility="Hidden"
+               HorizontalScrollBarVisibility="Hidden"
+               MaxHeight="280"/>
+    </ScrollViewer>
+  </Border>
+</DataTemplate>
+"@
+
+    try {
+        $sr = New-Object System.IO.StringReader $rowDetailsXaml
+        $xr = [System.Xml.XmlReader]::Create($sr)
+        $TicketsGrid.RowDetailsTemplate = [System.Windows.Markup.XamlReader]::Load($xr)
+    } catch {
+        Write-Warning "Tickets UI: failed to apply RowDetailsTemplate. $_"
+    }
 
     # Apply saved layout once the grid is loaded
     $TicketsGrid.Add_Loaded({
@@ -337,7 +315,6 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # Save layout when a column DisplayIndex changes
     $TicketsGrid.Add_ColumnDisplayIndexChanged({
         param($sender, $eventArgs)
         if (-not $script:TicketsColumnLayoutApplying) {
@@ -345,7 +322,52 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # Refresh (poll email first if available)
+    # Keep details state correct when rows are realised
+    $TicketsGrid.Add_LoadingRow({
+        param($sender, $e)
+        try {
+            $item = $e.Row.Item
+            $id = Get-RowItemIdSafe -RowItem $item
+            if ($id) {
+                $expanded = $script:ExpandedTicketIds.Contains($id)
+                Set-RowDetailsState -Row $e.Row -Expanded $expanded
+            }
+        } catch { }
+    })
+
+    # Toggle details when the Actions button is clicked.
+    # This catches the "View" button without needing to edit XAML, as long as the Button lives inside the grid.
+    $TicketsGrid.AddHandler(
+        [System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,
+        [System.Windows.RoutedEventHandler]{
+            param($sender, $e)
+            try {
+                $btn = $e.OriginalSource
+                if ($btn -isnot [System.Windows.Controls.Button]) { return }
+
+                if ($btn.Content -notin @('View','Hide')) { return }
+
+                $item = $btn.DataContext
+                if ($null -eq $item) { return }
+
+                Toggle-TicketRowDetails -RowItem $item
+
+                # Stop other handlers
+                $e.Handled = $true
+            } catch { }
+        },
+        $true
+    )
+
+    # Bonus: double click a row to toggle details too
+    $TicketsGrid.Add_MouseDoubleClick({
+        try {
+            $item = $script:TicketsGrid.SelectedItem
+            if ($item) { Toggle-TicketRowDetails -RowItem $item }
+        } catch { }
+    })
+
+    # Refresh (poll email first, then refresh grid)
     $BtnRefreshTickets.Add_Click({
         try {
             if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
@@ -356,7 +378,7 @@ function Initialize-QOTicketsUI {
         Update-QOTicketsGrid
     })
 
-    # Delete (supports multi select)
+    # Delete (supports multi-select)
     if ($BtnDeleteTicket) {
         $BtnDeleteTicket.Add_Click({
             try {
@@ -365,9 +387,8 @@ function Initialize-QOTicketsUI {
 
                 $idsToDelete = @(
                     foreach ($item in $selectedItems) {
-                        if ($null -ne $item -and ($item.PSObject.Properties.Name -contains 'Id')) {
-                            if (-not [string]::IsNullOrWhiteSpace($item.Id)) { [string]$item.Id }
-                        }
+                        $id = Get-RowItemIdSafe -RowItem $item
+                        if ($id) { $id }
                     }
                 ) | Select-Object -Unique
 
@@ -376,6 +397,7 @@ function Initialize-QOTicketsUI {
                 foreach ($id in $idsToDelete) {
                     if (Get-Command Remove-QOTicket -ErrorAction SilentlyContinue) {
                         Remove-QOTicket -Id $id | Out-Null
+                        [void]$script:ExpandedTicketIds.Remove($id)
                     }
                 }
             }
@@ -391,6 +413,7 @@ function Initialize-QOTicketsUI {
     $BtnNewTicket.Add_Click({
         try {
             $now = Get-Date
+
             $ticket = New-QOTicket `
                 -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
                 -Description "Test ticket created from the UI." `
