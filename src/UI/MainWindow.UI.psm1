@@ -55,34 +55,35 @@ function Set-QOTControlText {
     if (-not $Control) { return }
 
     try {
+        # TextBlock / TextBox
         if ($Control -is [System.Windows.Controls.TextBlock] -or
             $Control -is [System.Windows.Controls.TextBox]) {
             $Control.Text = $Value
             return
         }
 
+        # Label and most content controls
         if ($Control -is [System.Windows.Controls.Label] -or
             $Control -is [System.Windows.Controls.ContentControl]) {
             $Control.Content = $Value
             return
         }
 
-        # Last-resort: if it actually has a Text property, set it
+        # Fallback by property existence
         if ($Control.PSObject.Properties.Name -contains 'Text') {
             $Control.Text = $Value
             return
         }
-
-        # Or if it has Content
         if ($Control.PSObject.Properties.Name -contains 'Content') {
             $Control.Content = $Value
             return
         }
     }
     catch {
-        # swallow, do not crash UI thread
+        # Do not crash UI thread
     }
 }
+
 # -------------------------------------------------------------------
 # XAML LOADER
 # -------------------------------------------------------------------
