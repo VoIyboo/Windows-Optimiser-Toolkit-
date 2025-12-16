@@ -160,37 +160,37 @@ function Ensure-QOTicketsRowDetails {
 
         $xaml = @"
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-    <Border Margin="10,8,10,8" Padding="10" CornerRadius="6" BorderThickness="1" BorderBrush="#374151" Background="#020617">
-        <StackPanel>
-            <TextBlock Text="Ticket details" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="Title: " Foreground="#9CA3AF" Width="90"/>
-                <TextBlock Text="{Binding Title}" Foreground="White" TextWrapping="Wrap"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="Created: " Foreground="#9CA3AF" Width="90"/>
-                <TextBlock Text="{Binding CreatedAt}" Foreground="White"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="Status: " Foreground="#9CA3AF" Width="90"/>
-                <TextBlock Text="{Binding Status}" Foreground="White"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <TextBlock Text="Priority: " Foreground="#9CA3AF" Width="90"/>
-                <TextBlock Text="{Binding Priority}" Foreground="White"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="Category: " Foreground="#9CA3AF" Width="90"/>
-                <TextBlock Text="{Binding Category}" Foreground="White"/>
-            </StackPanel>
+    <Border Margin="10,8,10,8"
+            Padding="10"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="#374151"
+            Background="#020617">
 
-            <TextBlock Text="Email body and thread view comes next. This panel is the foundation."
-                       Foreground="#9CA3AF"
-                       TextWrapping="Wrap"/>
-        </StackPanel>
+        <DockPanel LastChildFill="True">
+
+            <TextBlock DockPanel.Dock="Top"
+                       Text="Email body"
+                       Foreground="White"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,8"/>
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+
+                <TextBlock Text="{Binding Description}"
+                           Foreground="White"
+                           TextWrapping="Wrap"
+                           FontSize="12"/>
+
+            </ScrollViewer>
+
+        </DockPanel>
     </Border>
 </DataTemplate>
 "@
+
 
         $sr = New-Object System.IO.StringReader($xaml)
         $xr = New-Object System.Xml.XmlTextReader($sr)
