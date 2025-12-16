@@ -358,6 +358,34 @@ function Initialize-QOTicketsUI {
     )
 
     $script:TicketsGrid = $TicketsGrid
+# Load saved RowDetails height (if any)
+try {
+    $s = Get-QOSettings
+    if ($s.PSObject.Properties.Name -contains 'TicketsRowDetailsHeight') {
+        $val = [double]$s.TicketsRowDetailsHeight
+        if ($val -gt 80) { $script:RowDetailsHeight = $val }
+    }
+} catch { }
+
+# Auto cap max height based on grid size (keeps it feeling natural)
+$TicketsGrid.Add_SizeChanged({
+    try {
+        $cap = [Math]::Floor($script:TicketsGrid.ActualHeight * 0.60)
+        if ($cap -lt 200) { $cap = 200 }
+        $script:RowDetailsHeightMax = $cap
+
+        # If current height is bigger than the new cap, pull it down
+        if ($script:RowDetailsHeight -gt $script:RowDetailsHeightMax) {
+            Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeightMax
+        }
+    } catch { }
+})
+
+# Push starting height into Tag for XAML binding
+Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeight
+
+
+
 
     # Load saved RowDetails height
     try {
