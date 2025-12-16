@@ -340,6 +340,18 @@ function Initialize-QOTicketsUI {
     $TicketsGrid.CanUserResizeColumns  = $true
     $TicketsGrid.SelectionUnit         = "FullRow"
     $TicketsGrid.SelectionMode         = "Extended"
+    # --- Smooth scrolling & RowDetails stability ---
+    try { $TicketsGrid.EnableRowVirtualization = $false } catch { }
+    try { $TicketsGrid.EnableColumnVirtualization = $true } catch { }
+    
+    # Prevent jumpy nested scrolling
+    try {
+        $TicketsGrid.SetValue(
+            [System.Windows.Controls.ScrollViewer]::CanContentScrollProperty,
+            $false
+        )
+    } catch { }
+
 
     try { $TicketsGrid.HorizontalScrollBarVisibility = 'Disabled' } catch { }
     try { $TicketsGrid.RowDetailsVisibilityMode = 'Collapsed' } catch { }
