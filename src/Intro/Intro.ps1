@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 # Absolute fallback so Set-QLogRoot always exists before anything else runs
 if (-not (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue)) {
-    function Set-QLogRoot {
+    function global:Set-QLogRoot {
         param([string]$Root)
         $Global:QOTLogRoot = $Root
     }
