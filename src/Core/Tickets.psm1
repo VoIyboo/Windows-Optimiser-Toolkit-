@@ -1,9 +1,8 @@
-# Tickets.UI.psm1
-# UI wiring for the Tickets tab
-
+# Tickets.psm1
 $ErrorActionPreference = "Stop"
 
-Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
+# Only import Settings here
+Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
 
 $script:TicketsColumnLayoutApplying = $false
 $script:TicketsGrid                 = $null
