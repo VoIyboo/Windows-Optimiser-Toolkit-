@@ -178,26 +178,46 @@ function Ensure-QOTicketsExpanderColumn {
     $existing = $Grid.Columns | Where-Object { [string]$_.Header -eq " " } | Select-Object -First 1
     if ($existing) { return }
 
-    $xaml = @"
+   $rowDetailsXaml = @"
 <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Button Width="28" Height="22" Padding="0" Margin="2" Focusable="False"
-          Tag="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}}">
-    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" Foreground="White">
-      <TextBlock.Style>
-        <Style TargetType="{x:Type TextBlock}">
-          <Setter Property="Text" Value="▸"/>
-          <Style.Triggers>
-            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=DetailsVisibility}" Value="Visible">
-              <Setter Property="Text" Value="▾"/>
-            </DataTrigger>
-          </Style.Triggers>
-        </Style>
-      </TextBlock.Style>
-    </TextBlock>
-  </Button>
+  <Border Margin="10,4,10,10"
+          CornerRadius="6"
+          BorderThickness="1"
+          BorderBrush="#374151"
+          Background="#020617"
+          Padding="10"
+          HorizontalAlignment="Stretch">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBox Grid.Row="0"
+               Text="{Binding EmailBody}"
+               IsReadOnly="True"
+               Background="Transparent"
+               BorderThickness="0"
+               Foreground="White"
+               TextWrapping="Wrap"
+               AcceptsReturn="True"
+               VerticalScrollBarVisibility="Auto"
+               HorizontalScrollBarVisibility="Disabled"
+               MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
+               HorizontalAlignment="Stretch"/>
+
+      <Thumb Grid.Row="1"
+             Tag="RowDetailsResizer"
+             Height="6"
+             Margin="0,8,0,0"
+             Cursor="SizeNS"
+             Background="#374151"/>
+    </Grid>
+  </Border>
 </DataTemplate>
 "@
+
 
     $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
     $template = [System.Windows.Markup.XamlReader]::Load($reader)
