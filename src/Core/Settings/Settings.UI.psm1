@@ -6,6 +6,14 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")   -Force -ErrorAction SilentlyContinue
 
+function Set-SettingsHint {
+    param(
+        [Parameter(Mandatory)] $Hint,
+        [Parameter(Mandatory)] [string] $Message
+    )
+    Set-QOTControlTextSafe -Control $Hint -Value $Message
+}
+
 # -------------------------------------------------------------------
 # SAFE CONTROL TEXT SETTER
 # Prevents crashes when using Label vs TextBlock vs TextBox
@@ -202,38 +210,39 @@ function Initialize-QOSettingsUI {
         Set-EmailControlsEnabledState -Enabled $false -EmailBox $emailBox -BtnAdd $btnAdd -BtnRemove $btnRemove -BtnCheck $btnCheck -ListBox $list -HintText $hint
     })
 
-    $btnAdd.Add_Click({
-        try {
-            $addr = "$($emailBox.Text)".Trim()
-
-            if ([string]::IsNullOrWhiteSpace($addr)) {
-                 "Type an email address first."
-                return
-            }
-
-            if ($addr -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') {
-                 "That email address format looks invalid."
-                return
-            }
-
-            $s = Get-QOSettings
-
-            # Defensive: always treat as array
-            $current = @($s.Tickets.EmailIntegration.MonitoredAddresses) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
-            if ($current -notcontains $addr) {
-                $current += $addr
-                $s.Tickets.EmailIntegration.MonitoredAddresses = @($current)
-                Save-QOSettings -Settings $s
-            }
-
-            $emailBox.Text = ""
-             "Saved."
-            Refresh-MonitoredList -ListBox $list
+$btnRemove.Add_Click({
+    try {
+        $sel = $list.SelectedItem
+        if (-not $sel) {
+            Set-SettingsHint -Hint $hint -Message "Select an address to remove."
+            return
         }
-        catch {
-             "Add failed. Check logs."
+
+        $remove = "$sel".Trim()
+
+        $s = Get-QOSettings
+        $current = @($s.Tickets.EmailIntegration.MonitoredAddresses) |
+            ForEach-Object { "$_".Trim() } |
+            Where-Object { $_ }
+
+        $newList = @($current | Where-Object { $_ -ne $remove })
+
+        if ($newList.Count -eq $current.Count) {
+            Set-SettingsHint -Hint $hint -Message "Did not find that address in settings."
+            return
         }
-    })
+
+        $s.Tickets.EmailIntegration.MonitoredAddresses = @($newList)
+        Save-QOSettings -Settings $s
+
+        Refresh-MonitoredList -ListBox $list
+        Set-SettingsHint -Hint $hint -Message "Removed: $remove"
+    }
+    catch {
+        Set-SettingsHint -Hint $hint -Message "Remove failed. Check logs."
+    }
+})
+
 
     $btnRemove.Add_Click({
         try {
