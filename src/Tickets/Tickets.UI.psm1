@@ -15,10 +15,17 @@ $script:TicketsGrid                 = $null
 # Expanded ticket IDs
 $script:ExpandedTicketIds = New-Object 'System.Collections.Generic.HashSet[string]'
 
-# RowDetails height (global preference)
-$script:RowDetailsMaxHeightDefault = 240
-$script:RowDetailsMaxHeight        = $script:RowDetailsMaxHeightDefault
+# RowDetails height (user adjustable)
+$script:RowDetailsHeightDefault = 240
+$script:RowDetailsHeight        = $script:RowDetailsHeightDefault
 
+# Limits (max will also be auto-capped to grid height)
+$script:RowDetailsHeightMin = 120
+$script:RowDetailsHeightMax = 900
+
+# Drag tracking
+$script:RowDetailsDragStartHeight = $null
+$script:RowDetailsSavePending = $false
 # -------------------------------------------------------------------
 # Column layout helpers (order + width)
 # -------------------------------------------------------------------
