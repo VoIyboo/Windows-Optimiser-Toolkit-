@@ -230,6 +230,24 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTMainWindow returned null. Main window was not created."
         }
 
+        # 🔒 Catch unhandled UI exceptions so they don’t kill ShowDialog
+        try {
+            $window.Dispatcher.Add_UnhandledException({
+                param($sender, $e)
+
+                try {
+                    if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                        Write-QLog "UI UnhandledException: $($e.Exception.ToString())" "ERROR"
+                    } else {
+                        Write-Host "UI UnhandledException: $($e.Exception.ToString())"
+                    }
+                } catch { }
+
+                # Prevent hard crash so UI keeps running
+                $e.Handled = $true
+            })
+        } catch { }
+
         [void]$window.ShowDialog()
     }
     catch {
