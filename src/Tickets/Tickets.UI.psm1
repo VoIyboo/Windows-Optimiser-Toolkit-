@@ -389,7 +389,7 @@ $rowDetailsXaml = @"
                     HorizontalScrollBarVisibility="Disabled"
                     PanningMode="VerticalFirst"
                     CanContentScroll="False"
-                    MaxHeight="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
+                    Height="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
                     Width="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=ActualWidth}"
                     HorizontalAlignment="Stretch">
         <TextBlock Text="{Binding EmailBody}"
