@@ -1,5 +1,5 @@
 # Intro.ps1
-# Responsible ONLY for splash + startup sequencing
+# Responsible ONLY for splash + startup sequencing (single splash)
 
 param(
     [string]$LogPath,
@@ -15,76 +15,52 @@ $ErrorActionPreference = "Stop"
 $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
 # --------------------------------------
-# Load minimal logging if available
+# WPF assemblies
+# --------------------------------------
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+
+# --------------------------------------
+# Load logging if available
 # --------------------------------------
 $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
-if (Test-Path $loggingModule) {
+if (Test-Path -LiteralPath $loggingModule) {
     Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
 }
 
 try { Write-QLog "Intro started. Root=$rootPath" } catch { }
 
 # --------------------------------------
-# WPF
-# --------------------------------------
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
-
-# --------------------------------------
-# Load splash helpers
+# Load splash helpers and show splash
 # --------------------------------------
 Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1") -Force -ErrorAction Stop
 
-# --------------------------------------
-# Create + show splash immediately
-# --------------------------------------
-$splash = New-QOTSplashWindow -Path (Join-Path $rootPath "src\Intro\Splash.xaml")
+$splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
+$splash     = New-QOTSplashWindow -Path $splashXaml
 
 Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
 Update-QOTSplashProgress -Window $splash -Value 5
-$splash.Show()
+$null = $splash.Show()
+
+# Let WPF paint the splash immediately
+try { $splash.Dispatcher.Invoke({ }, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
 
 # --------------------------------------
-# Run background init on separate runspace
+# Load Engine now (imports feature modules)
+# Keep it simple and safe, no grid refresh here
 # --------------------------------------
-$ps = [PowerShell]::Create()
-$null = $ps.AddScript({
-    param($Root)
+try {
+    Update-QOTSplashStatus   -Window $splash -Text "Loading modules..."
+    Update-QOTSplashProgress -Window $splash -Value 35
 
-    $ErrorActionPreference = "Stop"
+    $engine = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
+    if (-not (Test-Path -LiteralPath $engine)) {
+        throw "Engine module not found at: $engine"
+    }
 
-    # Load engine (this imports all feature modules)
-    $engine = Join-Path $Root "src\Core\Engine\Engine.psm1"
     Import-Module $engine -Force -ErrorAction Stop
 
-    # Optional warm-up work
-    if (Get-Command Refresh-QOTInstalledAppsGrid -ErrorAction SilentlyContinue) {
-        Refresh-QOTInstalledAppsGrid -Grid $null 2>$null
-    }
-
-    if (Get-Command Refresh-QOTCommonAppsGrid -ErrorAction SilentlyContinue) {
-        Refresh-QOTCommonAppsGrid -Grid $null 2>$null
-    }
-
-    return $true
-}).AddArgument($rootPath)
-
-$async = $ps.BeginInvoke()
-
-# --------------------------------------
-# Simple splash progress loop
-# --------------------------------------
-$progress = 10
-while (-not $async.IsCompleted) {
-    $progress = [Math]::Min(90, $progress + 3)
-    Update-QOTSplashStatus   -Window $splash -Text "Loading modules..."
-    Update-QOTSplashProgress -Window $splash -Value $progress
-    Start-Sleep -Milliseconds 120
-}
-
-try {
-    $ps.EndInvoke($async)
     Update-QOTSplashStatus   -Window $splash -Text "Opening app..."
-    Update-QOTSplashProgress -Window $splash -Value 100
+    Update-QOTSplashProgress -Window $splash -Value 90
 }
 catch {
     [System.Windows.MessageBox]::Show(
@@ -94,17 +70,19 @@ catch {
         "Error"
     ) | Out-Null
 
-    $splash.Close()
+    try { $splash.Close() } catch { }
     return
 }
-finally {
-    $ps.Dispose()
+
+# --------------------------------------
+# Start main window WHILE splash is visible
+# Main window is responsible for closing splash when ready
+# --------------------------------------
+try {
+    Start-QOTMain -RootPath $rootPath -SplashWindow $splash
 }
-
-Start-Sleep -Milliseconds 200
-$splash.Close()
-
-# --------------------------------------
-# Start main window
-# --------------------------------------
-Start-QOTMain -RootPath $rootPath
+catch {
+    try { Write-QLog "Start-QOTMain failed: $($_.Exception.Message)" "ERROR" } catch { }
+    try { $splash.Close() } catch { }
+    throw
+}
