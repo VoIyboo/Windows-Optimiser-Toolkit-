@@ -44,7 +44,14 @@ try {
     if (-not (Test-Path -LiteralPath $enginePath)) {
         throw "Engine module not found at: $enginePath"
     }
-    Import-Module $enginePath -Force -ErrorAction Stop
+    
+    . $enginePath
+    
+    if (-not (Get-Command Start-QOTMain -ErrorAction SilentlyContinue)) {
+    throw "Start-QOTMain was not loaded after dot-sourcing Engine.psm1. Path: $enginePath"
+}
+
+
 
     Set-Splash -Value 35 -Text "Warming up..."
 
