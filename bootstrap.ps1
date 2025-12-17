@@ -1,5 +1,5 @@
 # bootstrap.ps1
-# Always download a fresh build, extract clean, run Intro.ps1 quietly
+# Always download a fresh build, extract clean, run Intro.ps1 (debug friendly)
 
 $ErrorActionPreference   = "Stop"
 $ProgressPreference      = "SilentlyContinue"
@@ -14,8 +14,8 @@ if (-not (Test-Path -LiteralPath $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 }
 
-$logPath = Join-Path $logDir ("Bootstrap_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-Start-Transcript -Path $logPath -Append | Out-Null
+$bootstrapLog = Join-Path $logDir ("Bootstrap_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+Start-Transcript -Path $bootstrapLog -Append | Out-Null
 
 try {
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
@@ -57,8 +57,18 @@ try {
         throw "Intro.ps1 not found at $introPath"
     }
 
+    $introLog = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+
     Set-Location -LiteralPath $toolkitRoot
-    & $introPath -LogPath $logPath -Quiet | Out-Null
+
+    Write-Host ""
+    Write-Host "Toolkit root: $toolkitRoot"
+    Write-Host "Intro path:   $introPath"
+    Write-Host "Intro log:    $introLog"
+    Write-Host "Bootstrap log:$bootstrapLog"
+    Write-Host ""
+
+    & $introPath -LogPath $introLog -SkipSplash
 }
 finally {
     try { Stop-Transcript | Out-Null } catch { }
