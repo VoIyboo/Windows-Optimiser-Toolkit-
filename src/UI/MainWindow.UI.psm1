@@ -213,7 +213,6 @@ function Initialize-QOTMainWindow {
 function Start-QOTMainWindow {
     param(
         [switch]$NonBlocking,
-        [Parameter(Mandatory = $false)]
         [System.Windows.Window]$SplashWindow
     )
 
@@ -231,8 +230,13 @@ function Start-QOTMainWindow {
         }
 
         if ($NonBlocking) {
+            # IMPORTANT: Do not output booleans to the pipeline
             [void]$window.Show()
-            try { $window.Activate() } catch { }
+            try { [void]$window.Activate() } catch { }
+
+            # Expose so Intro.ps1 can watch it
+            $Global:QOTMainWindow = $window
+
             return $window
         }
 
@@ -243,6 +247,7 @@ function Start-QOTMainWindow {
         throw
     }
 }
+
 
 # -------------------------------------------------------------------
 # TAB SELECTION
