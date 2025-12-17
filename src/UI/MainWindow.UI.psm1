@@ -128,7 +128,6 @@ function New-QOTMainWindow {
 
 function Initialize-QOTMainWindow {
     try {
-
         $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
         $window   = New-QOTMainWindow -XamlPath $xamlPath
 
@@ -214,6 +213,7 @@ function Initialize-QOTMainWindow {
 function Start-QOTMainWindow {
     param(
         [switch]$NonBlocking,
+        [Parameter(Mandatory = $false)]
         [System.Windows.Window]$SplashWindow
     )
 
@@ -233,10 +233,6 @@ function Start-QOTMainWindow {
         if ($NonBlocking) {
             [void]$window.Show()
             try { $window.Activate() } catch { }
-
-            # Expose so Intro.ps1 can watch it
-            $Global:QOTMainWindow = $window
-
             return $window
         }
 
@@ -247,7 +243,6 @@ function Start-QOTMainWindow {
         throw
     }
 }
-
 
 # -------------------------------------------------------------------
 # TAB SELECTION
