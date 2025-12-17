@@ -93,38 +93,38 @@ function Start-QOTMain {
         [string]$RootPath
     )
 
-    try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
+    try {
+        try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
 
-    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-        $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
-        $uiModule = [System.IO.Path]::GetFullPath($uiModule)
+        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+            $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
+            $uiModule = [System.IO.Path]::GetFullPath($uiModule)
 
-        if (-not (Test-Path -LiteralPath $uiModule)) {
-            throw "UI module file missing: $uiModule"
+            if (-not (Test-Path -LiteralPath $uiModule)) {
+                throw "UI module file missing: $uiModule"
+            }
+
+            Import-Module $uiModule -Force -ErrorAction Stop
         }
 
-        Import-Module $uiModule -Force -ErrorAction Stop
+        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+            throw "UI module not loaded: Start-QOTMainWindow not found"
+        }
+
+        # Start the main window and return the Window object
+        $win = Start-QOTMainWindow
+        try { $win.Activate() } catch { }
+
+        # Expose the window so Intro.ps1 can wait for it to be visible
+        $Global:QOTMainWindow = $win
+
+        return $win
     }
-
-    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-        throw "UI module not loaded: Start-QOTMainWindow not found"
+    catch {
+        try { Write-QLog "Start-QOTMain failed: $($_.Exception.Message)" "ERROR" } catch { }
+        throw
     }
-    # Start the main window and return the Window object
-    $win = Start-QOTMainWindow
-    try { $win.Activate() } catch { }
-    # Expose the window so Intro.ps1 can wait for it to be visible
-    $Global:QOTMainWindow = $win
-
-    return $win
 }
-catch {
-    try { Write-QLog "Start-QOTMain failed: $($_.Exception.Message)" "ERROR" } catch { }
-    throw
-}
-
-
-
-
     Start-QOTMainWindow
 }
 
