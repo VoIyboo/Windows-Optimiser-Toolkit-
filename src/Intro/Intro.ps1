@@ -22,7 +22,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Ou
 Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1") -Force -ErrorAction Stop
 
 $splash = New-QOTSplashWindow -Path (Join-Path $rootPath "src\Intro\Splash.xaml")
-Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
+Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit (NEW INTRO)..."
 Update-QOTSplashProgress -Window $splash -Value 5
 [void]$splash.Show()
 
