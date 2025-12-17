@@ -59,12 +59,25 @@ $txt = $win.FindName("TxtStatus")
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(150)
 $timer.Add_Tick({
+
+    # Read progress updates if a progress file is provided
+    if ($ProgressPath -and (Test-Path -LiteralPath $ProgressPath)) {
+        try {
+            $p = Get-Content -LiteralPath $ProgressPath -Raw | ConvertFrom-Json
+            if ($bar -and $p.progress -ne $null) { $bar.Value = [double]$p.progress }
+            if ($txt -and $p.status) { $txt.Text = $p.status }
+        } catch { }
+    }
+
+    # Signal file means we are done
     if (Test-Path -LiteralPath $SignalPath) {
         $timer.Stop()
         try { Remove-Item -LiteralPath $SignalPath -Force -ErrorAction SilentlyContinue } catch {}
         $win.Close()
     }
+
 })
 $timer.Start()
 
 $null = $win.ShowDialog()
+
