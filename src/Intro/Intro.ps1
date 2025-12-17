@@ -236,6 +236,7 @@ Write-QLog "Starting main window" "INFO"
 Start-QOTMain -RootPath $rootPath
 
 if ($splash) {
+    $splash.Topmost = $false
     $splash.Close()
 }
 
