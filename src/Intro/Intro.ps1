@@ -7,121 +7,91 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference    = "SilentlyContinue"
+$WarningPreference     = "SilentlyContinue"
+$VerbosePreference     = "SilentlyContinue"
+$InformationPreference = "SilentlyContinue"
 
-# --------------------------------------
-# Resolve toolkit root
-# src\Intro\Intro.ps1 -> toolkit root
-# --------------------------------------
+# Resolve toolkit root (src\Intro\Intro.ps1 -> toolkit root)
 $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
-# --------------------------------------
 # WPF
-# --------------------------------------
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Out-Null
 
-# --------------------------------------
 # Load splash helpers
-# --------------------------------------
 Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1") -Force -ErrorAction Stop
 
-# --------------------------------------
 # Show splash immediately
-# --------------------------------------
 $splash = New-QOTSplashWindow -Path (Join-Path $rootPath "src\Intro\Splash.xaml")
 Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
 Update-QOTSplashProgress -Window $splash -Value 5
 [void]$splash.Show()
 
-# --------------------------------------
-# Background init (NO UI touching in here)
-# --------------------------------------
-$ps = [PowerShell]::Create()
-$null = $ps.AddScript({
-    param($Root)
+function Set-Splash {
+    param([int]$Value, [string]$Text)
 
-    $ErrorActionPreference = "Stop"
+    if ($Text)  { Update-QOTSplashStatus -Window $splash -Text $Text }
+    if ($Value) { Update-QOTSplashProgress -Window $splash -Value $Value }
 
-    $engine = Join-Path $Root "src\Core\Engine\Engine.psm1"
-    Import-Module $engine -Force -ErrorAction Stop
-
-    # Optional light warmups only (safe, quick)
-    try { if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) { $null = Test-QOTWingetAvailable } } catch { }
-    try { if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) { $null = Get-QOTCommonAppsCatalogue } } catch { }
-
-    return $true
-}).AddArgument($rootPath)
-
-$async = $ps.BeginInvoke()
-
-# --------------------------------------
-# Progress loop (keeps splash responsive)
-# --------------------------------------
-$progress = 10
-while (-not $async.IsCompleted) {
-
-    $progress = [Math]::Min(90, $progress + 2)
-
-    Update-QOTSplashStatus   -Window $splash -Text "Loading modules..."
-    Update-QOTSplashProgress -Window $splash -Value $progress
-
-    # Let WPF paint (very important)
-    try { $splash.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
-
-    Start-Sleep -Milliseconds 120
+    try { $splash.Dispatcher.Invoke({ }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
 }
 
-# --------------------------------------
-# Finish background init
-# --------------------------------------
 try {
+    Set-Splash -Value 15 -Text "Loading core modules..."
+
+    # Import Engine in THIS session (so Start-QOTMain exists here)
+    $enginePath = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
+    if (-not (Test-Path -LiteralPath $enginePath)) {
+        throw "Engine module not found at: $enginePath"
+    }
+    Import-Module $enginePath -Force -ErrorAction Stop
+
+    Set-Splash -Value 35 -Text "Warming up..."
+
+    # Background warmup (optional)
+    $ps = [PowerShell]::Create()
+    $null = $ps.AddScript({
+        param($Root)
+
+        $ErrorActionPreference = "Stop"
+
+        $engine = Join-Path $Root "src\Core\Engine\Engine.psm1"
+        Import-Module $engine -Force -ErrorAction Stop
+
+        if (Get-Command Invoke-QOTStartupWarmup -ErrorAction SilentlyContinue) {
+            Invoke-QOTStartupWarmup -RootPath $Root
+        }
+
+        return $true
+    }).AddArgument($rootPath)
+
+    $async = $ps.BeginInvoke()
+
+    $p = 40
+    while (-not $async.IsCompleted) {
+        $p = [Math]::Min(90, $p + 2)
+        Set-Splash -Value $p -Text "Loading modules..."
+        Start-Sleep -Milliseconds 120
+    }
+
     $null = $ps.EndInvoke($async)
+    $ps.Dispose()
 
-    Update-QOTSplashStatus   -Window $splash -Text "Opening app..."
-    Update-QOTSplashProgress -Window $splash -Value 100
+    Set-Splash -Value 100 -Text "Opening app..."
+    Start-Sleep -Milliseconds 200
 
-    try { $splash.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
+    # Close splash then open main window
+    $splash.Close()
+
+    Start-QOTMain -RootPath $rootPath
 }
 catch {
+    try { $splash.Close() } catch { }
+
     [System.Windows.MessageBox]::Show(
         "Startup failed:`n`n$($_.Exception.Message)",
         "Quinn Optimiser Toolkit",
         "OK",
         "Error"
     ) | Out-Null
-
-    try { $splash.Close() } catch { }
-    return
 }
-finally {
-    try { $ps.Dispose() } catch { }
-}
-
-# --------------------------------------
-# Start main window
-# Do NOT close splash here, the main window will close it on load
-# --------------------------------------
-# Make Start-QOTMain available in the main session (runspace imports do not carry over)
-while (-not $async.IsCompleted) {
-    $progress = [Math]::Min(90, $progress + 3)
-
-    Update-QOTSplashStatus   -Window $splash -Text "Loading modules..."
-    Update-QOTSplashProgress -Window $splash -Value $progress
-
-    try {
-        $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
-    } catch { }
-
-    Start-Sleep -Milliseconds 120
-}
-
-Update-QOTSplashStatus   -Window $splash -Text "Opening app..."
-Update-QOTSplashProgress -Window $splash -Value 100
-
-try {
-    $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
-} catch { }
-
-Start-Sleep -Milliseconds 150
-
-try { $splash.Close() } catch { }
-Start-QOTMain -RootPath $rootPath
