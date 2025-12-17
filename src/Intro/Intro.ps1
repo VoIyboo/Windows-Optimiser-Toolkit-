@@ -242,4 +242,7 @@ if ($splash) {
 }
 
 Write-QLog "Intro completed" "INFO"
-
+}
+finally {
+    $WarningPreference = $oldWarningPreference
+}
