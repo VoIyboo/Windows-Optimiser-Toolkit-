@@ -225,26 +225,10 @@ function Start-QOTMainWindow {
         }
 
         if ($SplashWindow) {
-            $window.Add_Loaded({
+            $window.Add_ContentRendered({
                 try { $SplashWindow.Close() } catch { }
             })
         }
-
-        try {
-            $window.Dispatcher.Add_UnhandledException({
-                param($sender, $e)
-
-                try {
-                    if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
-                        Write-QLog "UI UnhandledException: $($e.Exception.ToString())" "ERROR"
-                    } else {
-                        Write-Host "UI UnhandledException: $($e.Exception.ToString())"
-                    }
-                } catch { }
-
-                $e.Handled = $true
-            })
-        } catch { }
 
         [void]$window.ShowDialog()
     }
