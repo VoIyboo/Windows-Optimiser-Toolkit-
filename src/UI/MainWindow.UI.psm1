@@ -213,7 +213,7 @@ function Initialize-QOTMainWindow {
 
 function Start-QOTMainWindow {
     param(
-        [Parameter(Mandatory = $false)]
+        [switch]$NonBlocking,
         [System.Windows.Window]$SplashWindow
     )
 
@@ -225,51 +225,21 @@ function Start-QOTMainWindow {
         }
 
         if ($SplashWindow) {
-
-            # When the main window has actually rendered, show Ready for 2s, fade, then close splash
             $window.Add_ContentRendered({
-
-                try {
-                    $SplashWindow.Dispatcher.Invoke([action]{
-
-                        $bar = $SplashWindow.FindName("SplashProgressBar")
-                        $txt = $SplashWindow.FindName("SplashStatusText")
-
-                        if ($bar) { $bar.Value = 100 }
-                        if ($txt) { $txt.Text  = "Ready" }
-
-                    }, [System.Windows.Threading.DispatcherPriority]::Background)
-                } catch { }
-
-                $timer = New-Object System.Windows.Threading.DispatcherTimer
-                $timer.Interval = [TimeSpan]::FromSeconds(2)
-
-                $timer.Add_Tick({
-                    $timer.Stop()
-
-                    try {
-                        $SplashWindow.Dispatcher.Invoke([action]{
-                            $SplashWindow.Topmost = $false
-
-                            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-                            $anim.From = 1
-                            $anim.To = 0
-                            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
-
-                            $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
-                        })
-                    } catch { }
-
-                    Start-Sleep -Milliseconds 330
-
-                    try { $SplashWindow.Dispatcher.Invoke([action]{ $SplashWindow.Close() }) } catch { }
-                })
-
-                $timer.Start()
+                try { $SplashWindow.Close() } catch { }
             })
         }
 
-        # THIS is the message pump that makes WPF usable from PowerShell
+        if ($NonBlocking) {
+            [void]$window.Show()
+            try { $window.Activate() } catch { }
+
+            # Expose so Intro.ps1 can watch it
+            $Global:QOTMainWindow = $window
+
+            return $window
+        }
+
         [void]$window.ShowDialog()
     }
     catch {
