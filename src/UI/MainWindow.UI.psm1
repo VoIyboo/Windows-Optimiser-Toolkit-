@@ -225,18 +225,52 @@ function Start-QOTMainWindow {
         }
 
         if ($SplashWindow) {
+
+            # When the main window has actually rendered, show Ready for 2s, fade, then close splash
             $window.Add_ContentRendered({
-                try { $SplashWindow.Close() } catch { }
+
+                try {
+                    $SplashWindow.Dispatcher.Invoke([action]{
+
+                        $bar = $SplashWindow.FindName("SplashProgressBar")
+                        $txt = $SplashWindow.FindName("SplashStatusText")
+
+                        if ($bar) { $bar.Value = 100 }
+                        if ($txt) { $txt.Text  = "Ready" }
+
+                    }, [System.Windows.Threading.DispatcherPriority]::Background)
+                } catch { }
+
+                $timer = New-Object System.Windows.Threading.DispatcherTimer
+                $timer.Interval = [TimeSpan]::FromSeconds(2)
+
+                $timer.Add_Tick({
+                    $timer.Stop()
+
+                    try {
+                        $SplashWindow.Dispatcher.Invoke([action]{
+                            $SplashWindow.Topmost = $false
+
+                            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+                            $anim.From = 1
+                            $anim.To = 0
+                            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+
+                            $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+                        })
+                    } catch { }
+
+                    Start-Sleep -Milliseconds 330
+
+                    try { $SplashWindow.Dispatcher.Invoke([action]{ $SplashWindow.Close() }) } catch { }
+                })
+
+                $timer.Start()
             })
         }
 
-        # Non modal: do NOT block Intro.ps1
-        $window.Show() | Out-Null
-
-        # Give the UI thread a moment to process and actually draw the window
-        try { $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
-
-        return $window
+        # THIS is the message pump that makes WPF usable from PowerShell
+        [void]$window.ShowDialog()
     }
     catch {
         Write-Error "Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
