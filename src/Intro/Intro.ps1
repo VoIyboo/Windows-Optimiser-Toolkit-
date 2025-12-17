@@ -187,6 +187,24 @@ try {
                 $splash.WindowStartupLocation = "CenterScreen"
                 $splash.Topmost = $true
                 $splash.Show()
+
+                function Set-FoxSplash {
+                    param(
+                        [int]$Percent,
+                        [string]$Text
+                    )
+                
+                    if (-not $splash) { return }
+                
+                    $splash.Dispatcher.Invoke([action]{
+                        $bar = $splash.FindName("SplashProgressBar")
+                        $txt = $splash.FindName("SplashStatusText")
+                
+                        if ($bar) { $bar.Value = [double]$Percent }
+                        if ($txt) { $txt.Text = $Text }
+                    })
+                }
+
             }
         }
 
