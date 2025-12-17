@@ -1,5 +1,5 @@
 # Intro.ps1
-# Responsible ONLY for splash + startup sequencing (single splash, no second one)
+# Responsible ONLY for splash + startup sequencing (single splash)
 
 param(
     [string]$LogPath,
@@ -25,7 +25,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1") -Force -ErrorAction Stop
 
 # --------------------------------------
-# Create + show splash immediately
+# Show splash immediately
 # --------------------------------------
 $splash = New-QOTSplashWindow -Path (Join-Path $rootPath "src\Intro\Splash.xaml")
 Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
@@ -33,7 +33,7 @@ Update-QOTSplashProgress -Window $splash -Value 5
 [void]$splash.Show()
 
 # --------------------------------------
-# Start background init (no UI touching here)
+# Background init (NO UI touching in here)
 # --------------------------------------
 $ps = [PowerShell]::Create()
 $null = $ps.AddScript({
@@ -44,7 +44,7 @@ $null = $ps.AddScript({
     $engine = Join-Path $Root "src\Core\Engine\Engine.psm1"
     Import-Module $engine -Force -ErrorAction Stop
 
-    # Optional: light warmups only (no grids, no UI)
+    # Optional light warmups only (safe, quick)
     try { if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) { $null = Test-QOTWingetAvailable } } catch { }
     try { if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) { $null = Get-QOTCommonAppsCatalogue } } catch { }
 
@@ -54,58 +54,50 @@ $null = $ps.AddScript({
 $async = $ps.BeginInvoke()
 
 # --------------------------------------
-# Progress timer (keeps UI responsive)
+# Progress loop (keeps splash responsive)
 # --------------------------------------
-$progress = 8
-$timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromMilliseconds(120)
-
-$timer.Add_Tick({
-    if ($async.IsCompleted) {
-        $timer.Stop()
-        return
-    }
+$progress = 10
+while (-not $async.IsCompleted) {
 
     $progress = [Math]::Min(90, $progress + 2)
+
     Update-QOTSplashStatus   -Window $splash -Text "Loading modules..."
     Update-QOTSplashProgress -Window $splash -Value $progress
-})
 
-$timer.Start()
+    # Let WPF paint (very important)
+    try { $splash.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
+
+    Start-Sleep -Milliseconds 120
+}
 
 # --------------------------------------
-# When background init completes, open main window
+# Finish background init
 # --------------------------------------
-$splash.Dispatcher.BeginInvoke([Action]{
-    try {
-        while (-not $async.IsCompleted) {
-            Start-Sleep -Milliseconds 80
-        }
+try {
+    $null = $ps.EndInvoke($async)
 
-        $null = $ps.EndInvoke($async)
+    Update-QOTSplashStatus   -Window $splash -Text "Opening app..."
+    Update-QOTSplashProgress -Window $splash -Value 100
 
-        Update-QOTSplashStatus   -Window $splash -Text "Opening app..."
-        Update-QOTSplashProgress -Window $splash -Value 100
+    try { $splash.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
+}
+catch {
+    [System.Windows.MessageBox]::Show(
+        "Startup failed:`n`n$($_.Exception.Message)",
+        "Quinn Optimiser Toolkit",
+        "OK",
+        "Error"
+    ) | Out-Null
 
-        # Hand splash window into Start-QOTMain so MainWindow can close it when loaded
-        Start-QOTMain -RootPath $rootPath -SplashWindow $splash
-    }
-    catch {
-        [System.Windows.MessageBox]::Show(
-            "Startup failed:`n`n$($_.Exception.Message)",
-            "Quinn Optimiser Toolkit",
-            "OK",
-            "Error"
-        ) | Out-Null
+    try { $splash.Close() } catch { }
+    return
+}
+finally {
+    try { $ps.Dispose() } catch { }
+}
 
-        try { $splash.Close() } catch { }
-    }
-    finally {
-        try { $ps.Dispose() } catch { }
-        try { $timer.Stop() } catch { }
-    }
-}, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
-})
-
-# Keep script alive until splash closes (then main window takes over)
-[void][System.Windows.Threading.Dispatcher]::Run()
+# --------------------------------------
+# Start main window
+# Do NOT close splash here, the main window will close it on load
+# --------------------------------------
+Start-QOTMain -RootPath $rootPath -SplashWindow $splash
