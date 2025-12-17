@@ -164,15 +164,15 @@ try {
         Start-Sleep -Milliseconds 100
     }
     
-    # Now show Ready for 2 seconds, then fade away
-    Set-FoxSplash 100 "Ready"
-    Refresh-FoxSplash
-    Start-Sleep -Seconds 2
+        # Now show Ready for 2 seconds, then fade away
+        Set-FoxSplash 100 "Ready"
+        Refresh-FoxSplash
+        Start-Sleep -Seconds 2
     
-    FadeOut-AndCloseFoxSplash
+        FadeOut-AndCloseFoxSplash
     
-    Write-QLog "Intro completed" "INFO"
-    }
-    finally {
-        $WarningPreference = $oldWarningPreference
-    }
+        Write-QLog "Intro completed" "INFO"
+        }
+        finally {
+            $WarningPreference = $oldWarningPreference
+        }
