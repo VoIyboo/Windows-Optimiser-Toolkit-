@@ -109,6 +109,21 @@ function Start-QOTMain {
     if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
         throw "UI module not loaded: Start-QOTMainWindow not found"
     }
+    # Start the main window and return the Window object
+    $win = Start-QOTMainWindow
+    try { $win.Activate() } catch { }
+    # Expose the window so Intro.ps1 can wait for it to be visible
+    $Global:QOTMainWindow = $win
+
+    return $win
+}
+catch {
+    try { Write-QLog "Start-QOTMain failed: $($_.Exception.Message)" "ERROR" } catch { }
+    throw
+}
+
+
+
 
     Start-QOTMainWindow
 }
