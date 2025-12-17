@@ -4,7 +4,6 @@
 $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Settings.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path (Split-Path $PSScriptRoot -Parent) "Tickets.psm1")   -Force -ErrorAction SilentlyContinue
 
 # -------------------------------------------------------------------
 # Script scope controls (prevents $null in event handlers)
