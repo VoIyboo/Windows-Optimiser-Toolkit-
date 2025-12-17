@@ -142,15 +142,35 @@
         </Style>
         
         <Style TargetType="DataGridRow">
-            <Setter Property="Background" Value="#020617"/>
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-        </Style>
-        
-        <Style TargetType="DataGridCell">
-            <Setter Property="Background" Value="#020617"/>
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-            <Setter Property="BorderBrush" Value="#374151"/>
-        </Style>
+           <Style TargetType="DataGridRow">
+                    <Style TargetType="DataGridRow">
+                    <Setter Property="Background" Value="#020617"/>
+                    <Setter Property="Foreground" Value="#E5E7EB"/>
+                    <Setter Property="BorderBrush" Value="#374151"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#0B1220"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#2563EB"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+                
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Background" Value="#020617"/>
+                    <Setter Property="Foreground" Value="#E5E7EB"/>
+                    <Setter Property="BorderBrush" Value="#374151"/>
+                    <Setter Property="Padding" Value="6,3"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#2563EB"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+
     </Window.Resources>
 
     <Grid>
