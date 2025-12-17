@@ -1,11 +1,11 @@
 # bootstrap.ps1
 # Download latest Quinn Optimiser Toolkit build to a temp folder and run Intro.ps1
 
-$ErrorActionPreference  = "Stop"
-$ProgressPreference     = "SilentlyContinue"
-$WarningPreference      = "SilentlyContinue"
-$VerbosePreference      = "SilentlyContinue"
-$InformationPreference  = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
+$ProgressPreference    = "SilentlyContinue"
+$WarningPreference     = "SilentlyContinue"
+$VerbosePreference     = "SilentlyContinue"
+$InformationPreference = "SilentlyContinue"
 
 $originalLocation = Get-Location
 
@@ -24,13 +24,10 @@ try {
     $repoName  = "Windows-Optimiser-Toolkit-"
     $branch    = "main"
 
-    $baseTemp  = Join-Path $env:TEMP "QuinnOptimiserToolkit"
-    $zipPath   = Join-Path $baseTemp "repo.zip"
+    $baseTemp = Join-Path $env:TEMP "QuinnOptimiserToolkit"
+    $zipPath  = Join-Path $baseTemp "repo.zip"
 
-    # Keep it quiet but logged
-    try { Write-QLog "Bootstrap starting. Temp=$baseTemp" "INFO" } catch { }
-
-    # Clean temp every run so we never read stale folders
+    # Start clean every time
     if (Test-Path -LiteralPath $baseTemp) {
         Remove-Item -LiteralPath $baseTemp -Recurse -Force
     }
@@ -38,27 +35,23 @@ try {
 
     $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip"
 
-    # Download
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing | Out-Null
-
-    # Extract
     Expand-Archive -Path $zipPath -DestinationPath $baseTemp -Force
 
-    # Find extracted root folder (GitHub names it like RepoName-branch)
-    $toolkitRootFolder = Get-ChildItem -LiteralPath $baseTemp -Directory |
+    # GitHub extracts into a folder like: Windows-Optimiser-Toolkit--main
+    $rootFolder = Get-ChildItem -LiteralPath $baseTemp -Directory |
         Where-Object { $_.Name -like "$repoName*" } |
         Select-Object -First 1
 
-    if (-not $toolkitRootFolder) {
-        # Fallback: first directory under temp
-        $toolkitRootFolder = Get-ChildItem -LiteralPath $baseTemp -Directory | Select-Object -First 1
+    if (-not $rootFolder) {
+        $rootFolder = Get-ChildItem -LiteralPath $baseTemp -Directory | Select-Object -First 1
     }
 
-    if (-not $toolkitRootFolder) {
+    if (-not $rootFolder) {
         throw "Could not locate extracted repo folder under $baseTemp"
     }
 
-    $toolkitRoot = $toolkitRootFolder.FullName
+    $toolkitRoot = $rootFolder.FullName
 
     $introPath = Join-Path $toolkitRoot "src\Intro\Intro.ps1"
     if (-not (Test-Path -LiteralPath $introPath)) {
@@ -66,14 +59,7 @@ try {
     }
 
     Set-Location -LiteralPath $toolkitRoot
-
-    # Run intro quietly (splash handles UI)
     & $introPath -LogPath $logPath -Quiet | Out-Null
-}
-catch {
-    # Ensure errors still end up in log
-    Write-Host $_.Exception.ToString()
-    throw
 }
 finally {
     try { Stop-Transcript | Out-Null } catch { }
