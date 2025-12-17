@@ -149,14 +149,15 @@ function Invoke-QOTStartupWarmup {
 function Start-QOTMain {
     param(
         [Parameter(Mandatory)]
-        [string]$RootPath
+        [string]$RootPath,
+
+        [Parameter(Mandatory = $false)]
+        [System.Windows.Window]$SplashWindow
     )
 
     try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
 
-    # Safety net: load UI module if it is not already loaded
     if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-
         $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
         $uiModule = [System.IO.Path]::GetFullPath($uiModule)
 
@@ -171,38 +172,9 @@ function Start-QOTMain {
         throw "UI module not loaded: Start-QOTMainWindow not found"
     }
 
-    # Show splash first
-    $splash = $null
-    try {
-        $splash = New-QOTSplashWindow
-        $null = $splash.Show()
-        $splash.Activate()
-    } catch {
-        # If splash fails, do not block startup
-        try { Write-QLog "Splash failed: $($_.Exception.Message)" "WARN" } catch { }
-    }
-
-    # Run warmup on a background thread so the splash stays responsive
-    $task = [System.Threading.Tasks.Task]::Run([Action]{
-        Invoke-QOTStartupWarmup -RootPath $RootPath
-    })
-
-    # Keep UI responsive while we wait
-    while (-not $task.IsCompleted) {
-        try {
-            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
-                [Action]{ },
-                [System.Windows.Threading.DispatcherPriority]::Background
-            )
-        } catch { }
-        Start-Sleep -Milliseconds 50
-    }
-
-    # Close splash, then show main window
-    try { if ($splash) { $splash.Close() } } catch { }
-
-    Start-QOTMainWindow
+    Start-QOTMainWindow -SplashWindow $SplashWindow
 }
+
 
 Export-ModuleMember -Function `
     Start-QOTMain, `
