@@ -1,10 +1,11 @@
 # bootstrap.ps1
 # Download latest Quinn Optimiser Toolkit build to a temp folder and run Intro.ps1
 
-$ErrorActionPreference = "Stop"
-$ProgressPreference = 'SilentlyContinue'
-$WarningPreference  = 'SilentlyContinue'
-$VerbosePreference  = 'SilentlyContinue'
+$ErrorActionPreference   = "Stop"
+$ProgressPreference     = "SilentlyContinue"
+$WarningPreference      = "SilentlyContinue"
+$VerbosePreference      = "SilentlyContinue"
+$InformationPreference  = "SilentlyContinue"
 
 $originalLocation = Get-Location
 
