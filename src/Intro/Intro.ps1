@@ -57,7 +57,7 @@ try {
         }
     }
 
-    function Set-FoxSplash {
+    function script:Set-FoxSplash {
         param(
             [int]$Percent,
             [string]$Text
@@ -71,7 +71,7 @@ try {
         })
     }
 
-    function FadeOut-AndCloseFoxSplash {
+    function script:FadeOut-AndCloseFoxSplash {
         if (-not $splash) { return }
 
         $splash.Dispatcher.Invoke([action]{
@@ -97,13 +97,13 @@ try {
         $t.Start()
     }
 
-    function Complete-Intro {
+    function script:Complete-Intro {
         param(
             [string]$Reason = "normal"
         )
 
         try {
-            Set-FoxSplash 100 "Ready"
+            script:Set-FoxSplash 100 "Ready"
 
             $timer = New-Object System.Windows.Threading.DispatcherTimer
             $timer.Interval = [TimeSpan]::FromSeconds(2)
@@ -111,51 +111,49 @@ try {
             $timerLocal = $timer
             $timer.Add_Tick( ({
                 $timerLocal.Stop()
-                FadeOut-AndCloseFoxSplash
-                Write-QLog "Intro completed ($Reason)" "INFO"
+                script:FadeOut-AndCloseFoxSplash
+                script:Write-QLog "Intro completed ($Reason)" "INFO"
             }).GetNewClosure() )
 
             $timer.Start()
         } catch { }
     }
 
-    Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
-    Set-FoxSplash 20 "Loading config..."
+    script:Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
+    script:Set-FoxSplash 20 "Loading config..."
     if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
 
-    Set-FoxSplash 40 "Loading logging..."
+    script:Set-FoxSplash 40 "Loading logging..."
     if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
 
-    Set-FoxSplash 65 "Loading engine..."
+    script:Set-FoxSplash 65 "Loading engine..."
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    Set-FoxSplash 85 "Preparing UI..."
-    Write-QLog "Starting main window" "INFO"
+    script:Set-FoxSplash 85 "Preparing UI..."
+    script:Write-QLog "Starting main window" "INFO"
 
     $mw = $null
     try {
         $mw = Start-QOTMain -RootPath $rootPath
     } catch {
-        Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
+        script:Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
         throw
     }
 
-    # Use a proper WPF Application and run the message pump through it
     $app = [System.Windows.Application]::Current
     if (-not $app) {
         $app = New-Object System.Windows.Application
         $app.ShutdownMode = [System.Windows.ShutdownMode]::OnLastWindowClose
     }
 
-    # Fallback: if ContentRendered never fires, still complete the intro
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
 
     $fallbackLocal = $fallback
     $fallback.Add_Tick( ({
         $fallbackLocal.Stop()
-        Complete-Intro -Reason "fallback"
+        script:Complete-Intro -Reason "fallback"
     }).GetNewClosure() )
 
     $fallback.Start()
@@ -163,18 +161,16 @@ try {
     if ($mw) {
         $mw.Add_ContentRendered( ({
             try { $fallbackLocal.Stop() } catch { }
-            Complete-Intro -Reason "contentrendered"
+            script:Complete-Intro -Reason "contentrendered"
         }).GetNewClosure() )
 
-        # Ensure the main window is visible (depends what Start-QOTMain returns)
         try { if (-not $mw.IsVisible) { $mw.Show() } } catch { }
 
-        # Run the application loop so UI stays clickable
         [void]$app.Run()
     }
     else {
         try { $fallbackLocal.Stop() } catch { }
-        Complete-Intro -Reason "mw-null"
+        script:Complete-Intro -Reason "mw-null"
         try { $app.Shutdown() } catch { }
     }
 }
