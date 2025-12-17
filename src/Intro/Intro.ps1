@@ -25,6 +25,39 @@ $script:QOTLogPath = $LogPath
 $oldWarningPreference = $WarningPreference
 $WarningPreference = 'SilentlyContinue'
 
+# ------------------------------
+# Guaranteed fallback logging definitions
+# (We only use these if real ones are not available)
+# ------------------------------
+function Ensure-QOTFallbackLogging {
+    if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
+        function Write-QLog {
+            param([string]$Message,[string]$Level="INFO")
+            $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            $line = "[$ts] [$Level] $Message"
+            try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
+            if (-not $Quiet) { Write-Host $line }
+        }
+    }
+
+    if (-not (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue)) {
+        function Set-QLogRoot {
+            param([Parameter(Mandatory)][string]$Root)
+            $script:QLogRoot = $Root
+            if (-not (Test-Path -LiteralPath $script:QLogRoot)) {
+                New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
+            }
+        }
+    }
+
+    if (-not (Get-Command Start-QLogSession -ErrorAction SilentlyContinue)) {
+        function Start-QLogSession {
+            param([string]$Prefix="QuinnOptimiserToolkit")
+            Write-QLog "Log session started (fallback)." "INFO"
+        }
+    }
+}
+
 try {
     # ------------------------------
     # WPF assemblies
@@ -48,64 +81,25 @@ try {
     }
 
     # ------------------------------
-    # Logging MUST load or we fall back
+    # Try import real Logging (never rely on it)
     # ------------------------------
-    try {
-        Write-Host "DEBUG: loggingModule path   = $loggingModule"
-        Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
+    Write-Host "DEBUG: loggingModule path   = $loggingModule"
+    Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
 
-        if (-not (Test-Path -LiteralPath $loggingModule)) {
-            throw "Logging module not found at: $loggingModule"
-        }
-
-        $m = Import-Module $loggingModule -Force -ErrorAction Stop -PassThru
-
-        Write-Host "DEBUG: Logging imported from = $($m.Path)"
-        Write-Host "DEBUG: Set-QLogRoot available after import = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
-
-        $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
-        foreach ($name in $required) {
-            if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-                throw "Logging module imported but missing function: $name"
-            }
+    if (Test-Path -LiteralPath $loggingModule) {
+        try {
+            $m = Import-Module $loggingModule -Force -ErrorAction Stop -PassThru
+            Write-Host "DEBUG: Logging imported from = $($m.Path)"
+        } catch {
+            # ignore, we will fall back
+            Write-Host "DEBUG: Logging import failed = $($_.Exception.Message)"
         }
     }
-    catch {
-        function Write-QLog {
-            param(
-                [string]$Message,
-                [string]$Level = "INFO"
-            )
 
-            $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            $line = "[$ts] [$Level] $Message"
-
-            try {
-                if ($script:QOTLogPath) {
-                    $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
-                }
-            } catch { }
-
-            if (-not $Quiet) { Write-Host $line }
-        }
-
-        function Set-QLogRoot {
-            param([Parameter(Mandatory)][string]$Root)
-
-            $script:QLogRoot = $Root
-
-            if (-not (Test-Path -LiteralPath $script:QLogRoot)) {
-                New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
-            }
-        }
-
-        function Start-QLogSession {
-            param([string]$Prefix = "QuinnOptimiserToolkit")
-            Write-QLog "Log session started (fallback)." "INFO"
-        }
-
-        Write-QLog "Logging import failed, using fallback. $($_.Exception.Message)" "WARN"
-    }
+    # ------------------------------
+    # Absolute guarantee: if commands still missing, define fallback now
+    # ------------------------------
+    Ensure-QOTFallbackLogging
 
     # ------------------------------
     # Engine is required for Start-QOTMain
@@ -142,8 +136,11 @@ try {
     Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force -ErrorAction SilentlyContinue
     Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # Initialise config and start logging
+    # Init config + start logging
     $cfg = Initialize-QOTConfig -RootPath $rootPath
+
+    # Re-check and guarantee again right before use
+    Ensure-QOTFallbackLogging
 
     Set-QLogRoot -Root $cfg.LogsRoot
     Start-QLogSession
@@ -177,10 +174,7 @@ try {
     }
 
     function Set-IntroProgress {
-        param(
-            [int]$Value,
-            [string]$Text
-        )
+        param([int]$Value,[string]$Text)
 
         if ($splash) {
             if ($Text -and (Get-Command Update-QOTSplashStatus -ErrorAction SilentlyContinue)) {
@@ -215,10 +209,6 @@ try {
         try { $splash.Close() } catch { }
     }
 
-    # ------------------------------
-    # Start the main window
-    # Engine.psm1 expects -RootPath
-    # ------------------------------
     Start-QOTMain -RootPath $rootPath
 
     Write-QLog "Intro completed." "INFO"
