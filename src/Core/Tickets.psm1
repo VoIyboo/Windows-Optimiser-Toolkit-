@@ -4,7 +4,11 @@
 $ErrorActionPreference = "Stop"
 
 # Only import Settings here
-Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
+# Only import Settings if its functions are not already available
+if (-not (Get-Command Get-QOSettings -ErrorAction SilentlyContinue)) {
+    $settingsPath = Join-Path $PSScriptRoot "Settings.psm1"
+    Import-Module $settingsPath -Force -ErrorAction Stop
+}
 
 function Get-QOTicketsStorePath {
     $s = Get-QOSettings
