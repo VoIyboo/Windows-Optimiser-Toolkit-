@@ -47,66 +47,60 @@ try {
         Import-Module $configModule -Force -ErrorAction SilentlyContinue
     }
 
-    # ------------------------------
-    # Logging: try real module first, fallback if missing or incomplete
-    # ------------------------------
-    $loggingLoaded = $false
+# ------------------------------
+# Logging MUST load or we fall back
+# ------------------------------
+$loggingLoaded = $false
 
-    try {
-        if (-not (Test-Path -LiteralPath $loggingModule)) {
-            throw "Logging module not found at: $loggingModule"
-        }
-
-        Import-Module $loggingModule -Force -ErrorAction Stop
-
-        # Require these to exist, otherwise treat as failed import
-        $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
-        $missing  = @()
-
-        foreach ($name in $required) {
-            if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-                $missing += $name
-            }
-        }
-
-        if ($missing.Count -gt 0) {
-            throw "Logging module imported but missing functions: $($missing -join ', ')"
-        }
-
-        $loggingLoaded = $true
+try {
+    if (-not (Test-Path -LiteralPath $loggingModule)) {
+        throw "Logging module not found at: $loggingModule"
     }
-    catch {
-        # Fallback logging functions (only used if Logging.psm1 fails or is incomplete)
-        function Write-QLog {
-            param(
-                [string]$Message,
-                [string]$Level = "INFO"
-            )
 
-            $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            $line = "[$ts] [$Level] $Message"
-
-            try {
-                if ($script:QOTLogPath) {
-                    $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
-                }
-            } catch { }
-
-            if (-not $Quiet) { Write-Host $line }
-        }
-
-        function Set-QLogRoot {
-            param([Parameter(Mandatory)][string]$Root)
-            $script:QLogRoot = $Root
-        }
-
-        function Start-QLogSession {
-            param([string]$Prefix = "QuinnOptimiserToolkit")
-            Write-QLog "Log session started (fallback)." "INFO"
-        }
-
-        Write-QLog "Logging module import failed or incomplete, using fallback logging. $($_.Exception.Message)" "WARN"
+    # If an old version is already loaded, purge it first
+    $loaded = Get-Module | Where-Object { $_.Path -eq $loggingModule -or $_.Name -eq 'Logging' }
+    if ($loaded) {
+        Remove-Module -Name $loaded.Name -Force -ErrorAction SilentlyContinue
     }
+
+    $m = Import-Module $loggingModule -Force -ErrorAction Stop -PassThru
+
+    # Prove the functions exist before we continue
+    $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
+    foreach ($name in $required) {
+        if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+            throw "Logging module imported from $($m.Path) but $name is not available."
+        }
+    }
+
+    $loggingLoaded = $true
+}
+catch {
+    # Fallback logging (only if real logging failed)
+    function Write-QLog {
+        param([string]$Message,[string]$Level="INFO")
+        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $line = "[$ts] [$Level] $Message"
+        try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
+        if (-not $Quiet) { Write-Host $line }
+    }
+
+    function Set-QLogRoot {
+        param([Parameter(Mandatory)][string]$Root)
+        $script:QLogRoot = $Root
+        if (-not (Test-Path -LiteralPath $script:QLogRoot)) {
+            New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
+        }
+    }
+
+    function Start-QLogSession {
+        param([string]$Prefix="QuinnOptimiserToolkit")
+        Write-QLog "Log session started (fallback)." "INFO"
+    }
+
+    Write-QLog "Logging import failed, using fallback. $($_.Exception.Message)" "WARN"
+}
+
 
     # ------------------------------
     # Engine is required for Start-QOTMain
