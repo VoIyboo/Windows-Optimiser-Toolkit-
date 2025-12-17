@@ -38,19 +38,10 @@ try {
 
     $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip"
 
-    Write-Host "Downloading Quinn Optimiser Toolkit..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-
-    Write-Host "Extracting..." -ForegroundColor Cyan
-    Expand-Archive -Path $zipPath -DestinationPath $extractTo -Force
-
     $rootFolder = Get-ChildItem -Path $extractTo | Select-Object -First 1
     if (-not $rootFolder) {
         throw "Could not locate extracted repo folder under $extractTo"
     }
-
-    $toolkitRoot = $rootFolder.FullName
-    Write-Host "Toolkit root: $toolkitRoot"
 
     $introPath = Join-Path $toolkitRoot "src\Intro\Intro.ps1"
     if (-not (Test-Path $introPath)) {
