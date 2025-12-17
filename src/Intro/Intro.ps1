@@ -145,6 +145,8 @@ catch {
     # ------------------------------
     if (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) {
         Set-QLogRoot -Root $cfg.LogsRoot
+        Start-QLogSession
+        Write-QLog "Intro starting. Root path: $rootPath" "INFO"
     } else {
         # Ultra last resort so nothing can break startup
         function Write-QLog {
