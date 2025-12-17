@@ -67,28 +67,44 @@ function Get-QOTInstalledApps {
             }
 
             $installDate = $null
-            if ($_.InstallDate -and $_.InstallDate -match "^\d{8}$") {
+            $rawInstallDate = ($_.InstallDate | ForEach-Object { "$_".Trim() })
+            
+            if (-not [string]::IsNullOrWhiteSpace($rawInstallDate)) {
+            
+                $parsed = [datetime]::MinValue
+            
                 try {
-                    $parsed = $null
-                    if ([datetime]::TryParseExact(
-                            $_.InstallDate,
-                            "yyyyMMdd",
-                            $null,
+                    # Most common format in uninstall keys: yyyyMMdd
+                    if ($rawInstallDate -match '^\d{8}$' -and
+                        [datetime]::TryParseExact(
+                            $rawInstallDate,
+                            'yyyyMMdd',
+                            [System.Globalization.CultureInfo]::InvariantCulture,
                             [System.Globalization.DateTimeStyles]::None,
                             [ref]$parsed
                         )) {
+            
                         $installDate = $parsed
                     }
                     else {
-                        try { Write-QLog "Invalid InstallDate '$($_.InstallDate)' for $($_.DisplayName)" "WARN" } catch { }
+                        # Optional: quiet fallback for vendor weirdness
+                        if ([datetime]::TryParse(
+                            $rawInstallDate,
+                            [System.Globalization.CultureInfo]::InvariantCulture,
+                            [System.Globalization.DateTimeStyles]::None,
+                            [ref]$parsed
+                        )) {
+                            $installDate = $parsed
+                        }
                     }
                 }
                 catch {
                     try {
-                        Write-QLog "Error parsing InstallDate '$($_.InstallDate)' for $($_.DisplayName): $($_.Exception.Message)" "WARN"
+                        Write-QLog "Error parsing InstallDate '$rawInstallDate' for $($_.DisplayName): $($_.Exception.Message)" "WARN"
                     } catch { }
                 }
             }
+
 
             $isWhitelisted = $false
             foreach ($pattern in $Global:QOT_AppWhitelistPatterns) {
