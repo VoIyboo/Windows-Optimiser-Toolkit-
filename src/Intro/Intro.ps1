@@ -174,20 +174,21 @@ try {
         }
     } | Out-Null
 
-    # -------------------------------------------------
-    # Splash loader (blocks until signal file exists)
-    # -------------------------------------------------
-    if (-not $SkipSplash) {
-        $splashHost = Join-Path $rootPath "src\Intro\SplashHost.ps1"
-
-        if (Test-Path $splashHost) {
-            Write-QLog "Showing splash host..." "INFO"
-            & $splashHost -SignalPath $signalPath -ProgressPath $progressPath -Title "Quinn Optimiser Toolkit" -Subtitle "Starting up..."
+        # -------------------------------------------------
+        # Fox splash (Splash.xaml)
+        # -------------------------------------------------
+        $splash = $null
+        if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
+            $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
+            $splash = New-QOTSplashWindow -Path $splashXaml
+        
+            if ($splash) {
+                # Force centre
+                $splash.WindowStartupLocation = "CenterScreen"
+                $splash.Topmost = $true
+                $splash.Show()
+            }
         }
-        else {
-            Write-QLog "SplashHost.ps1 not found, skipping splash" "WARN"
-        }
-    }
 
     # -------------------------------------------------
     # Start main window (after splash closes)
