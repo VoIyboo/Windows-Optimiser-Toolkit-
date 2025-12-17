@@ -147,20 +147,26 @@ try {
     Refresh-FoxSplash
     Start-Sleep -Milliseconds 200
 
+    # -------------------------------------------------
+    # Start main UI while splash is still visible
+    # -------------------------------------------------
+    Write-QLog "Starting main window" "INFO"
+    $null = Start-QOTMain -RootPath $rootPath
+    
+    # Wait until the main window is actually loaded and visible
+    $waitStart = Get-Date
+    while ($true) {
+        $mw = $Global:QOTMainWindow
+    
+        if ($mw -and $mw.IsLoaded -and $mw.IsVisible) { break }
+    
+        if (((Get-Date) - $waitStart).TotalSeconds -gt 15) { break } # safety timeout
+        Start-Sleep -Milliseconds 100
+    }
+    
+    # Now show Ready for 2 seconds, then fade away
     Set-FoxSplash 100 "Ready"
     Refresh-FoxSplash
     Start-Sleep -Seconds 2
-
-    # -------------------------------------------------
-    # Fade out splash first, then start main UI
-    # -------------------------------------------------
+    
     FadeOut-AndCloseFoxSplash
-
-    Write-QLog "Starting main window" "INFO"
-    Start-QOTMain -RootPath $rootPath
-
-    Write-QLog "Intro completed" "INFO"
-}
-finally {
-    $WarningPreference = $oldWarningPreference
-}
