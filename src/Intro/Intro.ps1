@@ -1,5 +1,5 @@
 # Intro.ps1
-# Minimal splash startup for the Quinn Optimiser Toolkit (Progress + Swap to Main UI)
+# Fox splash startup for the Quinn Optimiser Toolkit (progress + swap to Main UI)
 
 param(
     [switch]$SkipSplash,
@@ -37,20 +37,6 @@ function script:Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
-function script:Set-QLogRoot {
-    param([Parameter(Mandatory)][string]$Root)
-
-    $script:QLogRoot = $Root
-    if (-not (Test-Path $script:QLogRoot)) {
-        New-Item -ItemType Directory -Path $script:QLogRoot -Force | Out-Null
-    }
-}
-
-function script:Start-QLogSession {
-    param([string]$Prefix = "QuinnOptimiserToolkit")
-    Write-QLog "Log session started." "INFO"
-}
-
 # -------------------------------------------------
 # Silence noisy warnings
 # -------------------------------------------------
@@ -58,190 +44,83 @@ $oldWarningPreference = $WarningPreference
 $WarningPreference = 'SilentlyContinue'
 
 try {
-    # -------------------------------------------------
-    # WPF assemblies
-    # -------------------------------------------------
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
     # -------------------------------------------------
-    # Resolve root + modules
+    # Resolve root + module paths
     # -------------------------------------------------
-    $rootPath     = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    $configModule = Join-Path $rootPath "src\Core\Config\Config.psm1"
+    $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
-    $engineModule = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
+    $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
     # -------------------------------------------------
-    # Paths used by SplashHost
+    # Fox splash (Splash.xaml)
     # -------------------------------------------------
-    $signalPath   = Join-Path $env:TEMP "QOT_ready.signal"
-    $progressPath = Join-Path $env:TEMP "QOT_progress.json"
+    $splash = $null
 
-    # Clean old files
-    Remove-Item -LiteralPath $signalPath -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $progressPath -Force -ErrorAction SilentlyContinue
+    if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
+        $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
+        $splash = New-QOTSplashWindow -Path $splashXaml
 
-    # -------------------------------------------------
-    # Import Config (best effort)
-    # -------------------------------------------------
-    if (Test-Path $configModule) {
-        Import-Module $configModule -Force -ErrorAction SilentlyContinue
+        if ($splash) {
+            $splash.WindowStartupLocation = "CenterScreen"
+            $splash.Topmost = $true
+            $splash.Show()
+        }
+    }
+
+    function Set-FoxSplash {
+        param(
+            [int]$Percent,
+            [string]$Text
+        )
+
+        if (-not $splash) { return }
+
+        $splash.Dispatcher.Invoke([action]{
+            $bar = $splash.FindName("SplashProgressBar")
+            $txt = $splash.FindName("SplashStatusText")
+
+            if ($bar) { $bar.Value = [double]$Percent }
+            if ($txt) { $txt.Text = $Text }
+        })
     }
 
     # -------------------------------------------------
-    # Import real logging (optional override)
+    # Loading stages shown on fox splash
     # -------------------------------------------------
-    if (Test-Path $loggingModule) {
-        try {
-            Import-Module $loggingModule -Force -ErrorAction Stop
-        } catch { }
-    }
+    Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
+    Start-Sleep -Milliseconds 150
 
-    # -------------------------------------------------
-    # Engine is REQUIRED
-    # -------------------------------------------------
-    if (-not (Test-Path $engineModule)) {
-        throw "Engine module not found at $engineModule"
-    }
+    Set-FoxSplash 20 "Loading config..."
+    if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
+
+    Set-FoxSplash 40 "Loading logging..."
+    if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
+
+    Set-FoxSplash 65 "Loading engine..."
+    if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
+    Set-FoxSplash 85 "Preparing UI..."
+    Start-Sleep -Milliseconds 200
+
+    Set-FoxSplash 100 "Ready"
+    Start-Sleep -Seconds 2
+
     # -------------------------------------------------
-    # Init config + logging
+    # Swap to main UI
     # -------------------------------------------------
-    function Initialize-QOTConfig {
-        param([Parameter(Mandatory)][string]$RootPath)
+    Write-QLog "Starting main window" "INFO"
+    Start-QOTMain -RootPath $rootPath
 
-        $Global:QOTRoot = $RootPath
-
-        $programDataRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit"
-        $logsRoot        = Join-Path $programDataRoot "Logs"
-
-        foreach ($p in @($programDataRoot, $logsRoot)) {
-            if (-not (Test-Path $p)) {
-                New-Item -Path $p -ItemType Directory -Force | Out-Null
-            }
-        }
-
-        [pscustomobject]@{
-            Root     = $RootPath
-            LogsRoot = $logsRoot
-        }
+    if ($splash) {
+        $splash.Topmost = $false
+        $splash.Close()
     }
 
-    $cfg = Initialize-QOTConfig -RootPath $rootPath
-
-    Set-QLogRoot -Root $cfg.LogsRoot
-    Start-QLogSession
-    Write-QLog "Intro starting. Root = $rootPath" "INFO"
-
-    # -------------------------------------------------
-    # Background prep work while splash is open
-    # -------------------------------------------------
-    Start-Job -ArgumentList $rootPath, $progressPath, $signalPath -ScriptBlock {
-        param($RootPath, $ProgressPath, $SignalPath)
-
-        function Set-Progress([int]$Percent, [string]$Status) {
-            @{ progress = $Percent; status = $Status } |
-                ConvertTo-Json |
-                Set-Content -LiteralPath $ProgressPath -Encoding UTF8
-        }
-
-        try {
-            Set-Progress 5  "Starting..."
-            Start-Sleep -Milliseconds 200
-
-            Set-Progress 20 "Loading config..."
-            Import-Module (Join-Path $RootPath "src\Core\Config\Config.psm1") -Force -ErrorAction Stop
-
-            Set-Progress 40 "Loading logging..."
-            Import-Module (Join-Path $RootPath "src\Core\Logging\Logging.psm1") -Force -ErrorAction Stop
-
-            Set-Progress 70 "Loading engine..."
-            Import-Module (Join-Path $RootPath "src\Core\Engine\Engine.psm1") -Force -ErrorAction Stop
-
-            Set-Progress 95 "Finalising..."
-            Start-Sleep -Milliseconds 400
-
-            Set-Progress 100 "Ready"
-            Start-Sleep -Seconds 2
-
-            New-Item -ItemType File -Path $SignalPath -Force | Out-Null
-        }
-        catch {
-            Set-Progress 100 ("Failed: " + $_.Exception.Message)
-            Start-Sleep -Seconds 2
-            New-Item -ItemType File -Path $SignalPath -Force | Out-Null
-        }
-    } | Out-Null
-
-        # -------------------------------------------------
-        # Fox splash (Splash.xaml)
-        # -------------------------------------------------
-        $splash = $null
-        
-        if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
-        
-            $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
-            $splash = New-QOTSplashWindow -Path $splashXaml
-        
-            if ($splash) {
-                $splash.WindowStartupLocation = "CenterScreen"
-                $splash.Topmost = $true
-                $splash.Show()
-            }
-        }
-        
-        function Set-FoxSplash {
-            param(
-                [int]$Percent,
-                [string]$Text
-            )
-        
-            if (-not $splash) { return }
-        
-            $splash.Dispatcher.Invoke([action]{
-                $bar = $splash.FindName("SplashProgressBar")
-                $txt = $splash.FindName("SplashStatusText")
-        
-                if ($bar) { $bar.Value = [double]$Percent }
-                if ($txt) { $txt.Text = $Text }
-            })
-        }
-              
-
-# -------------------------------------------------
-# Loading stages shown on fox splash
-# -------------------------------------------------
-Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
-Start-Sleep -Milliseconds 150
-
-Set-FoxSplash 20 "Loading config..."
-if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
-
-Set-FoxSplash 40 "Loading logging..."
-if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
-
-Set-FoxSplash 65 "Loading engine..."
-Import-Module $engineModule -Force -ErrorAction Stop
-
-Set-FoxSplash 85 "Preparing UI..."
-Start-Sleep -Milliseconds 200
-
-Set-FoxSplash 100 "Ready"
-Start-Sleep -Seconds 2
-
-# -------------------------------------------------
-# Swap to main UI
-# -------------------------------------------------
-Write-QLog "Starting main window" "INFO"
-Start-QOTMain -RootPath $rootPath
-
-if ($splash) {
-    $splash.Topmost = $false
-    $splash.Close()
-}
-
-Write-QLog "Intro completed" "INFO"
+    Write-QLog "Intro completed" "INFO"
 }
 finally {
     $WarningPreference = $oldWarningPreference
