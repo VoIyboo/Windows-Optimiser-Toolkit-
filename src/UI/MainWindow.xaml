@@ -339,9 +339,21 @@
                                           GridLinesVisibility="Horizontal"
                                           BorderBrush="{StaticResource BorderBrush}">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
-                                        <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="220" />
-                                    </DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="" Width="40">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center"/>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        
+                                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+                                            <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="220" />
+                                        
+                                        </DataGrid.Columns>
+
                                 </DataGrid>
 
                             </Grid>
@@ -498,8 +510,8 @@
 
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
-                                        <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="150" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="150" IsReadOnly="False" />
+                                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="False" />
                                         <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="*" IsReadOnly="False" />
                                     </DataGrid.Columns>
 
