@@ -94,6 +94,26 @@ try {
         $t.Start()
     }
 
+    function Complete-Intro {
+        param(
+            [string]$Reason = "normal"
+        )
+
+        try {
+            Set-FoxSplash 100 "Ready"
+
+            $timer = New-Object System.Windows.Threading.DispatcherTimer
+            $timer.Interval = [TimeSpan]::FromSeconds(2)
+            $timer.Add_Tick({
+                $timer.Stop()
+                FadeOut-AndCloseFoxSplash
+                Write-QLog "Intro completed ($Reason)" "INFO"
+                try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
+            })
+            $timer.Start()
+        } catch { }
+    }
+
     Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
     Set-FoxSplash 20 "Loading config..."
     if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
@@ -109,26 +129,24 @@ try {
     Write-QLog "Starting main window" "INFO"
     $mw = Start-QOTMain -RootPath $rootPath
 
+    # Fallback: if ContentRendered never fires, still complete the intro
+    $fallback = New-Object System.Windows.Threading.DispatcherTimer
+    $fallback.Interval = [TimeSpan]::FromSeconds(5)
+    $fallback.Add_Tick({
+        $fallback.Stop()
+        Complete-Intro -Reason "fallback"
+    })
+    $fallback.Start()
+
     if ($mw) {
         $mw.Add_ContentRendered({
-            try {
-                Set-FoxSplash 100 "Ready"
-
-                $timer = New-Object System.Windows.Threading.DispatcherTimer
-                $timer.Interval = [TimeSpan]::FromSeconds(2)
-                $timer.Add_Tick({
-                    $timer.Stop()
-                    FadeOut-AndCloseFoxSplash
-                    Write-QLog "Intro completed" "INFO"
-                })
-                $timer.Start()
-            } catch { }
+            try { $fallback.Stop() } catch { }
+            Complete-Intro -Reason "contentrendered"
         })
     }
     else {
-        Set-FoxSplash 100 "Ready"
-        FadeOut-AndCloseFoxSplash
-        Write-QLog "Intro completed" "INFO"
+        try { $fallback.Stop() } catch { }
+        Complete-Intro -Reason "mw-null"
     }
 
     # Keep message pump alive so UI is clickable
