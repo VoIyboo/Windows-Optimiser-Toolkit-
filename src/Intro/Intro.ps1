@@ -40,11 +40,6 @@ try {
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
     $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
-    Write-Host "DEBUG: loggingModule path = $loggingModule"
-    Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
-    Write-Host "DEBUG: Set-QLogRoot available = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
-
-
     # ------------------------------
     # Import config (best effort)
     # ------------------------------
@@ -52,57 +47,65 @@ try {
         Import-Module $configModule -Force -ErrorAction SilentlyContinue
     }
 
-# ------------------------------
-# Logging MUST load or we fall back
-# ------------------------------
-try {
-    Write-Host "DEBUG: loggingModule path   = $loggingModule"
-    Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
+    # ------------------------------
+    # Logging MUST load or we fall back
+    # ------------------------------
+    try {
+        Write-Host "DEBUG: loggingModule path   = $loggingModule"
+        Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
 
-    if (-not (Test-Path -LiteralPath $loggingModule)) {
-        throw "Logging module not found at: $loggingModule"
-    }
+        if (-not (Test-Path -LiteralPath $loggingModule)) {
+            throw "Logging module not found at: $loggingModule"
+        }
 
-    # Import logging and prove the functions exist
-    $m = Import-Module $loggingModule -Force -ErrorAction Stop -PassThru
+        $m = Import-Module $loggingModule -Force -ErrorAction Stop -PassThru
 
-    Write-Host "DEBUG: Logging imported from = $($m.Path)"
-    Write-Host "DEBUG: Set-QLogRoot available after import = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
+        Write-Host "DEBUG: Logging imported from = $($m.Path)"
+        Write-Host "DEBUG: Set-QLogRoot available after import = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
 
-    $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
-    foreach ($name in $required) {
-        if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-            throw "Logging module imported but missing function: $name"
+        $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
+        foreach ($name in $required) {
+            if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+                throw "Logging module imported but missing function: $name"
+            }
         }
     }
-}
-catch {
-    # Fallback logging (only if real logging failed)
-    function Write-QLog {
-        param([string]$Message,[string]$Level="INFO")
-        $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        $line = "[$ts] [$Level] $Message"
-        try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
-        if (-not $Quiet) { Write-Host $line }
-    }
+    catch {
+        function Write-QLog {
+            param(
+                [string]$Message,
+                [string]$Level = "INFO"
+            )
 
-    function Set-QLogRoot {
-        param([Parameter(Mandatory)][string]$Root)
-        $script:QLogRoot = $Root
-        if (-not (Test-Path -LiteralPath $script:QLogRoot)) {
-            New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
+            $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            $line = "[$ts] [$Level] $Message"
+
+            try {
+                if ($script:QOTLogPath) {
+                    $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
+                }
+            } catch { }
+
+            if (-not $Quiet) { Write-Host $line }
         }
+
+        function Set-QLogRoot {
+            param([Parameter(Mandatory)][string]$Root)
+
+            $script:QLogRoot = $Root
+
+            if (-not (Test-Path -LiteralPath $script:QLogRoot)) {
+                New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
+            }
+        }
+
+        function Start-QLogSession {
+            param([string]$Prefix = "QuinnOptimiserToolkit")
+            Write-QLog "Log session started (fallback)." "INFO"
+        }
+
+        Write-QLog "Logging import failed, using fallback. $($_.Exception.Message)" "WARN"
     }
-
-    function Start-QLogSession {
-        param([string]$Prefix="QuinnOptimiserToolkit")
-        Write-QLog "Log session started (fallback)." "INFO"
-    }
-
-    Write-QLog "Logging import failed, using fallback. $($_.Exception.Message)" "WARN"
-}
-
-
 
     # ------------------------------
     # Engine is required for Start-QOTMain
@@ -139,34 +142,11 @@ catch {
     Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force -ErrorAction SilentlyContinue
     Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # Initialise config
+    # Initialise config and start logging
     $cfg = Initialize-QOTConfig -RootPath $rootPath
 
-    # ------------------------------
-    # Safe logging init (guarded)
-    # ------------------------------
-    if (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) {
-        Set-QLogRoot -Root $cfg.LogsRoot
-        Start-QLogSession
-        Write-QLog "Intro starting. Root path: $rootPath" "INFO"
-    } else {
-        # Ultra last resort so nothing can break startup
-        function Write-QLog {
-            param([string]$Message,[string]$Level="INFO")
-            $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-            $line = "[$ts] [$Level] $Message"
-            try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
-            if (-not $Quiet) { Write-Host $line }
-        }
-        Write-QLog "Set-QLogRoot missing. Logging module did not provide expected functions." "WARN"
-    }
-
-    if (Get-Command Start-QLogSession -ErrorAction SilentlyContinue) {
-        Start-QLogSession
-    } else {
-        Write-QLog "Start-QLogSession missing. Continuing without session init." "WARN"
-    }
-
+    Set-QLogRoot -Root $cfg.LogsRoot
+    Start-QLogSession
     Write-QLog "Intro starting. Root path: $rootPath" "INFO"
 
     # ------------------------------
@@ -248,6 +228,5 @@ catch {
     }
 }
 finally {
-    # Restore warning preference
     $WarningPreference = $oldWarningPreference
 }
