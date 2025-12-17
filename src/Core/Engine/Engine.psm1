@@ -1,5 +1,6 @@
 # Engine.psm1
 # Coordinates major operations by calling the feature modules
+# Splash is NOT handled here. Intro.ps1 owns the splash.
 
 $ErrorActionPreference = "Stop"
 
@@ -7,7 +8,7 @@ Import-Module "$PSScriptRoot\..\Config\Config.psm1"   -Force -ErrorAction Silent
 Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction SilentlyContinue
 
 # Import feature modules (best effort)
-Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1"         -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1"           -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction SilentlyContinue
 
 # Apps
@@ -15,12 +16,9 @@ Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps.psm1"     -Force -ErrorAct
 Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps.psm1" -Force -ErrorAction SilentlyContinue
 
 # Advanced
-Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"   -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"     -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1" -Force -ErrorAction SilentlyContinue
 
-# ------------------------------------------------------------
-# Small helpers used by the UI
-# ------------------------------------------------------------
 function Set-QOTStatus {
     param([string]$Text)
 
@@ -33,27 +31,19 @@ function Set-QOTStatus {
 
 function Set-QOTProgress {
     param([int]$Percent)
-
     try { Write-QLog "Progress: $Percent%" } catch { }
 }
 
-# ------------------------------------------------------------
-# Run button logic
-# ------------------------------------------------------------
 function Invoke-QOTRun {
     try { Write-QLog "Starting full run" } catch { }
     Set-QOTStatus "Running..."
     Set-QOTProgress 0
 
     try {
-        if (Get-Command Start-QOTCleaning -ErrorAction SilentlyContinue) {
-            Start-QOTCleaning
-        }
+        if (Get-Command Start-QOTCleaning -ErrorAction SilentlyContinue) { Start-QOTCleaning }
         Set-QOTProgress 33
 
-        if (Get-Command Start-QOTTweaks -ErrorAction SilentlyContinue) {
-            Start-QOTTweaks
-        }
+        if (Get-Command Start-QOTTweaks -ErrorAction SilentlyContinue) { Start-QOTTweaks }
         Set-QOTProgress 66
 
         try { Write-QLog "Run completed" } catch { }
@@ -66,20 +56,13 @@ function Invoke-QOTRun {
     }
 }
 
-# ------------------------------------------------------------
-# Advanced Run
-# ------------------------------------------------------------
 function Invoke-QOTAdvancedRun {
     try { Write-QLog "Starting Advanced run" } catch { }
     Set-QOTStatus "Running Advanced Tasks..."
 
     try {
-        if (Get-Command Start-QOTAdvancedCleaning -ErrorAction SilentlyContinue) {
-            Start-QOTAdvancedCleaning
-        }
-        if (Get-Command Start-QOTNetworkFix -ErrorAction SilentlyContinue) {
-            Start-QOTNetworkFix
-        }
+        if (Get-Command Start-QOTAdvancedCleaning -ErrorAction SilentlyContinue) { Start-QOTAdvancedCleaning }
+        if (Get-Command Start-QOTNetworkFix -ErrorAction SilentlyContinue) { Start-QOTNetworkFix }
 
         try { Write-QLog "Advanced run completed" } catch { }
         Set-QOTStatus "Advanced Completed"
@@ -90,58 +73,16 @@ function Invoke-QOTAdvancedRun {
     }
 }
 
-# ------------------------------------------------------------
-# Start-QOTMain: entry point for main UI
-# ------------------------------------------------------------
-function New-QOTSplashWindow {
-    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Out-Null
-
-    $xaml = @"
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="Loading..."
-        Height="220" Width="520"
-        WindowStartupLocation="CenterScreen"
-        Background="#0F172A"
-        WindowStyle="None"
-        AllowsTransparency="True"
-        Topmost="True"
-        ShowInTaskbar="False">
-    <Border Background="#020617" BorderBrush="#374151" BorderThickness="1" CornerRadius="12" Padding="18">
-        <StackPanel>
-            <TextBlock Text="Quinn Optimiser Toolkit" Foreground="White" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock Text="Loading components..." Foreground="#9CA3AF" Margin="0,6,0,18"/>
-            <ProgressBar Height="10" IsIndeterminate="True" Background="#1E293B" Foreground="#2563EB"/>
-        </StackPanel>
-    </Border>
-</Window>
-"@
-
-    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
-    return [Windows.Markup.XamlReader]::Load($reader)
-}
-
 function Invoke-QOTStartupWarmup {
     param(
         [Parameter(Mandatory)]
         [string]$RootPath
     )
 
-    # Put your "slow stuff" here.
-    # Keep it safe: no UI touching inside this function.
     try { Write-QLog "Startup warmup: begin" } catch { }
 
-    # Example warmups (adjust to taste):
-    try {
-        if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) {
-            $null = Test-QOTWingetAvailable
-        }
-    } catch { }
-
-    try {
-        if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) {
-            $null = Get-QOTCommonAppsCatalogue
-        }
-    } catch { }
+    try { if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) { $null = Test-QOTWingetAvailable } } catch { }
+    try { if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) { $null = Get-QOTCommonAppsCatalogue } } catch { }
 
     try { Write-QLog "Startup warmup: end" } catch { }
 }
@@ -149,10 +90,7 @@ function Invoke-QOTStartupWarmup {
 function Start-QOTMain {
     param(
         [Parameter(Mandatory)]
-        [string]$RootPath,
-
-        [Parameter(Mandatory = $false)]
-        [System.Windows.Window]$SplashWindow
+        [string]$RootPath
     )
 
     try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
@@ -172,13 +110,13 @@ function Start-QOTMain {
         throw "UI module not loaded: Start-QOTMainWindow not found"
     }
 
-    Start-QOTMainWindow -SplashWindow $SplashWindow
+    Start-QOTMainWindow
 }
-
 
 Export-ModuleMember -Function `
     Start-QOTMain, `
     Invoke-QOTRun, `
     Invoke-QOTAdvancedRun, `
+    Invoke-QOTStartupWarmup, `
     Set-QOTStatus, `
     Set-QOTProgress
