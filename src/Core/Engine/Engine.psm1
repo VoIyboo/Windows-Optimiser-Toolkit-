@@ -112,7 +112,7 @@ function Start-QOTMain {
         }
 
         # Start the main window and return the Window object
-        $win = Start-QOTMainWindow
+        $win = Start-QOTMainWindow -NonBlocking
         try { $win.Activate() } catch { }
 
         # Expose the window so Intro.ps1 can wait for it to be visible
