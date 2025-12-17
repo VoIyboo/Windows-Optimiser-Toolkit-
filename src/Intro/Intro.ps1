@@ -87,10 +87,13 @@ try {
 
         $t = New-Object System.Windows.Threading.DispatcherTimer
         $t.Interval = [TimeSpan]::FromMilliseconds(330)
-        $t.Add_Tick({
-            $t.Stop()
+
+        $tLocal = $t
+        $t.Add_Tick( ({
+            $tLocal.Stop()
             try { $splash.Close() } catch { }
-        })
+        }).GetNewClosure() )
+
         $t.Start()
     }
 
@@ -104,12 +107,14 @@ try {
 
             $timer = New-Object System.Windows.Threading.DispatcherTimer
             $timer.Interval = [TimeSpan]::FromSeconds(2)
-            $timer.Add_Tick({
-                $timer.Stop()
+
+            $timerLocal = $timer
+            $timer.Add_Tick( ({
+                $timerLocal.Stop()
                 FadeOut-AndCloseFoxSplash
                 Write-QLog "Intro completed ($Reason)" "INFO"
-                try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
-            })
+            }).GetNewClosure() )
+
             $timer.Start()
         } catch { }
     }
@@ -127,30 +132,51 @@ try {
 
     Set-FoxSplash 85 "Preparing UI..."
     Write-QLog "Starting main window" "INFO"
-    $mw = Start-QOTMain -RootPath $rootPath
+
+    $mw = $null
+    try {
+        $mw = Start-QOTMain -RootPath $rootPath
+    } catch {
+        Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
+        throw
+    }
+
+    # Use a proper WPF Application and run the message pump through it
+    $app = [System.Windows.Application]::Current
+    if (-not $app) {
+        $app = New-Object System.Windows.Application
+        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnLastWindowClose
+    }
 
     # Fallback: if ContentRendered never fires, still complete the intro
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
-    $fallback.Add_Tick({
-        $fallback.Stop()
+
+    $fallbackLocal = $fallback
+    $fallback.Add_Tick( ({
+        $fallbackLocal.Stop()
         Complete-Intro -Reason "fallback"
-    })
+    }).GetNewClosure() )
+
     $fallback.Start()
 
     if ($mw) {
-        $mw.Add_ContentRendered({
-            try { $fallback.Stop() } catch { }
+        $mw.Add_ContentRendered( ({
+            try { $fallbackLocal.Stop() } catch { }
             Complete-Intro -Reason "contentrendered"
-        })
+        }).GetNewClosure() )
+
+        # Ensure the main window is visible (depends what Start-QOTMain returns)
+        try { if (-not $mw.IsVisible) { $mw.Show() } } catch { }
+
+        # Run the application loop so UI stays clickable
+        [void]$app.Run()
     }
     else {
-        try { $fallback.Stop() } catch { }
+        try { $fallbackLocal.Stop() } catch { }
         Complete-Intro -Reason "mw-null"
+        try { $app.Shutdown() } catch { }
     }
-
-    # Keep message pump alive so UI is clickable
-    [System.Windows.Threading.Dispatcher]::Run()
 }
 finally {
     $WarningPreference = $oldWarningPreference
