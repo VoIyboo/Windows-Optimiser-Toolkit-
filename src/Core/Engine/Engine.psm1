@@ -93,6 +93,59 @@ function Invoke-QOTAdvancedRun {
 # ------------------------------------------------------------
 # Start-QOTMain: entry point for main UI
 # ------------------------------------------------------------
+function New-QOTSplashWindow {
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Out-Null
+
+    $xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        Title="Loading..."
+        Height="220" Width="520"
+        WindowStartupLocation="CenterScreen"
+        Background="#0F172A"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Topmost="True"
+        ShowInTaskbar="False">
+    <Border Background="#020617" BorderBrush="#374151" BorderThickness="1" CornerRadius="12" Padding="18">
+        <StackPanel>
+            <TextBlock Text="Quinn Optimiser Toolkit" Foreground="White" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Text="Loading components..." Foreground="#9CA3AF" Margin="0,6,0,18"/>
+            <ProgressBar Height="10" IsIndeterminate="True" Background="#1E293B" Foreground="#2563EB"/>
+        </StackPanel>
+    </Border>
+</Window>
+"@
+
+    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
+    return [Windows.Markup.XamlReader]::Load($reader)
+}
+
+function Invoke-QOTStartupWarmup {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RootPath
+    )
+
+    # Put your "slow stuff" here.
+    # Keep it safe: no UI touching inside this function.
+    try { Write-QLog "Startup warmup: begin" } catch { }
+
+    # Example warmups (adjust to taste):
+    try {
+        if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) {
+            $null = Test-QOTWingetAvailable
+        }
+    } catch { }
+
+    try {
+        if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) {
+            $null = Get-QOTCommonAppsCatalogue
+        }
+    } catch { }
+
+    try { Write-QLog "Startup warmup: end" } catch { }
+}
+
 function Start-QOTMain {
     param(
         [Parameter(Mandatory)]
@@ -117,6 +170,36 @@ function Start-QOTMain {
     if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
         throw "UI module not loaded: Start-QOTMainWindow not found"
     }
+
+    # Show splash first
+    $splash = $null
+    try {
+        $splash = New-QOTSplashWindow
+        $null = $splash.Show()
+        $splash.Activate()
+    } catch {
+        # If splash fails, do not block startup
+        try { Write-QLog "Splash failed: $($_.Exception.Message)" "WARN" } catch { }
+    }
+
+    # Run warmup on a background thread so the splash stays responsive
+    $task = [System.Threading.Tasks.Task]::Run([Action]{
+        Invoke-QOTStartupWarmup -RootPath $RootPath
+    })
+
+    # Keep UI responsive while we wait
+    while (-not $task.IsCompleted) {
+        try {
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke(
+                [Action]{ },
+                [System.Windows.Threading.DispatcherPriority]::Background
+            )
+        } catch { }
+        Start-Sleep -Milliseconds 50
+    }
+
+    # Close splash, then show main window
+    try { if ($splash) { $splash.Close() } } catch { }
 
     Start-QOTMainWindow
 }
