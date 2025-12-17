@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory)]
     [string]$SignalPath,
 
+    [string]$ProgressPath,
+
     [string]$Title = "Quinn Optimiser Toolkit",
     [string]$Subtitle = "Loading..."
 )
@@ -34,8 +36,8 @@ $xaml = @"
 
       <Border Grid.Row="1" Margin="0,18,0,10" Background="#020617" CornerRadius="12" BorderBrush="#374151" BorderThickness="1">
         <Grid Margin="12">
-          <ProgressBar IsIndeterminate="True" Height="18"/>
-          <TextBlock Text="Starting up..." Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"/>
+          <ProgressBar Name="BarProgress" IsIndeterminate="False" Minimum="0" Maximum="100" Height="18"/>
+          <TextBlock Name="TxtStatus" Text="Starting up..." Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="12"/>
         </Grid>
       </Border>
 
