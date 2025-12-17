@@ -1,11 +1,11 @@
 # bootstrap.ps1
-# Download latest Quinn Optimiser Toolkit build to a temp folder and run Intro.ps1
+# Always download a fresh build, extract clean, run Intro.ps1 quietly
 
-$ErrorActionPreference = "Stop"
-$ProgressPreference    = "SilentlyContinue"
-$WarningPreference     = "SilentlyContinue"
-$VerbosePreference     = "SilentlyContinue"
-$InformationPreference = "SilentlyContinue"
+$ErrorActionPreference   = "Stop"
+$ProgressPreference      = "SilentlyContinue"
+$WarningPreference       = "SilentlyContinue"
+$VerbosePreference       = "SilentlyContinue"
+$InformationPreference   = "SilentlyContinue"
 
 $originalLocation = Get-Location
 
@@ -27,18 +27,17 @@ try {
     $baseTemp = Join-Path $env:TEMP "QuinnOptimiserToolkit"
     $zipPath  = Join-Path $baseTemp "repo.zip"
 
-    # Start clean every time
     if (Test-Path -LiteralPath $baseTemp) {
         Remove-Item -LiteralPath $baseTemp -Recurse -Force
     }
     New-Item -ItemType Directory -Path $baseTemp -Force | Out-Null
 
-    $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip"
+    $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust"
 
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing | Out-Null
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -Headers @{ "Cache-Control"="no-cache" } -UseBasicParsing | Out-Null
     Expand-Archive -Path $zipPath -DestinationPath $baseTemp -Force
 
-    # GitHub extracts into a folder like: Windows-Optimiser-Toolkit--main
     $rootFolder = Get-ChildItem -LiteralPath $baseTemp -Directory |
         Where-Object { $_.Name -like "$repoName*" } |
         Select-Object -First 1
@@ -52,8 +51,8 @@ try {
     }
 
     $toolkitRoot = $rootFolder.FullName
+    $introPath   = Join-Path $toolkitRoot "src\Intro\Intro.ps1"
 
-    $introPath = Join-Path $toolkitRoot "src\Intro\Intro.ps1"
     if (-not (Test-Path -LiteralPath $introPath)) {
         throw "Intro.ps1 not found at $introPath"
     }
