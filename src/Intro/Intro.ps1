@@ -41,14 +41,14 @@ try {
     $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
     # ------------------------------
-    # Import core modules
+    # Import config (best effort)
     # ------------------------------
     if (Test-Path -LiteralPath $configModule) {
         Import-Module $configModule -Force -ErrorAction SilentlyContinue
     }
 
     # ------------------------------
-    # Logging: try real module first, fallback only if it fails
+    # Logging: try real module first, fallback if missing or incomplete
     # ------------------------------
     $loggingLoaded = $false
 
@@ -59,15 +59,24 @@ try {
 
         Import-Module $loggingModule -Force -ErrorAction Stop
 
-        # Basic sanity check that the module provided the expected commands
-        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
-            $loggingLoaded = $true
-        } else {
-            throw "Logging module imported but Write-QLog was not available."
+        # Require these to exist, otherwise treat as failed import
+        $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
+        $missing  = @()
+
+        foreach ($name in $required) {
+            if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+                $missing += $name
+            }
         }
+
+        if ($missing.Count -gt 0) {
+            throw "Logging module imported but missing functions: $($missing -join ', ')"
+        }
+
+        $loggingLoaded = $true
     }
     catch {
-        # Fallback logging functions (only used if Logging.psm1 fails)
+        # Fallback logging functions (only used if Logging.psm1 fails or is incomplete)
         function Write-QLog {
             param(
                 [string]$Message,
@@ -96,7 +105,7 @@ try {
             Write-QLog "Log session started (fallback)." "INFO"
         }
 
-        Write-QLog "Logging module import failed, using fallback logging. $($_.Exception.Message)" "WARN"
+        Write-QLog "Logging module import failed or incomplete, using fallback logging. $($_.Exception.Message)" "WARN"
     }
 
     # ------------------------------
@@ -134,11 +143,32 @@ try {
     Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force -ErrorAction SilentlyContinue
     Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # Initialise config and logging
+    # Initialise config
     $cfg = Initialize-QOTConfig -RootPath $rootPath
 
-    Set-QLogRoot -Root $cfg.LogsRoot
-    Start-QLogSession
+    # ------------------------------
+    # Safe logging init (guarded)
+    # ------------------------------
+    if (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) {
+        Set-QLogRoot -Root $cfg.LogsRoot
+    } else {
+        # Ultra last resort so nothing can break startup
+        function Write-QLog {
+            param([string]$Message,[string]$Level="INFO")
+            $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            $line = "[$ts] [$Level] $Message"
+            try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
+            if (-not $Quiet) { Write-Host $line }
+        }
+        Write-QLog "Set-QLogRoot missing. Logging module did not provide expected functions." "WARN"
+    }
+
+    if (Get-Command Start-QLogSession -ErrorAction SilentlyContinue) {
+        Start-QLogSession
+    } else {
+        Write-QLog "Start-QLogSession missing. Continuing without session init." "WARN"
+    }
+
     Write-QLog "Intro starting. Root path: $rootPath" "INFO"
 
     # ------------------------------
@@ -150,13 +180,22 @@ try {
 
     if (-not $SkipSplash) {
         $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
-        $splash     = New-QOTSplashWindow -Path $splashXaml
 
-        Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
-        Update-QOTSplashProgress -Window $splash -Value 5
-        [void]$splash.Show()
+        if (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue) {
+            $splash = New-QOTSplashWindow -Path $splashXaml
 
-        $script:SplashShownAt = Get-Date
+            if ($splash) {
+                if (Get-Command Update-QOTSplashStatus -ErrorAction SilentlyContinue) {
+                    Update-QOTSplashStatus -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
+                }
+                if (Get-Command Update-QOTSplashProgress -ErrorAction SilentlyContinue) {
+                    Update-QOTSplashProgress -Window $splash -Value 5
+                }
+
+                try { [void]$splash.Show() } catch { }
+                $script:SplashShownAt = Get-Date
+            }
+        }
     }
 
     function Set-IntroProgress {
@@ -166,8 +205,12 @@ try {
         )
 
         if ($splash) {
-            if ($Text)  { Update-QOTSplashStatus -Window $splash -Text $Text }
-            if ($Value -ne $null) { Update-QOTSplashProgress -Window $splash -Value $Value }
+            if ($Text -and (Get-Command Update-QOTSplashStatus -ErrorAction SilentlyContinue)) {
+                Update-QOTSplashStatus -Window $splash -Text $Text
+            }
+            if ($Value -ne $null -and (Get-Command Update-QOTSplashProgress -ErrorAction SilentlyContinue)) {
+                Update-QOTSplashProgress -Window $splash -Value $Value
+            }
 
             try { $splash.Dispatcher.Invoke({ }, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
         }
@@ -191,7 +234,7 @@ try {
             Start-Sleep -Milliseconds ($script:MinSplashMs - $elapsedMs)
         }
 
-        $splash.Close()
+        try { $splash.Close() } catch { }
     }
 
     # ------------------------------
