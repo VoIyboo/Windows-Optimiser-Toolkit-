@@ -172,3 +172,7 @@ try {
     FadeOut-AndCloseFoxSplash
     
     Write-QLog "Intro completed" "INFO"
+    }
+    finally {
+        $WarningPreference = $oldWarningPreference
+    }
