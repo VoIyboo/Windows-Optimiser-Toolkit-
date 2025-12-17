@@ -153,26 +153,25 @@ try {
     Write-QLog "Starting main window" "INFO"
     $null = Start-QOTMain -RootPath $rootPath
     
-    # Wait until the main window is actually loaded and visible
     $waitStart = Get-Date
     while ($true) {
+    
         $mw = $Global:QOTMainWindow
     
-        if ($mw -and $mw.IsLoaded -and $mw.IsVisible) { break }
+        if ($mw -and $mw.IsInitialized -and $mw.IsVisible) {
+            break
+        }
     
-        if (((Get-Date) - $waitStart).TotalSeconds -gt 15) { break } # safety timeout
+        if (((Get-Date) - $waitStart).TotalSeconds -gt 15) {
+            Write-QLog "UI ready timeout, continuing anyway" "WARN"
+            break
+        }
+    
         Start-Sleep -Milliseconds 100
     }
     
-        # Now show Ready for 2 seconds, then fade away
-        Set-FoxSplash 100 "Ready"
-        Refresh-FoxSplash
-        Start-Sleep -Seconds 2
-    
-        FadeOut-AndCloseFoxSplash
-    
-        Write-QLog "Intro completed" "INFO"
-    }
-    finally {
-        $WarningPreference = $oldWarningPreference
-    }
+    Set-FoxSplash 100 "Ready"
+    Refresh-FoxSplash
+    Start-Sleep -Seconds 2
+    FadeOut-AndCloseFoxSplash
+
