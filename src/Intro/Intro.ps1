@@ -100,4 +100,28 @@ finally {
 # Start main window
 # Do NOT close splash here, the main window will close it on load
 # --------------------------------------
-Start-QOTMain -RootPath $rootPath -SplashWindow $splash
+# Make Start-QOTMain available in the main session (runspace imports do not carry over)
+while (-not $async.IsCompleted) {
+    $progress = [Math]::Min(90, $progress + 3)
+
+    Update-QOTSplashStatus   -Window $splash -Text "Loading modules..."
+    Update-QOTSplashProgress -Window $splash -Value $progress
+
+    try {
+        $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+    } catch { }
+
+    Start-Sleep -Milliseconds 120
+}
+
+Update-QOTSplashStatus   -Window $splash -Text "Opening app..."
+Update-QOTSplashProgress -Window $splash -Value 100
+
+try {
+    $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+} catch { }
+
+Start-Sleep -Milliseconds 150
+
+try { $splash.Close() } catch { }
+Start-QOTMain -RootPath $rootPath
