@@ -230,13 +230,20 @@ function Start-QOTMainWindow {
             })
         }
 
-        [void]$window.ShowDialog()
+        # Non modal: do NOT block Intro.ps1
+        $window.Show() | Out-Null
+
+        # Give the UI thread a moment to process and actually draw the window
+        try { $window.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
+
+        return $window
     }
     catch {
         Write-Error "Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
         throw
     }
 }
+
 
 # -------------------------------------------------------------------
 # TAB SELECTION
