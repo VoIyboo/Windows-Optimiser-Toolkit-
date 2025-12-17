@@ -1,5 +1,5 @@
 # Intro.ps1
-# Fox splash startup for the Quinn Optimiser Toolkit (progress + swap to Main UI)
+# Fox splash startup for the Quinn Optimiser Toolkit (progress + fade + swap to Main UI)
 
 param(
     [switch]$SkipSplash,
@@ -95,38 +95,69 @@ try {
         })
     }
 
+    function Refresh-FoxSplash {
+        if (-not $splash) { return }
+        $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+    }
+
+    function FadeOut-AndCloseFoxSplash {
+        if (-not $splash) { return }
+
+        $splash.Dispatcher.Invoke([action]{
+            $splash.Topmost = $false
+
+            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+            $anim.From = 1
+            $anim.To = 0
+            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+
+            $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+        })
+
+        Start-Sleep -Milliseconds 330
+
+        try {
+            $splash.Dispatcher.Invoke([action]{
+                $splash.Close()
+            })
+        } catch { }
+    }
+
     # -------------------------------------------------
     # Loading stages shown on fox splash
     # -------------------------------------------------
     Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
+    Refresh-FoxSplash
     Start-Sleep -Milliseconds 150
 
     Set-FoxSplash 20 "Loading config..."
+    Refresh-FoxSplash
     if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
 
     Set-FoxSplash 40 "Loading logging..."
+    Refresh-FoxSplash
     if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
 
     Set-FoxSplash 65 "Loading engine..."
+    Refresh-FoxSplash
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
     Set-FoxSplash 85 "Preparing UI..."
+    Refresh-FoxSplash
     Start-Sleep -Milliseconds 200
 
     Set-FoxSplash 100 "Ready"
+    Refresh-FoxSplash
     Start-Sleep -Seconds 2
 
     # -------------------------------------------------
-    # Swap to main UI
+    # Fade out splash first, then start main UI
     # -------------------------------------------------
+    FadeOut-AndCloseFoxSplash
+
     Write-QLog "Starting main window" "INFO"
     Start-QOTMain -RootPath $rootPath
-
-    if ($splash) {
-        $splash.Topmost = $false
-        $splash.Close()
-    }
 
     Write-QLog "Intro completed" "INFO"
 }
