@@ -178,34 +178,35 @@ try {
         # Fox splash (Splash.xaml)
         # -------------------------------------------------
         $splash = $null
+        
         if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
+        
             $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
             $splash = New-QOTSplashWindow -Path $splashXaml
         
             if ($splash) {
-                # Force centre
                 $splash.WindowStartupLocation = "CenterScreen"
                 $splash.Topmost = $true
                 $splash.Show()
             }
-            
-            function Set-FoxSplash {
-                param(
-                    [int]$Percent,
-                    [string]$Text
-                )
-            
-                if (-not $splash) { return }
-            
-                $splash.Dispatcher.Invoke([action]{
-                    $bar = $splash.FindName("SplashProgressBar")
-                    $txt = $splash.FindName("SplashStatusText")
-            
-                    if ($bar) { $bar.Value = [double]$Percent }
-                    if ($txt) { $txt.Text = $Text }
-                })
-            }
-
+        }
+        
+        function Set-FoxSplash {
+            param(
+                [int]$Percent,
+                [string]$Text
+            )
+        
+            if (-not $splash) { return }
+        
+            $splash.Dispatcher.Invoke([action]{
+                $bar = $splash.FindName("SplashProgressBar")
+                $txt = $splash.FindName("SplashStatusText")
+        
+                if ($bar) { $bar.Value = [double]$Percent }
+                if ($txt) { $txt.Text = $Text }
+            })
+        }
               
 
 # -------------------------------------------------
