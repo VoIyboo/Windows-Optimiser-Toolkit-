@@ -208,14 +208,36 @@ try {
             }
         }
 
-    # -------------------------------------------------
-    # Start main window (after splash closes)
-    # -------------------------------------------------
-    Write-QLog "Starting main window" "INFO"
-    Start-QOTMain -RootPath $rootPath
+# -------------------------------------------------
+# Loading stages shown on fox splash
+# -------------------------------------------------
+Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
+Start-Sleep -Milliseconds 150
 
-    Write-QLog "Intro completed" "INFO"
+Set-FoxSplash 20 "Loading config..."
+if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
+
+Set-FoxSplash 40 "Loading logging..."
+if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
+
+Set-FoxSplash 65 "Loading engine..."
+Import-Module $engineModule -Force -ErrorAction Stop
+
+Set-FoxSplash 85 "Preparing UI..."
+Start-Sleep -Milliseconds 200
+
+Set-FoxSplash 100 "Ready"
+Start-Sleep -Seconds 2
+
+# -------------------------------------------------
+# Swap to main UI
+# -------------------------------------------------
+Write-QLog "Starting main window" "INFO"
+Start-QOTMain -RootPath $rootPath
+
+if ($splash) {
+    $splash.Close()
 }
-finally {
-    $WarningPreference = $oldWarningPreference
-}
+
+Write-QLog "Intro completed" "INFO"
+
