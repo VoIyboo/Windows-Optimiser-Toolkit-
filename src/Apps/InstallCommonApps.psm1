@@ -16,46 +16,47 @@ function Get-QOTCommonAppsCatalogue {
     #>
 
     $apps = @(
-        [pscustomobject]@{
-            Name     = "Google Chrome"
-            WingetId = "Google.Chrome"
-            Category = "Browser"
-        }
-        [pscustomobject]@{
-            Name     = "Mozilla Firefox"
-            WingetId = "Mozilla.Firefox"
-            Category = "Browser"
-        }
-        [pscustomobject]@{
-            Name     = "7-Zip"
-            WingetId = "7zip.7zip"
-            Category = "Utility"
-        }
-        [pscustomobject]@{
-            Name     = "VLC Media Player"
-            WingetId = "VideoLAN.VLC"
-            Category = "Media"
-        }
-        [pscustomobject]@{
-            Name     = "Notepad++"
-            WingetId = "Notepad++.Notepad++"
-            Category = "Editor"
-        }
-        [pscustomobject]@{
-            Name     = "Discord"
-            WingetId = "Discord.Discord"
-            Category = "Social"
-        }
-        [pscustomobject]@{
-            Name     = "Spotify"
-            WingetId = "Spotify.Spotify"
-            Category = "Media"
-        }
-        [pscustomobject]@{
-            Name     = "Visual Studio Code"
-            WingetId = "Microsoft.VisualStudioCode"
-            Category = "Editor"
-        }
+        # Browsers
+        [pscustomobject]@{ Name="Google Chrome";        WingetId="Google.Chrome";               Category="Browser" }
+        [pscustomobject]@{ Name="Mozilla Firefox";      WingetId="Mozilla.Firefox";             Category="Browser" }
+        [pscustomobject]@{ Name="Microsoft Edge";       WingetId="Microsoft.Edge";              Category="Browser" }
+        [pscustomobject]@{ Name="Brave Browser";        WingetId="Brave.Brave";                 Category="Browser" }
+
+        # Utilities
+        [pscustomobject]@{ Name="7-Zip";                WingetId="7zip.7zip";                   Category="Utility" }
+        [pscustomobject]@{ Name="WinRAR";               WingetId="RARLab.WinRAR";               Category="Utility" }
+        [pscustomobject]@{ Name="Notepad++";            WingetId="Notepad++.Notepad++";         Category="Utility" }
+        [pscustomobject]@{ Name="Everything Search";    WingetId="voidtools.Everything";        Category="Utility" }
+        [pscustomobject]@{ Name="PowerToys";            WingetId="Microsoft.PowerToys";         Category="Utility" }
+        [pscustomobject]@{ Name="Greenshot";            WingetId="Greenshot.Greenshot";         Category="Utility" }
+        [pscustomobject]@{ Name="ShareX";               WingetId="ShareX.ShareX";               Category="Utility" }
+        [pscustomobject]@{ Name="Adobe Acrobat Reader"; WingetId="Adobe.Acrobat.Reader.64-bit"; Category="Utility" }
+
+        # Media
+        [pscustomobject]@{ Name="VLC Media Player";     WingetId="VideoLAN.VLC";                Category="Media" }
+        [pscustomobject]@{ Name="Spotify";              WingetId="Spotify.Spotify";             Category="Media" }
+        [pscustomobject]@{ Name="OBS Studio";           WingetId="OBSProject.OBSStudio";        Category="Media" }
+        [pscustomobject]@{ Name="Audacity";             WingetId="Audacity.Audacity";           Category="Media" }
+
+        # Communication
+        [pscustomobject]@{ Name="Microsoft Teams";      WingetId="Microsoft.Teams";             Category="Communication" }
+        [pscustomobject]@{ Name="Zoom";                 WingetId="Zoom.Zoom";                   Category="Communication" }
+        [pscustomobject]@{ Name="Discord";              WingetId="Discord.Discord";             Category="Communication" }
+        [pscustomobject]@{ Name="Slack";                WingetId="SlackTechnologies.Slack";     Category="Communication" }
+
+        # Dev / IT
+        [pscustomobject]@{ Name="Visual Studio Code";   WingetId="Microsoft.VisualStudioCode";  Category="Dev" }
+        [pscustomobject]@{ Name="Git";                  WingetId="Git.Git";                     Category="Dev" }
+        [pscustomobject]@{ Name="GitHub Desktop";       WingetId="GitHub.GitHubDesktop";        Category="Dev" }
+        [pscustomobject]@{ Name="Python 3";             WingetId="Python.Python.3";             Category="Dev" }
+        [pscustomobject]@{ Name="Node.js LTS";          WingetId="OpenJS.NodeJS.LTS";           Category="Dev" }
+        [pscustomobject]@{ Name="PuTTY";                WingetId="PuTTY.PuTTY";                 Category="Dev" }
+        [pscustomobject]@{ Name="WinSCP";               WingetId="WinSCP.WinSCP";               Category="Dev" }
+
+        # Cloud / Backup
+        [pscustomobject]@{ Name="OneDrive";             WingetId="Microsoft.OneDrive";          Category="Cloud" }
+        [pscustomobject]@{ Name="Google Drive";         WingetId="Google.Drive";                Category="Cloud" }
+        [pscustomobject]@{ Name="Dropbox";              WingetId="Dropbox.Dropbox";             Category="Cloud" }
     )
 
     return $apps
@@ -67,14 +68,11 @@ function Test-QOTWingetAvailable {
     #>
     try {
         $null = winget --version 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            return $true
-        }
+        if ($LASTEXITCODE -eq 0) { return $true }
     }
     catch {
         Write-QLog ("winget --version failed: {0}" -f $_.Exception.Message) "WARN"
     }
-
     return $false
 }
 
@@ -90,7 +88,6 @@ function Test-QOTWingetAppInstalled {
     }
 
     try {
-        # Use winget list to check for the ID
         $result = winget list --id $WingetId --source winget 2>$null
         if ($LASTEXITCODE -eq 0 -and $result -match [regex]::Escape($WingetId)) {
             return $true
@@ -101,6 +98,37 @@ function Test-QOTWingetAppInstalled {
     }
 
     return $false
+}
+
+function Get-QOTCommonApps {
+    <#
+        Builds the UI-ready common apps list.
+
+        Adds:
+        - Status       : Installed / Available / Unknown
+        - IsInstallable: True if not installed
+        - IsSelected   : For future multi-select support
+    #>
+    $catalogue = @(Get-QOTCommonAppsCatalogue)
+
+    foreach ($app in $catalogue) {
+        $installed = $false
+        $status    = "Available"
+
+        if (Test-QOTWingetAvailable) {
+            $installed = Test-QOTWingetAppInstalled -WingetId $app.WingetId
+            $status    = if ($installed) { "Installed" } else { "Available" }
+        }
+        else {
+            $status    = "Unknown"
+        }
+
+        $app | Add-Member -NotePropertyName Status        -NotePropertyValue $status -Force
+        $app | Add-Member -NotePropertyName IsInstallable -NotePropertyValue (-not $installed) -Force
+        $app | Add-Member -NotePropertyName IsSelected    -NotePropertyValue $false -Force
+    }
+
+    return $catalogue
 }
 
 function Install-QOTCommonApp {
@@ -157,6 +185,7 @@ function Install-QOTCommonApp {
 
 Export-ModuleMember -Function `
     Get-QOTCommonAppsCatalogue, `
+    Get-QOTCommonApps, `
     Test-QOTWingetAvailable, `
     Test-QOTWingetAppInstalled, `
     Install-QOTCommonApp
