@@ -51,6 +51,10 @@ $xml    = [xml]$xaml
 $reader = New-Object System.Xml.XmlNodeReader $xml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
 
+$bar = $win.FindName("BarProgress")
+$txt = $win.FindName("TxtStatus")
+
+
 # Poll for the signal file, then close
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(150)
