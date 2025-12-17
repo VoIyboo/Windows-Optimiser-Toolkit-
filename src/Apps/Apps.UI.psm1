@@ -311,10 +311,10 @@ function Initialize-QOTAppsUI {
         $BtnScanApps.Visibility = 'Collapsed'
     }
 
-    # Uninstall selected button
-    $BtnUninstallSelected.Add_Click({
-        Invoke-QOTUninstallSelectedApps -Grid $AppsGrid
-    })
+    # Uninstall selected button (we’re retiring this in favour of Run Selected actions)
+    if ($BtnUninstallSelected) {
+        $BtnUninstallSelected.Visibility = 'Collapsed'
+    }
 
     # Install button clicks inside the common apps grid
     $InstallGrid.AddHandler(
