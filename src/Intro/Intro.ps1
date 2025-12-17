@@ -40,6 +40,11 @@ try {
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
     $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
+    Write-Host "DEBUG: loggingModule path = $loggingModule"
+    Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
+    Write-Host "DEBUG: Set-QLogRoot available = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
+
+
     # ------------------------------
     # Import config (best effort)
     # ------------------------------
@@ -50,30 +55,26 @@ try {
 # ------------------------------
 # Logging MUST load or we fall back
 # ------------------------------
-$loggingLoaded = $false
-
 try {
+    Write-Host "DEBUG: loggingModule path   = $loggingModule"
+    Write-Host "DEBUG: loggingModule exists = $([bool](Test-Path -LiteralPath $loggingModule))"
+
     if (-not (Test-Path -LiteralPath $loggingModule)) {
         throw "Logging module not found at: $loggingModule"
     }
 
-    # If an old version is already loaded, purge it first
-    $loaded = Get-Module | Where-Object { $_.Path -eq $loggingModule -or $_.Name -eq 'Logging' }
-    if ($loaded) {
-        Remove-Module -Name $loaded.Name -Force -ErrorAction SilentlyContinue
-    }
-
+    # Import logging and prove the functions exist
     $m = Import-Module $loggingModule -Force -ErrorAction Stop -PassThru
 
-    # Prove the functions exist before we continue
+    Write-Host "DEBUG: Logging imported from = $($m.Path)"
+    Write-Host "DEBUG: Set-QLogRoot available after import = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
+
     $required = @("Write-QLog", "Set-QLogRoot", "Start-QLogSession")
     foreach ($name in $required) {
         if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
-            throw "Logging module imported from $($m.Path) but $name is not available."
+            throw "Logging module imported but missing function: $name"
         }
     }
-
-    $loggingLoaded = $true
 }
 catch {
     # Fallback logging (only if real logging failed)
@@ -100,6 +101,7 @@ catch {
 
     Write-QLog "Logging import failed, using fallback. $($_.Exception.Message)" "WARN"
 }
+
 
 
     # ------------------------------
