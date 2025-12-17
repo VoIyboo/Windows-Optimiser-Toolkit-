@@ -1,211 +1,174 @@
 # Intro.ps1
-# Minimal splash startup for the Quinn Optimiser Toolkit
+# Shows splash immediately, runs init in background, then opens main window
 
+[CmdletBinding()]
 param(
-    [switch]$SkipSplash,
     [string]$LogPath,
     [switch]$Quiet
 )
 
 $ErrorActionPreference = "Stop"
 
-# ------------------------------
-# Logging setup (file path always exists)
-# ------------------------------
-if (-not $LogPath) {
-    $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
-    if (-not (Test-Path -LiteralPath $logDir)) {
-        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    }
-    $LogPath = Join-Path $logDir ("QOT_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-}
-$script:QOTLogPath = $LogPath
+# --- Resolve toolkit root (Intro.ps1 is in src\Intro) ---
+$toolkitRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
-# ------------------------------
-# Fallback logging functions (only used if Logging.psm1 fails)
-# ------------------------------
-function Write-QLog {
+# --- Load core logging early (so we can log during init) ---
+$logging = Join-Path $toolkitRoot "src\Core\Logging\Logging.psm1"
+if (Test-Path $logging) { Import-Module $logging -Force -ErrorAction SilentlyContinue }
+
+try { Write-QLog "Intro: starting. Root=$toolkitRoot" } catch { }
+
+# --- WPF assemblies ---
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
+
+function New-QOTSplashWindow {
+    $xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Studio Voly"
+        Width="620" Height="320"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False">
+    <Border Background="#0B1220" CornerRadius="20" BorderBrush="#111827" BorderThickness="1" Padding="22">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Studio Voly" Foreground="#E5E7EB" FontSize="34" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="TxtStatus" Text="Starting..." Foreground="#9CA3AF" FontSize="13" Margin="0,10,0,0" HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <ProgressBar Grid.Row="1"
+                         x:Name="Bar"
+                         Height="14"
+                         Margin="0,18,0,0"
+                         Minimum="0" Maximum="100"
+                         Value="0"
+                         Foreground="#22C55E"
+                         Background="#111827"/>
+
+            <TextBlock Grid.Row="2"
+                       x:Name="TxtPercent"
+                       Text="0%"
+                       Foreground="#9CA3AF"
+                       FontSize="11"
+                       Margin="0,10,0,0"
+                       HorizontalAlignment="Center"/>
+        </Grid>
+    </Border>
+</Window>
+"@
+
+    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
+    return [Windows.Markup.XamlReader]::Load($reader)
+}
+
+function Set-Splash {
     param(
-        [string]$Message,
-        [string]$Level = "INFO"
+        [Parameter(Mandatory)] $Window,
+        [Parameter(Mandatory)] [string]$Text,
+        [Parameter(Mandatory)] [int]$Percent
     )
 
-    $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $line = "[$ts] [$Level] $Message"
+    $Window.Dispatcher.Invoke([action]{
+        $txt = $Window.FindName("TxtStatus")
+        $bar = $Window.FindName("Bar")
+        $pct = $Window.FindName("TxtPercent")
 
-    try {
-        if ($script:QOTLogPath) {
-            $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
-        }
-    } catch { }
-
-    if (-not $Quiet) { Write-Host $line }
+        if ($txt) { $txt.Text = $Text }
+        if ($bar) { $bar.Value = [Math]::Max(0, [Math]::Min(100, $Percent)) }
+        if ($pct) { $pct.Text = ("{0}%" -f $Percent) }
+    })
 }
 
-function Set-QLogRoot {
-    param([Parameter(Mandatory)][string]$Root)
-    $script:QLogRoot = $Root
+# Create splash and show it immediately
+$splash = New-QOTSplashWindow
+$splash.Show()
+
+Set-Splash -Window $splash -Text "Loading core..." -Percent 5
+
+# --- Background init: do NOT block UI thread ---
+$ps = [PowerShell]::Create()
+$null = $ps.AddScript({
+    param($Root)
+
+    $ErrorActionPreference = "Stop"
+
+    # Import Engine first (it will import modules)
+    $engine = Join-Path $Root "src\Core\Engine\Engine.psm1"
+    if (-not (Test-Path $engine)) { throw "Engine.psm1 missing at $engine" }
+    Import-Module $engine -Force -ErrorAction Stop
+
+    # Optional: warm up data (avoid UI feeling “empty” on first click)
+    if (Get-Command Refresh-QOTInstalledAppsGrid -ErrorAction SilentlyContinue) {
+        try { Write-QLog "Intro init: warm installed apps scan (background)"; } catch { }
+        # We only warm data structures here. UI wiring will bind later.
+        Refresh-QOTInstalledAppsGrid -Grid $null 2>$null
+    }
+
+    if (Get-Command Refresh-QOTCommonAppsGrid -ErrorAction SilentlyContinue) {
+        try { Write-QLog "Intro init: warm common apps list (background)"; } catch { }
+        Refresh-QOTCommonAppsGrid -Grid $null 2>$null
+    }
+
+    return $true
+}).AddArgument($toolkitRoot)
+
+$async = $ps.BeginInvoke()
+
+# Simple progress loop while background init runs
+$progress = 10
+while (-not $async.IsCompleted) {
+    $progress = [Math]::Min(90, $progress + 2)
+    Set-Splash -Window $splash -Text "Loading modules..." -Percent $progress
+    Start-Sleep -Milliseconds 120
 }
 
-function Start-QLogSession {
-    param([string]$Prefix = "QuinnOptimiserToolkit")
-    Write-QLog "Log session started (fallback)." "INFO"
-}
-
-
-Write-Host "DEBUG: Set-QLogRoot command = $((Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) -ne $null)"
-
-Get-Command Set-QLogRoot -All | Out-Host
-
-# Silence noisy module import warnings
-$oldWarningPreference = $WarningPreference
-$WarningPreference = 'SilentlyContinue'
-
-# ------------------------------
-# WPF assemblies
-# ------------------------------
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
-
-# ------------------------------
-# Work out repo root + module paths
-# ------------------------------
-$rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-
-$configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
-$loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
-$engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
-
-# ------------------------------
-# Import core modules
-# ------------------------------
-if (Test-Path -LiteralPath $configModule) {
-    Import-Module $configModule -Force -ErrorAction SilentlyContinue
-}
-
-# Logging MUST load or we keep fallback (but we do not hide failures)
 try {
-    if (-not (Test-Path -LiteralPath $loggingModule)) {
-        throw "Logging module not found at: $loggingModule"
-    }
-
-    Import-Module $loggingModule -Force -ErrorAction Stop
-
-    # If real logging functions exist, prefer them over the fallback ones
-    if (Get-Command Set-QLogRoot -ErrorAction SilentlyContinue) {
-        Write-QLog "Logging.psm1 imported successfully." "INFO"
-    }
+    $result = $ps.EndInvoke($async)
+    Set-Splash -Window $splash -Text "Opening app..." -Percent 100
 }
 catch {
-    Write-QLog "Logging module import failed, using fallback logging. $($_.Exception.Message)" "WARN"
-}
+    try { Write-QLog ("Intro init failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
 
-# Engine is required for Start-QOTMain
-if (-not (Test-Path -LiteralPath $engineModule)) {
-    throw "Engine module not found at: $engineModule"
-}
-Import-Module $engineModule -Force -ErrorAction Stop
-
-# ------------------------------
-# Local config init
-# ------------------------------
-function Initialize-QOTConfig {
-    param([Parameter(Mandatory)][string]$RootPath)
-
-    $Global:QOTRoot = $RootPath
-
-    $programDataRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit"
-    $logsRoot        = Join-Path $programDataRoot "Logs"
-
-    foreach ($path in @($programDataRoot, $logsRoot)) {
-        if (-not (Test-Path -LiteralPath $path)) {
-            New-Item -Path $path -ItemType Directory -Force | Out-Null
-        }
-    }
-
-    [pscustomobject]@{
-        Root     = $RootPath
-        LogsRoot = $logsRoot
-    }
-}
-
-# Import UI helpers (best effort)
-Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1")  -Force -ErrorAction SilentlyContinue
-Import-Module (Join-Path $rootPath "src\UI\MainWindow.UI.psm1") -Force -ErrorAction SilentlyContinue
-
-# Initialise config and logging
-$cfg = Initialize-QOTConfig -RootPath $rootPath
-
-Write-Host "DEBUG: Set-QLogRoot available right before call = $([bool](Get-Command Set-QLogRoot -ErrorAction SilentlyContinue))"
-
-Set-QLogRoot -Root $cfg.LogsRoot
-Start-QLogSession
-
-Write-QLog "Intro starting. Root path: $rootPath" "INFO"
-
-# ------------------------------
-# Optional splash
-# ------------------------------
-$splash = $null
-$script:MinSplashMs   = 3000
-$script:SplashShownAt = $null
-
-if (-not $SkipSplash) {
-    $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
-    $splash     = New-QOTSplashWindow -Path $splashXaml
-
-    Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
-    Update-QOTSplashProgress -Window $splash -Value 5
-    [void]$splash.Show()
-
-    $script:SplashShownAt = Get-Date
-}
-
-function Set-IntroProgress {
-    param(
-        [int]$Value,
-        [string]$Text
-    )
-
-    if ($splash) {
-        if ($Text)  { Update-QOTSplashStatus   -Window $splash -Text $Text }
-        if ($Value -ne $null) { Update-QOTSplashProgress -Window $splash -Value $Value }
-
-        try { $splash.Dispatcher.Invoke({ }, [System.Windows.Threading.DispatcherPriority]::Background) } catch { }
-    }
-}
-
-Set-IntroProgress -Value 25 -Text "Loading UI..."
-Set-IntroProgress -Value 55 -Text "Initialising modules..."
-Set-IntroProgress -Value 85 -Text "Starting app..."
-
-Write-QLog "Closing splash and starting main window." "INFO"
-
-if ($splash) {
-    Set-IntroProgress -Value 100 -Text "Ready."
-
-    $elapsedMs = 0
-    if ($script:SplashShownAt) {
-        $elapsedMs = [int]((Get-Date) - $script:SplashShownAt).TotalMilliseconds
-    }
-
-    if ($script:MinSplashMs -and $elapsedMs -lt $script:MinSplashMs) {
-        Start-Sleep -Milliseconds ($script:MinSplashMs - $elapsedMs)
-    }
+    [System.Windows.MessageBox]::Show(
+        "Startup failed:`n`n$($_.Exception.Message)",
+        "Quinn Optimiser Toolkit",
+        "OK",
+        "Error"
+    ) | Out-Null
 
     $splash.Close()
+    return
+}
+finally {
+    $ps.Dispose()
 }
 
-# ------------------------------
-# Start the main window
-# Engine.psm1 expects -RootPath
-# ------------------------------
-Start-QOTMain -RootPath $rootPath
+# Close splash, then open main window (same thread)
+Start-Sleep -Milliseconds 200
+$splash.Close()
 
-Write-QLog "Intro completed." "INFO"
-
-# Restore warning preference
-$WarningPreference = $oldWarningPreference
-
-if (-not $Quiet) {
-    Write-Host "Log saved to: $script:QOTLogPath"
+# Call into Engine entry point
+try {
+    Start-QOTMain -RootPath $toolkitRoot
+}
+catch {
+    try { Write-QLog ("Start-QOTMain failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    [System.Windows.MessageBox]::Show(
+        "Failed to launch main UI:`n`n$($_.Exception.Message)",
+        "Quinn Optimiser Toolkit",
+        "OK",
+        "Error"
+    ) | Out-Null
 }
