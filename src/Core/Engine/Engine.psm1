@@ -125,8 +125,7 @@ function Start-QOTMain {
         throw
     }
 }
-    Start-QOTMainWindow
-}
+
 
 Export-ModuleMember -Function `
     Start-QOTMain, `
