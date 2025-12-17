@@ -195,3 +195,19 @@ try {
 finally {
     $WarningPreference = $oldWarningPreference
 }
+
+# Keep the UI alive after splash closes (only if we created the main window)
+if ($Global:QOTMainWindow) {
+    try {
+        $disp = [System.Windows.Threading.Dispatcher]::FromThread([System.Threading.Thread]::CurrentThread)
+
+        # If there is no dispatcher loop yet, start it
+        if ($null -eq $disp) {
+            [System.Windows.Threading.Dispatcher]::Run()
+        }
+    } catch {
+        # If we can't run the dispatcher, just exit gracefully
+    }
+}
+
+
