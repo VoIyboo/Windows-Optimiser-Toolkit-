@@ -67,6 +67,51 @@ try {
     # Resolve root + modules
     # -------------------------------------------------
     $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $signalPath   = Join-Path $env:TEMP "QOT_ready.signal"
+    $progressPath = Join-Path $env:TEMP "QOT_progress.json"
+    
+    # Clean old files
+    Remove-Item -LiteralPath $signalPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $progressPath -Force -ErrorAction SilentlyContinue
+    
+    # Background prep work while splash is open
+    Start-Job -ArgumentList $rootPath, $progressPath, $signalPath -ScriptBlock {
+        param($RootPath, $ProgressPath, $SignalPath)
+    
+        function Set-Progress([int]$Percent, [string]$Status) {
+            @{ progress = $Percent; status = $Status } | ConvertTo-Json | Set-Content -LiteralPath $ProgressPath -Encoding UTF8
+        }
+    
+        try {
+            Set-Progress 5  "Starting..."
+            Start-Sleep -Milliseconds 200
+    
+            Set-Progress 20 "Loading config..."
+            Import-Module (Join-Path $RootPath "src\Core\Config\Config.psm1") -Force -ErrorAction Stop
+    
+            Set-Progress 40 "Loading logging..."
+            Import-Module (Join-Path $RootPath "src\Core\Logging\Logging.psm1") -Force -ErrorAction Stop
+    
+            Set-Progress 70 "Loading main window..."
+            Import-Module (Join-Path $RootPath "src\Core\Engine\Engine.psm1") -Force -ErrorAction Stop
+    
+            Set-Progress 95 "Finalising..."
+            Start-Sleep -Milliseconds 400
+    
+            Set-Progress 100 "Ready"
+            Start-Sleep -Seconds 2
+    
+            New-Item -ItemType File -Path $SignalPath -Force | Out-Null
+        }
+        catch {
+            Set-Progress 100 ("Failed: " + $_.Exception.Message)
+            Start-Sleep -Seconds 2
+            New-Item -ItemType File -Path $SignalPath -Force | Out-Null
+        }
+    } | Out-Null
+
+
+
 
     $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
