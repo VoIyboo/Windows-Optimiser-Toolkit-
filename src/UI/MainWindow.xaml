@@ -430,15 +430,130 @@
                 </TabItem>
 
                 <!-- Tickets -->
+                <!-- Tickets -->
                 <TabItem x:Name="TabTickets" Header="Tickets">
                     <Grid Margin="5,10,5,5">
-                        <GroupBox Header="Tickets (preview)" Margin="0">
-                            <TextBlock Text="Tickets UI will appear here."
-                                       Foreground="{StaticResource TextSubtle}"
-                                       TextWrapping="Wrap" />
+                        <GroupBox Margin="0">
+                
+                            <GroupBox.Header>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                
+                                    <TextBlock Text="Tickets (preview)"
+                                               Foreground="#E5E7EB"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                
+                                    <StackPanel Grid.Column="1"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                
+                                        <Button x:Name="BtnRefreshTickets"
+                                                Width="28"
+                                                Height="28"
+                                                Margin="0,0,8,0"
+                                                ToolTip="Refresh">
+                                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="14"
+                                                       Text="&#xE72C;"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Button>
+                
+                                        <Button x:Name="BtnNewTicket"
+                                                Width="28"
+                                                Height="28"
+                                                Margin="0,0,8,0"
+                                                ToolTip="New ticket">
+                                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="14"
+                                                       Text="&#xE710;"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Button>
+                
+                                        <Button x:Name="BtnDeleteTicket"
+                                                Width="28"
+                                                Height="28"
+                                                ToolTip="Delete selected ticket">
+                                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="14"
+                                                       Text="&#xE74D;"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Button>
+                
+                                    </StackPanel>
+                                </Grid>
+                            </GroupBox.Header>
+                
+                            <Grid Margin="4">
+                
+                                <DataGrid x:Name="TicketsGrid"
+                                          Margin="0,4,0,8"
+                                          AutoGenerateColumns="False"
+                                          HeadersVisibility="Column"
+                                          IsReadOnly="False"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          GridLinesVisibility="Horizontal"
+                                          Background="{StaticResource CardBrush}"
+                                          BorderBrush="{StaticResource BorderBrush}"
+                                          Foreground="White">
+                
+                                    <DataGrid.Resources>
+                                        <Style TargetType="DataGridColumnHeader">
+                                            <Setter Property="Foreground" Value="#E5E7EB" />
+                                            <Setter Property="Background" Value="#111827" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Setter Property="BorderBrush" Value="#374151" />
+                                        </Style>
+                
+                                        <Style TargetType="DataGridRow">
+                                            <Setter Property="Background" Value="#020617"/>
+                                            <Setter Property="Foreground" Value="#E5E7EB"/>
+                                            <Setter Property="BorderBrush" Value="#374151"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#0B1220"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                
+                                        <Style TargetType="DataGridCell">
+                                            <Setter Property="BorderBrush" Value="#374151"/>
+                                            <Setter Property="Padding" Value="6,3"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.Resources>
+                
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+                                        <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="150" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="True" />
+                                        <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="*" IsReadOnly="False" />
+                                    </DataGrid.Columns>
+                
+                                </DataGrid>
+                
+                            </Grid>
                         </GroupBox>
                     </Grid>
                 </TabItem>
+
 
             </TabControl>
         </ContentControl>
