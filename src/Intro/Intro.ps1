@@ -156,8 +156,9 @@ try {
     # Start main window
     # -------------------------------------------------
     Write-QLog "Starting main window"
-    Start-QOTMain -RootPath $rootPath
-
+    #Start-QOTMain -RootPath $rootPath
+    Write-QLog "Main window launch deferred to splash"
+    
     if ($splash) {
         $elapsed = ((Get-Date) - $shownAt).TotalMilliseconds
         if ($elapsed -lt $minSplashMs) {
