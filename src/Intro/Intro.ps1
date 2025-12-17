@@ -86,40 +86,44 @@ try {
 
         if (-not $splash) { return }
 
-        $splash.Dispatcher.Invoke([action]{
-            $bar = $splash.FindName("SplashProgressBar")
-            $txt = $splash.FindName("SplashStatusText")
+        try {
+            $splash.Dispatcher.Invoke([action]{
+                $bar = $splash.FindName("SplashProgressBar")
+                $txt = $splash.FindName("SplashStatusText")
 
-            if ($bar) { $bar.Value = [double]$Percent }
-            if ($txt) { $txt.Text = $Text }
-        })
+                if ($bar) { $bar.Value = [double]$Percent }
+                if ($txt) { $txt.Text = $Text }
+            })
+        } catch { }
     }
 
     function Refresh-FoxSplash {
         if (-not $splash) { return }
-        $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+        try {
+            $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+        } catch { }
     }
 
     function FadeOut-AndCloseFoxSplash {
         if (-not $splash) { return }
 
-        $splash.Dispatcher.Invoke([action]{
-            $splash.Topmost = $false
+        try {
+            $splash.Dispatcher.Invoke([action]{
+                $splash.Topmost = $false
 
-            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-            $anim.From = 1
-            $anim.To = 0
-            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+                $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+                $anim.From = 1
+                $anim.To = 0
+                $anim.Duration = [TimeSpan]::FromMilliseconds(300)
 
-            $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
-        })
+                $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+            })
+        } catch { }
 
         Start-Sleep -Milliseconds 330
 
         try {
-            $splash.Dispatcher.Invoke([action]{
-                $splash.Close()
-            })
+            $splash.Dispatcher.Invoke([action]{ $splash.Close() })
         } catch { }
     }
 
@@ -151,27 +155,43 @@ try {
     # Start main UI while splash is still visible
     # -------------------------------------------------
     Write-QLog "Starting main window" "INFO"
+
+    # Start main window (expects Engine.Start-QOTMain to set $Global:QOTMainWindow)
     $null = Start-QOTMain -RootPath $rootPath
-    
+
+    # Wait until the main window is actually visible (max 15s)
     $waitStart = Get-Date
     while ($true) {
-    
         $mw = $Global:QOTMainWindow
-    
-        if ($mw -and $mw.IsInitialized -and $mw.IsVisible) {
+
+        # Use IsVisible + IsLoaded when available, but don’t crash if property missing
+        $isVisible = $false
+        $isLoaded  = $false
+
+        try { if ($mw) { $isVisible = [bool]$mw.IsVisible } } catch { }
+        try { if ($mw) { $isLoaded  = [bool]$mw.IsLoaded  } } catch { }
+
+        if ($mw -and ($isVisible -or $isLoaded)) {
             break
         }
-    
+
         if (((Get-Date) - $waitStart).TotalSeconds -gt 15) {
             Write-QLog "UI ready timeout, continuing anyway" "WARN"
             break
         }
-    
+
         Start-Sleep -Milliseconds 100
     }
-    
+
+    # Now show Ready for 2 seconds, then fade away
     Set-FoxSplash 100 "Ready"
     Refresh-FoxSplash
     Start-Sleep -Seconds 2
+
     FadeOut-AndCloseFoxSplash
 
+    Write-QLog "Intro completed" "INFO"
+}
+finally {
+    $WarningPreference = $oldWarningPreference
+}
