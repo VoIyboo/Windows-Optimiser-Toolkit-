@@ -111,7 +111,6 @@ function Start-QOTMain {
             throw "UI module not loaded: Start-QOTMainWindow not found"
         }
 
-        # Non blocking window so Intro can keep splash alive
         $win = Start-QOTMainWindow -NonBlocking
         $Global:QOTMainWindow = $win
 
@@ -122,6 +121,7 @@ function Start-QOTMain {
         throw
     }
 }
+
 
 Export-ModuleMember -Function `
     Start-QOTMain, `
