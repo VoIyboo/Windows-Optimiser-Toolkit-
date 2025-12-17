@@ -18,7 +18,7 @@ if (-not $LogPath) {
 }
 $script:QOTLogPath = $LogPath
 
-function script:Write-QLog {
+function Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
@@ -57,21 +57,24 @@ try {
         }
     }
 
-    function script:Set-FoxSplash {
-        param(
-            [int]$Percent,
-            [string]$Text
-        )
+    # =================================================================
+    # Scriptblocks stored in variables (callable inside event handlers)
+    # =================================================================
+
+    $script:SetFoxSplash = {
+        param([int]$Percent, [string]$Text)
+
         if (-not $splash) { return }
+
         $splash.Dispatcher.Invoke([action]{
             $bar = $splash.FindName("SplashProgressBar")
             $txt = $splash.FindName("SplashStatusText")
             if ($bar) { $bar.Value = [double]$Percent }
             if ($txt) { $txt.Text = $Text }
         })
-    }
+    }.GetNewClosure()
 
-    function script:FadeOut-AndCloseFoxSplash {
+    $script:FadeOutAndClose = {
         if (-not $splash) { return }
 
         $splash.Dispatcher.Invoke([action]{
@@ -95,15 +98,13 @@ try {
         }).GetNewClosure() )
 
         $t.Start()
-    }
+    }.GetNewClosure()
 
-    function script:Complete-Intro {
-        param(
-            [string]$Reason = "normal"
-        )
+    $script:CompleteIntro = {
+        param([string]$Reason = "normal")
 
         try {
-            script:Set-FoxSplash 100 "Ready"
+            & $script:SetFoxSplash 100 "Ready"
 
             $timer = New-Object System.Windows.Threading.DispatcherTimer
             $timer.Interval = [TimeSpan]::FromSeconds(2)
@@ -111,33 +112,37 @@ try {
             $timerLocal = $timer
             $timer.Add_Tick( ({
                 $timerLocal.Stop()
-                script:FadeOut-AndCloseFoxSplash
-                script:Write-QLog "Intro completed ($Reason)" "INFO"
+                & $script:FadeOutAndClose
+                Write-QLog "Intro completed ($Reason)" "INFO"
             }).GetNewClosure() )
 
             $timer.Start()
         } catch { }
-    }
+    }.GetNewClosure()
 
-    script:Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
-    script:Set-FoxSplash 20 "Loading config..."
+    # =================================================================
+    # Startup sequence
+    # =================================================================
+
+    & $script:SetFoxSplash 5  "Starting Quinn Optimiser Toolkit..."
+    & $script:SetFoxSplash 20 "Loading config..."
     if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
 
-    script:Set-FoxSplash 40 "Loading logging..."
+    & $script:SetFoxSplash 40 "Loading logging..."
     if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
 
-    script:Set-FoxSplash 65 "Loading engine..."
+    & $script:SetFoxSplash 65 "Loading engine..."
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    script:Set-FoxSplash 85 "Preparing UI..."
-    script:Write-QLog "Starting main window" "INFO"
+    & $script:SetFoxSplash 85 "Preparing UI..."
+    Write-QLog "Starting main window" "INFO"
 
     $mw = $null
     try {
         $mw = Start-QOTMain -RootPath $rootPath
     } catch {
-        script:Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
+        Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
         throw
     }
 
@@ -147,13 +152,14 @@ try {
         $app.ShutdownMode = [System.Windows.ShutdownMode]::OnLastWindowClose
     }
 
+    # Fallback if ContentRendered never fires
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
 
     $fallbackLocal = $fallback
     $fallback.Add_Tick( ({
         $fallbackLocal.Stop()
-        script:Complete-Intro -Reason "fallback"
+        & $script:CompleteIntro "fallback"
     }).GetNewClosure() )
 
     $fallback.Start()
@@ -161,7 +167,7 @@ try {
     if ($mw) {
         $mw.Add_ContentRendered( ({
             try { $fallbackLocal.Stop() } catch { }
-            script:Complete-Intro -Reason "contentrendered"
+            & $script:CompleteIntro "contentrendered"
         }).GetNewClosure() )
 
         try { if (-not $mw.IsVisible) { $mw.Show() } } catch { }
@@ -170,7 +176,7 @@ try {
     }
     else {
         try { $fallbackLocal.Stop() } catch { }
-        script:Complete-Intro -Reason "mw-null"
+        & $script:CompleteIntro "mw-null"
         try { $app.Shutdown() } catch { }
     }
 }
