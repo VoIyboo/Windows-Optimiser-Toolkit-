@@ -123,53 +123,54 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+
         <!-- Dark DataGrid style (Studio Voly) -->
         <Style TargetType="DataGrid">
-            <Setter Property="Background" Value="#020617"/>
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-            <Setter Property="BorderBrush" Value="#374151"/>
-            <Setter Property="GridLinesVisibility" Value="None"/>
-            <Setter Property="RowBackground" Value="#020617"/>
-            <Setter Property="AlternatingRowBackground" Value="#020617"/>
-            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="Background" Value="#020617" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="BorderBrush" Value="#374151" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="CanUserDeleteRows" Value="False" />
+            <Setter Property="RowBackground" Value="#020617" />
+            <Setter Property="AlternatingRowBackground" Value="#020617" />
         </Style>
-        
+
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="#0F172A"/>
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-            <Setter Property="BorderBrush" Value="#374151"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#0F172A" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="BorderBrush" Value="#374151" />
+            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
-        
+
         <Style TargetType="DataGridRow">
-           <Style TargetType="DataGridRow">
-                    <Style TargetType="DataGridRow">
-                    <Setter Property="Background" Value="#020617"/>
-                    <Setter Property="Foreground" Value="#E5E7EB"/>
-                    <Setter Property="BorderBrush" Value="#374151"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#0B1220"/>
-                        </Trigger>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#2563EB"/>
-                            <Setter Property="Foreground" Value="#FFFFFF"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-                
-                <Style TargetType="DataGridCell">
-                    <Setter Property="Background" Value="#020617"/>
-                    <Setter Property="Foreground" Value="#E5E7EB"/>
-                    <Setter Property="BorderBrush" Value="#374151"/>
-                    <Setter Property="Padding" Value="6,3"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#2563EB"/>
-                            <Setter Property="Foreground" Value="#FFFFFF"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
+            <Setter Property="Background" Value="#020617" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="BorderBrush" Value="#374151" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#0B1220" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#2563EB" />
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Background" Value="#020617" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="BorderBrush" Value="#374151" />
+            <Setter Property="Padding" Value="6,3" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#2563EB" />
+                    <Setter Property="Foreground" Value="#FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
     </Window.Resources>
 
@@ -198,7 +199,7 @@
                         Background="Transparent"
                         BorderBrush="{StaticResource BorderBrush}"
                         ToolTip="Settings">
-                
+
                     <TextBlock x:Name="BtnSettingsIcon"
                                FontFamily="Segoe MDL2 Assets"
                                FontSize="16"
@@ -207,7 +208,6 @@
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                 </Button>
-
 
                 <!-- App title -->
                 <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
@@ -336,16 +336,11 @@
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
                                           IsReadOnly="True"
-                                          CanUserAddRows="False"
-                                          CanUserDeleteRows="False"
                                           GridLinesVisibility="Horizontal"
-                                          Background="{StaticResource CardBrush}"
-                                          BorderBrush="{StaticResource BorderBrush}"
-                                          Foreground="White">
+                                          BorderBrush="{StaticResource BorderBrush}">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
-                                        <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="130" />
-                                        <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="200" />
+                                        <DataGridTextColumn Header="Publisher" Binding="{Binding Publisher}" Width="220" />
                                     </DataGrid.Columns>
                                 </DataGrid>
 
@@ -359,12 +354,8 @@
                                       Margin="4"
                                       AutoGenerateColumns="False"
                                       HeadersVisibility="Column"
-                                      CanUserAddRows="False"
-                                      CanUserDeleteRows="False"
                                       GridLinesVisibility="Horizontal"
-                                      Background="{StaticResource CardBrush}"
-                                      BorderBrush="{StaticResource BorderBrush}"
-                                      Foreground="White">
+                                      BorderBrush="{StaticResource BorderBrush}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="App" Binding="{Binding Name}" Width="*" />
                                     <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="120" />
@@ -464,8 +455,6 @@
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
                                           IsReadOnly="False"
-                                          CanUserAddRows="False"
-                                          CanUserDeleteRows="False"
                                           GridLinesVisibility="Horizontal"
                                           Background="{StaticResource CardBrush}"
                                           BorderBrush="{StaticResource BorderBrush}"
@@ -473,39 +462,39 @@
 
                                     <DataGrid.Resources>
                                         <Style TargetType="DataGridColumnHeader">
-                                                <Setter Property="Foreground" Value="#E5E7EB" />
-                                                <Setter Property="Background" Value="#111827" />
-                                                <Setter Property="FontWeight" Value="SemiBold" />
-                                                <Setter Property="BorderBrush" Value="#374151" />
-                                            </Style>
-                                        
-                                            <Style TargetType="DataGridRow">
-                                                <Setter Property="Background" Value="#020617"/>
-                                                <Setter Property="Foreground" Value="#E5E7EB"/>
-                                                <Setter Property="BorderBrush" Value="#374151"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#0B1220"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsSelected" Value="True">
-                                                        <Setter Property="Background" Value="#2563EB"/>
-                                                        <Setter Property="Foreground" Value="#FFFFFF"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        
-                                            <Style TargetType="DataGridCell">
-                                                <Setter Property="BorderBrush" Value="#374151"/>
-                                                <Setter Property="Padding" Value="6,3"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsSelected" Value="True">
-                                                        <Setter Property="Background" Value="#2563EB"/>
-                                                        <Setter Property="Foreground" Value="#FFFFFF"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        
-                                        </DataGrid.Resources>
+                                            <Setter Property="Foreground" Value="#E5E7EB" />
+                                            <Setter Property="Background" Value="#111827" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Setter Property="BorderBrush" Value="#374151" />
+                                        </Style>
+
+                                        <Style TargetType="DataGridRow">
+                                            <Setter Property="Background" Value="#020617"/>
+                                            <Setter Property="Foreground" Value="#E5E7EB"/>
+                                            <Setter Property="BorderBrush" Value="#374151"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#0B1220"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+
+                                        <Style TargetType="DataGridCell">
+                                            <Setter Property="BorderBrush" Value="#374151"/>
+                                            <Setter Property="Padding" Value="6,3"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter Property="Background" Value="#2563EB"/>
+                                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+
+                                    </DataGrid.Resources>
 
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
