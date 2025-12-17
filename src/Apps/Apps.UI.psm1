@@ -291,13 +291,13 @@ function Initialize-QOTAppsUI {
     param(
         [Parameter(Mandatory)]
         [System.Windows.Controls.Button]$BtnScanApps,
-
-        [Parameter(Mandatory)]
+    
+        [Parameter()]
         [System.Windows.Controls.Button]$BtnUninstallSelected,
-
+    
         [Parameter(Mandatory)]
         [System.Windows.Controls.DataGrid]$AppsGrid,
-
+    
         [Parameter(Mandatory)]
         [System.Windows.Controls.DataGrid]$InstallGrid
     )
