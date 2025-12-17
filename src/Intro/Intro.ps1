@@ -170,3 +170,5 @@ try {
     Start-Sleep -Seconds 2
     
     FadeOut-AndCloseFoxSplash
+    
+    Write-QLog "Intro completed" "INFO"
