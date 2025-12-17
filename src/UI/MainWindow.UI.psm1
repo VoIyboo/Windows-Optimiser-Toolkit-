@@ -55,21 +55,18 @@ function Set-QOTControlText {
     if (-not $Control) { return }
 
     try {
-        # TextBlock / TextBox
         if ($Control -is [System.Windows.Controls.TextBlock] -or
             $Control -is [System.Windows.Controls.TextBox]) {
             $Control.Text = $Value
             return
         }
 
-        # Label and most content controls
         if ($Control -is [System.Windows.Controls.Label] -or
             $Control -is [System.Windows.Controls.ContentControl]) {
             $Control.Content = $Value
             return
         }
 
-        # Fallback by property existence
         if ($Control.PSObject.Properties.Name -contains 'Text') {
             $Control.Text = $Value
             return
@@ -80,7 +77,6 @@ function Set-QOTControlText {
         }
     }
     catch {
-        # Do not crash UI thread
     }
 }
 
@@ -108,7 +104,6 @@ function New-QOTMainWindow {
             throw "XamlReader returned null (unknown XAML parse failure)."
         }
 
-        # Apply Studio Voly icon (optional)
         $iconPath = Join-Path $PSScriptRoot "icon.ico"
         if (Test-Path -LiteralPath $iconPath) {
             Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
@@ -155,7 +150,8 @@ function Initialize-QOTMainWindow {
                     -BtnScanApps          $BtnScanApps `
                     -BtnUninstallSelected $BtnUninstallApps `
                     -AppsGrid             $AppsGrid `
-                    -InstallGrid          $InstallGrid
+                    -InstallGrid          $InstallGrid `
+                    -RunButton            $script:RunButton
             }
         }
 
@@ -204,12 +200,6 @@ function Initialize-QOTMainWindow {
             $script:MainProgress.Value   = 0
         }
 
-        if ($script:RunButton) {
-            $script:RunButton.Add_Click({
-                Set-QOTControlText -Control $script:StatusLabel -Value "Run clicked (engine coming soon)"
-            })
-        }
-
         return $window
     }
     catch {
@@ -222,6 +212,10 @@ function Initialize-QOTMainWindow {
 # -------------------------------------------------------------------
 
 function Start-QOTMainWindow {
+    param(
+        [Parameter(Mandatory = $false)]
+        [System.Windows.Window]$SplashWindow
+    )
 
     try {
         $window = Initialize-QOTMainWindow
@@ -230,7 +224,12 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTMainWindow returned null. Main window was not created."
         }
 
-        # 🔒 Catch unhandled UI exceptions so they don’t kill ShowDialog
+        if ($SplashWindow) {
+            $window.Add_Loaded({
+                try { $SplashWindow.Close() } catch { }
+            })
+        }
+
         try {
             $window.Dispatcher.Add_UnhandledException({
                 param($sender, $e)
@@ -243,7 +242,6 @@ function Start-QOTMainWindow {
                     }
                 } catch { }
 
-                # Prevent hard crash so UI keeps running
                 $e.Handled = $true
             })
         } catch { }
@@ -308,6 +306,7 @@ function Set-QOTSummary {
         })
     }
 }
+
 # -------------------------------------------------------------------
 # SETTINGS VIEW SWAP
 # -------------------------------------------------------------------
