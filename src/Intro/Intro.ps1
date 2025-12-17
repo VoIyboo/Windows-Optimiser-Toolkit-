@@ -1,5 +1,5 @@
 # Intro.ps1
-# Responsible ONLY for splash + startup sequencing (single splash)
+# Single splash, single runspace, clean startup
 
 param(
     [string]$LogPath,
@@ -12,84 +12,58 @@ $WarningPreference     = "SilentlyContinue"
 $VerbosePreference     = "SilentlyContinue"
 $InformationPreference = "SilentlyContinue"
 
-# Resolve toolkit root (src\Intro\Intro.ps1 -> toolkit root)
+# Resolve toolkit root
 $rootPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 
 # WPF
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase | Out-Null
 
-# Load splash helpers
+# Splash helpers
 Import-Module (Join-Path $rootPath "src\Intro\Splash.UI.psm1") -Force -ErrorAction Stop
 
-# Show splash immediately
 $splash = New-QOTSplashWindow -Path (Join-Path $rootPath "src\Intro\Splash.xaml")
 Update-QOTSplashStatus   -Window $splash -Text "Starting Quinn Optimiser Toolkit..."
 Update-QOTSplashProgress -Window $splash -Value 5
 [void]$splash.Show()
 
-function Set-Splash {
+function Update-Splash {
     param([int]$Value, [string]$Text)
 
     if ($Text)  { Update-QOTSplashStatus -Window $splash -Text $Text }
     if ($Value) { Update-QOTSplashProgress -Window $splash -Value $Value }
 
-    try { $splash.Dispatcher.Invoke({ }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
+    try {
+        $splash.Dispatcher.Invoke({ }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
+    } catch { }
 }
 
 try {
-    Set-Splash -Value 15 -Text "Loading core modules..."
+    Update-Splash 20 "Loading engine..."
 
-    # Import Engine in THIS session (so Start-QOTMain exists here)
+    # LOAD ENGINE IN MAIN RUNSPACE
     $enginePath = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
     if (-not (Test-Path -LiteralPath $enginePath)) {
-        throw "Engine module not found at: $enginePath"
+        throw "Engine module not found at $enginePath"
     }
-    
+
     . $enginePath
-    
+
     if (-not (Get-Command Start-QOTMain -ErrorAction SilentlyContinue)) {
-    throw "Start-QOTMain was not loaded after dot-sourcing Engine.psm1. Path: $enginePath"
-}
-
-
-
-    Set-Splash -Value 35 -Text "Warming up..."
-
-    # Background warmup (optional)
-    $ps = [PowerShell]::Create()
-    $null = $ps.AddScript({
-        param($Root)
-
-        $ErrorActionPreference = "Stop"
-
-        $engine = Join-Path $Root "src\Core\Engine\Engine.psm1"
-        Import-Module $engine -Force -ErrorAction Stop
-
-        if (Get-Command Invoke-QOTStartupWarmup -ErrorAction SilentlyContinue) {
-            Invoke-QOTStartupWarmup -RootPath $Root
-        }
-
-        return $true
-    }).AddArgument($rootPath)
-
-    $async = $ps.BeginInvoke()
-
-    $p = 40
-    while (-not $async.IsCompleted) {
-        $p = [Math]::Min(90, $p + 2)
-        Set-Splash -Value $p -Text "Loading modules..."
-        Start-Sleep -Milliseconds 120
+        throw "Start-QOTMain not available after loading Engine.psm1"
     }
 
-    $null = $ps.EndInvoke($async)
-    $ps.Dispose()
+    Update-Splash 50 "Initialising modules..."
+    Start-Sleep -Milliseconds 300
 
-    Set-Splash -Value 100 -Text "Opening app..."
+    Update-Splash 80 "Preparing interface..."
+    Start-Sleep -Milliseconds 300
+
+    Update-Splash 100 "Opening app..."
     Start-Sleep -Milliseconds 200
 
-    # Close splash then open main window
     $splash.Close()
 
+    # START MAIN WINDOW
     Start-QOTMain -RootPath $rootPath
 }
 catch {
