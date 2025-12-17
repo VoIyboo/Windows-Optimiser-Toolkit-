@@ -68,7 +68,7 @@ try {
     Write-Host "Bootstrap log:$bootstrapLog"
     Write-Host ""
 
-    & $introPath -LogPath $introLog -SkipSplash
+    & $introPath -LogPath $introLog
 }
 finally {
     try { Stop-Transcript | Out-Null } catch { }
