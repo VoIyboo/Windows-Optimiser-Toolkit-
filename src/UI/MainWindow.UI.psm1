@@ -55,22 +55,12 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Settings gear button
     # ------------------------------------------------------------
-    $btnSettings = $window.FindName("BtnSettings")
+       $btnSettings = $window.FindName("BtnSettings")
     if ($btnSettings) {
         $btnSettings.Add_Click({
             try {
-                if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
-                    [System.Windows.MessageBox]::Show(
-                        "Settings UI entry point not found."
-                    ) | Out-Null
-                    return
-                }
-                
-                $content = Initialize-QOSettingsUI
-
-
-                $content = New-QOTSettingsView
-
+                $content = Initialize-QOSettingsUI -Window $window
+    
                 $sw = New-Object System.Windows.Window
                 $sw.Title = "Settings"
                 $sw.Width = 600
@@ -78,7 +68,7 @@ function Start-QOTMainWindow {
                 $sw.Owner = $window
                 $sw.WindowStartupLocation = "CenterOwner"
                 $sw.Content = $content
-
+    
                 $sw.ShowDialog() | Out-Null
             }
             catch {
@@ -88,6 +78,7 @@ function Start-QOTMainWindow {
             }
         })
     }
+
 
     # ------------------------------------------------------------
     # Close splash + show main window
