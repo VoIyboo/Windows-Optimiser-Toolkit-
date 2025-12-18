@@ -678,13 +678,9 @@ function Initialize-QOTicketsUI {
     })
 
     $BtnRefreshTickets.Add_Click({
-    try {
-        if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
-            Invoke-QOEmailTicketPoll | Out-Null
-        }
-    } catch { }
     Update-QOTicketsGrid
 })
+
 
 
     if ($BtnDeleteTicket) {
