@@ -12,7 +12,7 @@ function Start-QOTMainWindow {
     $basePath = Join-Path $PSScriptRoot ".."
 
     # ------------------------------------------------------------
-    # Core modules (exact paths confirmed)
+    # Core modules (paths confirmed)
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
@@ -23,7 +23,7 @@ function Start-QOTMainWindow {
     # UI modules
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")   -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Settings.UI.psm1")     -Force -ErrorAction Stop
+    # IMPORTANT: DO NOT import Settings.UI.psm1 here
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -57,6 +57,13 @@ function Start-QOTMainWindow {
     if ($btnSettings) {
         $btnSettings.Add_Click({
             try {
+                if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
+                    [System.Windows.MessageBox]::Show(
+                        "Settings UI not loaded. Settings.UI.psm1 is missing from this build."
+                    ) | Out-Null
+                    return
+                }
+
                 $content = New-QOTSettingsView
 
                 $sw = New-Object System.Windows.Window
