@@ -4,8 +4,6 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
-[System.Windows.MessageBox]::Show("LOADED Settings.UI.psm1 from: " + $PSCommandPath) | Out-Null
-
 function Write-QOSettingsUILog {
     param([string]$Message)
 
