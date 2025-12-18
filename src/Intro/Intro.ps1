@@ -10,6 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# -------------------------------------------------
+# Log file path (always exists)
+# -------------------------------------------------
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
     if (-not (Test-Path $logDir)) {
@@ -20,7 +23,10 @@ if (-not $LogPath) {
 
 $script:QOTLogPath = $LogPath
 
-function Write-QLog {
+# -------------------------------------------------
+# Fallback logging (ALWAYS AVAILABLE, even inside event handlers)
+# -------------------------------------------------
+function global:Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
@@ -33,6 +39,9 @@ function Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
+# -------------------------------------------------
+# Silence noisy warnings
+# -------------------------------------------------
 $oldWarningPreference = $WarningPreference
 $WarningPreference    = "SilentlyContinue"
 
@@ -114,7 +123,7 @@ try {
 
     Write-QLog "Starting main window" "INFO"
 
-    # Important: MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
+    # Important: Start-QOTMain must accept -SplashWindow OR ignore it safely.
     Start-QOTMain -RootPath $rootPath -SplashWindow $splash
 }
 finally {
