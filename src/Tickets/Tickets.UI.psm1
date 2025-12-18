@@ -1,5 +1,5 @@
 # src\Tickets\Tickets.UI.psm1
-# UI wiring for the Tickets tab
+# UI wiring for Tickets tab
 
 $ErrorActionPreference = "Stop"
 
@@ -14,14 +14,14 @@ function Initialize-QOTicketsUI {
     Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
 
     $script:TicketsGrid = $Window.FindName("TicketsGrid")
-    $btnRefresh = $Window.FindName("BtnTicketsRefresh")
-    $btnAdd     = $Window.FindName("BtnTicketsAdd")
-    $btnDelete  = $Window.FindName("BtnTicketsDelete")
+    $btnRefresh         = $Window.FindName("BtnRefreshTickets")
+    $btnNew             = $Window.FindName("BtnNewTicket")
+    $btnDelete          = $Window.FindName("BtnDeleteTicket")
 
     if (-not $script:TicketsGrid) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
-    if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsRefresh") | Out-Null; return }
-    if (-not $btnAdd)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsAdd") | Out-Null; return }
-    if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsDelete") | Out-Null; return }
+    if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
+    if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
+    if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
 
     $refresh = {
         try {
@@ -36,7 +36,7 @@ function Initialize-QOTicketsUI {
 
     $btnRefresh.Add_Click($refresh)
 
-    $btnAdd.Add_Click({
+    $btnNew.Add_Click({
         try {
             $title = [Microsoft.VisualBasic.Interaction]::InputBox("Ticket title:", "New Ticket", "")
             if ([string]::IsNullOrWhiteSpace($title)) { return }
@@ -69,7 +69,6 @@ function Initialize-QOTicketsUI {
             if ($confirm -ne "Yes") { return }
 
             Remove-QOTicket -Id $id | Out-Null
-
             & $refresh
         }
         catch {
