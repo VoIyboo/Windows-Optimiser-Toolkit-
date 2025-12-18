@@ -20,7 +20,6 @@ function New-QOTSettingsView {
 
     # ------------------------------------------------------------
     # Convert SettingsWindow.xaml root <Window> to <Grid> safely
-    # (only remove Window-only attrs on the root, keep inner widths)
     # ------------------------------------------------------------
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
 
@@ -83,10 +82,10 @@ function New-QOTSettingsView {
     if (-not $hint)     { throw "LblHint not found in SettingsWindow.xaml" }
 
     # ------------------------------------------------------------
-    # Hint setter that works inside event handlers (closure)
+    # Delegate for hint text (always invokable, even in WPF handlers)
     # ------------------------------------------------------------
-    $SetHint = {
-        param([AllowEmptyString()][string]$Value)
+    $SetHint = [System.Action[string]]{
+        param([string]$Value)
 
         if ($null -eq $hint) { return }
 
@@ -132,7 +131,7 @@ function New-QOTSettingsView {
     }
 
     Refresh-List
-    & $SetHint ""
+    $SetHint.Invoke("")
 
     # ------------------------------------------------------------
     # Events
@@ -141,7 +140,7 @@ function New-QOTSettingsView {
         try {
             $addr = ($txtEmail.Text + "").Trim()
             if (-not $addr) {
-                & $SetHint "Enter an email address."
+                $SetHint.Invoke("Enter an email address.")
                 return
             }
 
@@ -149,7 +148,7 @@ function New-QOTSettingsView {
             $current = @($s.Tickets.EmailIntegration.MonitoredAddresses)
 
             if ($current -contains $addr) {
-                & $SetHint "Already exists."
+                $SetHint.Invoke("Already exists.")
                 return
             }
 
@@ -157,11 +156,11 @@ function New-QOTSettingsView {
             Save-QOSettings -Settings $s
 
             $txtEmail.Text = ""
-            & $SetHint "Added $addr"
+            $SetHint.Invoke("Added $addr")
             Refresh-List
         }
         catch {
-            & $SetHint "Add failed. Check logs."
+            $SetHint.Invoke("Add failed. Check logs.")
         }
     })
 
@@ -169,7 +168,7 @@ function New-QOTSettingsView {
         try {
             $sel = $list.SelectedItem
             if (-not $sel) {
-                & $SetHint "Select an address."
+                $SetHint.Invoke("Select an address.")
                 return
             }
 
@@ -178,11 +177,11 @@ function New-QOTSettingsView {
                 @($s.Tickets.EmailIntegration.MonitoredAddresses | Where-Object { $_ -ne $sel })
 
             Save-QOSettings -Settings $s
-            & $SetHint "Removed $sel"
+            $SetHint.Invoke("Removed $sel")
             Refresh-List
         }
         catch {
-            & $SetHint "Remove failed. Check logs."
+            $SetHint.Invoke("Remove failed. Check logs.")
         }
     })
 
