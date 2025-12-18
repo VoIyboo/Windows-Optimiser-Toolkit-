@@ -23,7 +23,8 @@ if (-not $LogPath) {
 
 $script:QOTLogPath = $LogPath
 
-function global:Write-QLog {
+# Local function (always available to this script)
+function Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
@@ -36,16 +37,13 @@ function global:Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
-# Hard bind the unscoped name immediately
-try { Set-Item -Path Function:\Write-QLog -Value ${function:global:Write-QLog} -Force } catch { }
+# Publish to global explicitly (do NOT swallow failures)
+Set-Item -Path Function:\global:Write-QLog -Value ${function:Write-QLog} -Force
 
 $oldWarningPreference = $WarningPreference
 $WarningPreference    = "SilentlyContinue"
 
 try {
-    # -------------------------------------------------------------------
-    # WPF core
-    # -------------------------------------------------------------------
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
     # Ensure a WPF Application exists (prevents null Current in modules that expect it)
@@ -54,12 +52,7 @@ try {
         [System.Windows.Application]::Current.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
     }
 
-    # Re-hard bind again after Application creation
-    try { Set-Item -Path Function:\Write-QLog -Value ${function:global:Write-QLog} -Force } catch { }
-
-    # -------------------------------------------------------------------
     # Paths
-    # -------------------------------------------------------------------
     $rootPath       = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $configModule   = Join-Path $rootPath "src\Core\Config\Config.psm1"
     $loggingModule  = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
@@ -67,25 +60,15 @@ try {
     $splashUIModule = Join-Path $rootPath "src\Intro\Splash.UI.psm1"
     $splashXaml     = Join-Path $rootPath "src\Intro\Splash.xaml"
 
-    # -------------------------------------------------------------------
-    # Splash UI load (best effort)
-    # -------------------------------------------------------------------
+    # Splash UI module (best effort)
     if (Test-Path -LiteralPath $splashUIModule) {
         Import-Module $splashUIModule -Force -ErrorAction SilentlyContinue
     }
 
-    # After any imports, hard bind logging again
-    try { Set-Item -Path Function:\Write-QLog -Value ${function:global:Write-QLog} -Force } catch { }
-
     $splash = $null
-
     if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
         if (Test-Path -LiteralPath $splashXaml) {
-            try {
-                $splash = New-QOTSplashWindow -Path $splashXaml
-            } catch {
-                $splash = $null
-            }
+            try { $splash = New-QOTSplashWindow -Path $splashXaml } catch { $splash = $null }
         }
 
         if ($splash) {
@@ -102,9 +85,7 @@ try {
             [int]$Percent,
             [string]$Text
         )
-
         if (-not $splash) { return }
-
         try {
             $splash.Dispatcher.Invoke([action]{
                 $bar = $splash.FindName("SplashProgressBar")
@@ -141,9 +122,7 @@ try {
     }
 
     function Complete-Intro {
-        param(
-            [string]$Reason = "normal"
-        )
+        param([string]$Reason = "normal")
 
         try {
             Set-FoxSplash 100 "Ready"
@@ -153,45 +132,36 @@ try {
             $timer.Add_Tick({
                 $timer.Stop()
                 FadeOut-AndCloseFoxSplash
-                try { Write-QLog "Intro completed ($Reason)" "INFO" } catch { }
+                Write-QLog "Intro completed ($Reason)" "INFO"
                 try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
             })
             $timer.Start()
         } catch { }
     }
 
-    # -------------------------------------------------------------------
-    # Load modules (best effort except Engine)
-    # -------------------------------------------------------------------
+    # Load config
     Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
     Set-FoxSplash 20 "Loading config..."
     if (Test-Path -LiteralPath $configModule) {
         Import-Module $configModule -Force -ErrorAction SilentlyContinue
     }
 
-    # Re-hard bind after config import
-    try { Set-Item -Path Function:\Write-QLog -Value ${function:global:Write-QLog} -Force } catch { }
-
+    # Load logging (this module might be stomping names, so republish after)
     Set-FoxSplash 40 "Loading logging..."
     if (Test-Path -LiteralPath $loggingModule) {
         Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
     }
+    Set-Item -Path Function:\global:Write-QLog -Value ${function:Write-QLog} -Force
 
-    # Re-hard bind after logging import (this is the one that often clobbers it)
-    try { Set-Item -Path Function:\Write-QLog -Value ${function:global:Write-QLog} -Force } catch { }
-
+    # Load engine
     Set-FoxSplash 65 "Loading engine..."
     if (-not (Test-Path -LiteralPath $engineModule)) {
         throw "Engine module not found at $engineModule"
     }
     Import-Module $engineModule -Force -ErrorAction Stop
+    Set-Item -Path Function:\global:Write-QLog -Value ${function:Write-QLog} -Force
 
-    # Re-hard bind after engine import as well
-    try { Set-Item -Path Function:\Write-QLog -Value ${function:global:Write-QLog} -Force } catch { }
-
-    # -------------------------------------------------------------------
     # Start main window
-    # -------------------------------------------------------------------
     Set-FoxSplash 85 "Preparing UI..."
     Write-QLog "Starting main window" "INFO"
 
@@ -199,13 +169,11 @@ try {
     try {
         $mw = Start-QOTMain -RootPath $rootPath
     } catch {
-        try { Write-QLog "Start-QOTMain threw: $($_.Exception.Message)" "ERROR" } catch { }
+        Write-QLog "Start-QOTMain threw: $($_.Exception.Message)" "ERROR"
         $mw = $null
     }
 
-    # -------------------------------------------------------------------
     # Fallback completion if ContentRendered never fires
-    # -------------------------------------------------------------------
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
     $fallback.Add_Tick({
@@ -230,9 +198,7 @@ try {
         Complete-Intro -Reason "mw-null"
     }
 
-    # -------------------------------------------------------------------
-    # Keep message pump alive so UI remains clickable
-    # -------------------------------------------------------------------
+    # Keep message pump alive so UI is clickable
     [System.Windows.Threading.Dispatcher]::Run()
 }
 finally {
