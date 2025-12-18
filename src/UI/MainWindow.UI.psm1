@@ -52,15 +52,16 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Settings gear button (robust loader)
     # ------------------------------------------------------------
-    $btnSettings = $window.FindName("BtnSettings")
-    if ($btnSettings) {
-        $btnSettings.Add_Click({
-            try {
-                $settingsUiPath = Join-Path $basePath "Core\Settings\Settings.UI.psm1"
-                if (-not (Test-Path -LiteralPath $settingsUiPath)) {
-                    [System.Windows.MessageBox]::Show("Settings UI file not found at:`r`n$settingsUiPath") | Out-Null
-                    return
+                $btnSettings = $window.FindName("BtnSettings")
+                $tabs        = $window.FindName("MainTabControl")
+                $tabSettings = $window.FindName("TabSettings")
+                
+                if ($btnSettings -and $tabs -and $tabSettings) {
+                    $btnSettings.Add_Click({
+                        $tabs.SelectedItem = $tabSettings
+                    })
                 }
+
 
                 Import-Module $settingsUiPath -Force -ErrorAction Stop
 
