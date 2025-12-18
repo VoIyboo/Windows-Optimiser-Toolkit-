@@ -1,30 +1,27 @@
 # src\Tickets\Tickets.UI.psm1
-# UI wiring for the Tickets tab (NO storage logic here)
+# UI wiring for the Tickets tab
 
 $ErrorActionPreference = "Stop"
 
-Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1")   -Force -ErrorAction Stop
-Import-Module (Join-Path $PSScriptRoot "..\Core\Settings.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1") -Force -ErrorAction Stop
 
 $script:TicketsGrid = $null
 
 function Initialize-QOTicketsUI {
-    param(
-        [Parameter(Mandatory)]
-        $Window
-    )
+    param([Parameter(Mandatory)] $Window)
 
-    if (-not $Window) { throw "Initialize-QOTicketsUI: Window is null." }
+    Add-Type -AssemblyName PresentationFramework | Out-Null
+    Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
 
     $script:TicketsGrid = $Window.FindName("TicketsGrid")
-    $btnRefresh         = $Window.FindName("BtnTicketsRefresh")
-    $btnAdd             = $Window.FindName("BtnTicketsAdd")
-    $btnDelete          = $Window.FindName("BtnTicketsDelete")
+    $btnRefresh = $Window.FindName("BtnTicketsRefresh")
+    $btnAdd     = $Window.FindName("BtnTicketsAdd")
+    $btnDelete  = $Window.FindName("BtnTicketsDelete")
 
-    if (-not $script:TicketsGrid) { [System.Windows.MessageBox]::Show("TicketsGrid not found. Check XAML Name=""TicketsGrid""") | Out-Null; return }
-    if (-not $btnRefresh)         { [System.Windows.MessageBox]::Show("BtnTicketsRefresh not found. Check XAML Name=""BtnTicketsRefresh""") | Out-Null; return }
-    if (-not $btnAdd)             { [System.Windows.MessageBox]::Show("BtnTicketsAdd not found. Check XAML Name=""BtnTicketsAdd""") | Out-Null; return }
-    if (-not $btnDelete)          { [System.Windows.MessageBox]::Show("BtnTicketsDelete not found. Check XAML Name=""BtnTicketsDelete""") | Out-Null; return }
+    if (-not $script:TicketsGrid) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
+    if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsRefresh") | Out-Null; return }
+    if (-not $btnAdd)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsAdd") | Out-Null; return }
+    if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsDelete") | Out-Null; return }
 
     $refresh = {
         try {
@@ -33,7 +30,7 @@ function Initialize-QOTicketsUI {
             $script:TicketsGrid.Items.Refresh()
         }
         catch {
-            [System.Windows.MessageBox]::Show("Failed to load tickets.`r`n$($_.Exception.Message)") | Out-Null
+            [System.Windows.MessageBox]::Show("Load tickets failed.`r`n$($_.Exception.Message)") | Out-Null
         }
     }
 
@@ -41,17 +38,16 @@ function Initialize-QOTicketsUI {
 
     $btnAdd.Add_Click({
         try {
-            Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
             $title = [Microsoft.VisualBasic.Interaction]::InputBox("Ticket title:", "New Ticket", "")
             if ([string]::IsNullOrWhiteSpace($title)) { return }
 
-            $t = New-QOTicket -Title $title
-            Add-QOTicket -Ticket $t
+            $ticket = New-QOTicket -Title $title
+            Add-QOTicket -Ticket $ticket | Out-Null
 
             & $refresh
         }
         catch {
-            [System.Windows.MessageBox]::Show("Failed to create ticket.`r`n$($_.Exception.Message)") | Out-Null
+            [System.Windows.MessageBox]::Show("Create ticket failed.`r`n$($_.Exception.Message)") | Out-Null
         }
     })
 
@@ -63,27 +59,21 @@ function Initialize-QOTicketsUI {
                 return
             }
 
-            $id = $null
-            if ($selected.PSObject.Properties.Name -contains "Id") { $id = [string]$selected.Id }
+            $id = if ($selected.PSObject.Properties.Name -contains "Id") { [string]$selected.Id } else { "" }
             if ([string]::IsNullOrWhiteSpace($id)) {
-                [System.Windows.MessageBox]::Show("Selected ticket has no Id. Cannot delete.") | Out-Null
+                [System.Windows.MessageBox]::Show("Selected ticket has no Id, cannot delete.") | Out-Null
                 return
             }
 
-            $confirm = [System.Windows.MessageBox]::Show(
-                "Delete this ticket?", "Confirm delete",
-                [System.Windows.MessageBoxButton]::YesNo,
-                [System.Windows.MessageBoxImage]::Warning
-            )
+            $confirm = [System.Windows.MessageBox]::Show("Delete this ticket?", "Confirm", "YesNo", "Warning")
+            if ($confirm -ne "Yes") { return }
 
-            if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
-
-            Remove-QOTicket -Id $id
+            Remove-QOTicket -Id $id | Out-Null
 
             & $refresh
         }
         catch {
-            [System.Windows.MessageBox]::Show("Failed to delete ticket.`r`n$($_.Exception.Message)") | Out-Null
+            [System.Windows.MessageBox]::Show("Delete ticket failed.`r`n$($_.Exception.Message)") | Out-Null
         }
     })
 
