@@ -279,4 +279,9 @@ function Initialize-QOSettingsUI {
     return $root
 }
 
-Export-ModuleMember -Function Initialize-QOSettingsUI
+function New-QOTSettingsView {
+    # Wrapper so MainWindow.UI.psm1 can request a settings panel easily
+    return (Initialize-QOSettingsUI -Window $null)
+}
+
+Export-ModuleMember -Function Initialize-QOSettingsUI, New-QOTSettingsView
