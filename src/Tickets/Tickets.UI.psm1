@@ -23,9 +23,48 @@ $script:RowDetailsHeight        = $script:RowDetailsHeightDefault
 $script:RowDetailsHeightMin = 120
 $script:RowDetailsHeightMax = 900
 
-# Drag tracking
-$script:RowDetailsDragStartHeight = $null
-$script:RowDetailsSavePending = $false
+function Set-QORowDetailsHeight {
+    param([Parameter(Mandatory)] [double] $NewHeight)
+
+    $h = [Math]::Round($NewHeight)
+
+    if ($h -lt $script:RowDetailsHeightMin) { $h = $script:RowDetailsHeightMin }
+    if ($h -gt $script:RowDetailsHeightMax) { $h = $script:RowDetailsHeightMax }
+
+    $script:RowDetailsHeight = $h
+
+    try {
+        if ($script:TicketsGrid) {
+            # XAML binds Height to DataGrid.Tag
+            $script:TicketsGrid.Tag = $script:RowDetailsHeight
+        }
+    } catch { }
+}
+
+function Save-QORowDetailsHeightSetting {
+    try {
+        $s = Get-QOSettings
+        $s | Add-Member -NotePropertyName TicketsRowDetailsHeight -NotePropertyValue ([double]$script:RowDetailsHeight) -Force
+        Save-QOSettings -Settings $s
+    } catch { }
+}
+
+function Ensure-QOTicketStoreReady {
+    try {
+        $s = Get-QOSettings
+
+        if (-not $s.TicketStorePath -or [string]::IsNullOrWhiteSpace([string]$s.TicketStorePath)) {
+            $defaultStore = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Tickets"
+            $s | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $defaultStore -Force
+            Save-QOSettings -Settings $s
+        }
+
+        if (-not (Test-Path $s.TicketStorePath)) {
+            New-Item -ItemType Directory -Path $s.TicketStorePath -Force | Out-Null
+        }
+    } catch { }
+}
+
 # -------------------------------------------------------------------
 # Column layout helpers (order + width)
 # -------------------------------------------------------------------
@@ -359,31 +398,35 @@ function Initialize-QOTicketsUI {
     )
 
     $script:TicketsGrid = $TicketsGrid
-# Load saved RowDetails height (if any)
-try {
-    $s = Get-QOSettings
-    if ($s.PSObject.Properties.Name -contains 'TicketsRowDetailsHeight') {
-        $val = [double]$s.TicketsRowDetailsHeight
-        if ($val -gt 80) { $script:RowDetailsHeight = $val }
-    }
-} catch { }
 
-# Auto cap max height based on grid size (keeps it feeling natural)
-$TicketsGrid.Add_SizeChanged({
+    Ensure-QOTicketStoreReady
+
+    # Load saved RowDetails height (if any)
     try {
-        $cap = [Math]::Floor($script:TicketsGrid.ActualHeight * 0.60)
-        if ($cap -lt 200) { $cap = 200 }
-        $script:RowDetailsHeightMax = $cap
-
-        # If current height is bigger than the new cap, pull it down
-        if ($script:RowDetailsHeight -gt $script:RowDetailsHeightMax) {
-            Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeightMax
+        $s = Get-QOSettings
+        if ($s.PSObject.Properties.Name -contains 'TicketsRowDetailsHeight') {
+            $val = [double]$s.TicketsRowDetailsHeight
+            if ($val -gt 80) { $script:RowDetailsHeight = $val }
         }
     } catch { }
-})
 
-# Push starting height into Tag for XAML binding
-Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeight
+    # Auto cap max height based on grid size
+    $TicketsGrid.Add_SizeChanged({
+        try {
+            $cap = [Math]::Floor($script:TicketsGrid.ActualHeight * 0.60)
+            if ($cap -lt 200) { $cap = 200 }
+            $script:RowDetailsHeightMax = $cap
+
+            if ($script:RowDetailsHeight -gt $script:RowDetailsHeightMax) {
+                Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeightMax
+                Save-QORowDetailsHeightSetting
+            }
+        } catch { }
+    })
+
+    # Push starting height into Tag for XAML binding
+    Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeight
+
 
 
 
@@ -520,30 +563,25 @@ $rowDetailsXaml = @"
         } catch { }
     })
 
-    # Drag handle to resize RowDetails height and save it
-    $TicketsGrid.AddHandler(
-        [System.Windows.Controls.Primitives.Thumb]::DragDeltaEvent,
-        [System.Windows.Controls.Primitives.DragDeltaEventHandler]{
-            param($sender, $e)
-            try {
-                $thumb = $e.OriginalSource -as [System.Windows.Controls.Primitives.Thumb]
-                if (-not $thumb) { return }
-                if ($thumb.Tag -ne 'RowDetailsResizer') { return }
+       # Drag handle to resize RowDetails height and save it
+        $TicketsGrid.AddHandler(
+            [System.Windows.Controls.Primitives.Thumb]::DragDeltaEvent,
+            [System.Windows.Controls.Primitives.DragDeltaEventHandler]{
+                param($sender, $e)
+                try {
+                    $thumb = $e.OriginalSource -as [System.Windows.Controls.Primitives.Thumb]
+                    if (-not $thumb) { return }
+                    if ($thumb.Tag -ne 'RowDetailsResizer') { return }
+    
+                    # Dragging down increases height, dragging up reduces
+                    $new = [double]$script:RowDetailsHeight + [double]$e.VerticalChange
+                    Set-QORowDetailsHeight -NewHeight $new
+                    Save-QORowDetailsHeightSetting
+                } catch { }
+            },
+            $true
+        )
 
-                $new = [double]$script:RowDetailsMaxHeight + [double]$e.VerticalChange
-                if ($new -lt 120) { $new = 120 }
-                if ($new -gt 900) { $new = 900 }
-
-                $script:RowDetailsMaxHeight = $new
-                $script:TicketsGrid.Tag = $script:RowDetailsMaxHeight
-
-                $s = Get-QOSettings
-                $s | Add-Member -NotePropertyName TicketsRowDetailsMaxHeight -NotePropertyValue $script:RowDetailsMaxHeight -Force
-                Save-QOSettings -Settings $s
-            } catch { }
-        },
-        $true
-    )
 
     $TicketsGrid.Add_LoadingRow({
         param($sender, $e)
@@ -618,24 +656,42 @@ $rowDetailsXaml = @"
         })
     }
 
-    $BtnNewTicket.Add_Click({
+        $BtnNewTicket.Add_Click({
         try {
             $now = Get-Date
-            $ticket = New-QOTicket `
-                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
-                -Description "Test ticket created from the UI." `
-                -Category "Testing" `
-                -Priority "Low"
 
-            Add-QOTicket -Ticket $ticket | Out-Null
+            if (Get-Command New-QOTicket -ErrorAction SilentlyContinue) {
+                $ticket = New-QOTicket `
+                    -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                    -Description "Test ticket created from the UI." `
+                    -Category "Testing" `
+                    -Priority "Low"
+            } else {
+                # Fallback ticket object if core helper doesn't exist
+                $ticket = [pscustomobject]@{
+                    Id          = [guid]::NewGuid().ToString()
+                    Title       = ("Test ticket {0}" -f $now.ToString("HH:mm"))
+                    Description = "Test ticket created from the UI."
+                    Category    = "Testing"
+                    Priority    = "Low"
+                    Status      = "New"
+                    CreatedAt   = $now.ToString("o")
+                    AssignedTo  = ""
+                }
+            }
+
+            if (Get-Command Add-QOTicket -ErrorAction SilentlyContinue) {
+                Add-QOTicket -Ticket $ticket | Out-Null
+            } else {
+                throw "Add-QOTicket not found. Tickets.psm1 core is missing Add-QOTicket."
+            }
         }
         catch {
-            Write-Warning "Tickets UI: failed to create test ticket. $_"
+            Write-Warning ("Tickets UI: failed to create ticket. {0}" -f $_.Exception.Message)
         }
+
         Update-QOTicketsGrid
     })
 
-    Update-QOTicketsGrid
-}
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
