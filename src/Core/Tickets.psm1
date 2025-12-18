@@ -442,6 +442,8 @@ function Invoke-QOEmailTicketPoll {
             
                 if ($count -ge $MaxItemsPerMailbox) { break }
             }
+        }
+    }
 
 Export-ModuleMember -Function `
     Get-QOTickets, Save-QOTickets, `
