@@ -3,35 +3,19 @@
 
 $ErrorActionPreference = "Stop"
 
-# -------------------------------------------------------------------
-# IMPORTS
-# -------------------------------------------------------------------
-
 $basePath = Join-Path $PSScriptRoot ".."
 
-Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
-Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Config\Config.psm1")    -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1")  -Force -ErrorAction Stop
 
-# Core modules can be soft if older builds do not include them
 Import-Module (Join-Path $basePath "Core\Settings.psm1") -Force -ErrorAction SilentlyContinue
 Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction SilentlyContinue
 
-# UI modules
 Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-# IMPORTANT: If any earlier module (like Settings) defined Initialize-QOTicketsUI,
-# remove it so the correct Tickets UI version can be loaded.
 Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-
-# Load Tickets UI from the correct location
 Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
-
-# Settings UI module
 Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
-
-# -------------------------------------------------------------------
-# WINDOW LEVEL REFERENCES
-# -------------------------------------------------------------------
 
 $script:IsSettingsShown = $false
 
@@ -43,9 +27,6 @@ $script:RunButton    = $null
 $script:SettingsView = $null
 $script:LastTab      = $null
 
-# -------------------------------------------------------------------
-# SAFE TEXT SETTER
-# -------------------------------------------------------------------
 function Set-QOTControlText {
     param(
         [Parameter(Mandatory)] $Control,
@@ -55,38 +36,24 @@ function Set-QOTControlText {
     if (-not $Control) { return }
 
     try {
-        if ($Control -is [System.Windows.Controls.TextBlock] -or
-            $Control -is [System.Windows.Controls.TextBox]) {
+        if ($Control -is [System.Windows.Controls.TextBlock] -or $Control -is [System.Windows.Controls.TextBox]) {
             $Control.Text = $Value
             return
         }
 
-        if ($Control -is [System.Windows.Controls.Label] -or
-            $Control -is [System.Windows.Controls.ContentControl]) {
+        if ($Control -is [System.Windows.Controls.Label] -or $Control -is [System.Windows.Controls.ContentControl]) {
             $Control.Content = $Value
             return
         }
 
-        if ($Control.PSObject.Properties.Name -contains 'Text') {
-            $Control.Text = $Value
-            return
-        }
-        if ($Control.PSObject.Properties.Name -contains 'Content') {
-            $Control.Content = $Value
-            return
-        }
-    }
-    catch {
-    }
+        if ($Control.PSObject.Properties.Name -contains 'Text')    { $Control.Text    = $Value; return }
+        if ($Control.PSObject.Properties.Name -contains 'Content') { $Control.Content = $Value; return }
+    } catch { }
 }
-
-# -------------------------------------------------------------------
-# XAML LOADER
-# -------------------------------------------------------------------
 
 function New-QOTMainWindow {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]$XamlPath
     )
 
@@ -122,15 +89,14 @@ function New-QOTMainWindow {
     }
 }
 
-# -------------------------------------------------------------------
-# INIT WINDOW + TABS
-# -------------------------------------------------------------------
-
 function Initialize-QOTMainWindow {
     try {
-
         $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
         $window   = New-QOTMainWindow -XamlPath $xamlPath
+
+        if (-not $window) {
+            throw "New-QOTMainWindow returned null."
+        }
 
         $script:MainWindow   = $window
         $script:StatusLabel  = $window.FindName("StatusLabel")
@@ -184,8 +150,7 @@ function Initialize-QOTMainWindow {
         if (-not $global:QOSettings) {
             if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
                 $global:QOSettings = Get-QOSettings
-            }
-            else {
+            } else {
                 $global:QOSettings = [pscustomobject]@{ PreferredStartTab = "Cleaning" }
             }
         }
@@ -207,10 +172,6 @@ function Initialize-QOTMainWindow {
     }
 }
 
-# -------------------------------------------------------------------
-# SHOW WINDOW
-# -------------------------------------------------------------------
-
 function Start-QOTMainWindow {
     param(
         [Parameter(Mandatory = $false)]
@@ -224,61 +185,55 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTMainWindow returned null. Main window was not created."
         }
 
+        # Close splash AFTER the main window is rendered, with Ready + 2s + fade.
         if ($SplashWindow) {
             $window.Add_ContentRendered({
                 try {
-                    # Update splash to Ready
                     $bar = $SplashWindow.FindName("SplashProgressBar")
                     $txt = $SplashWindow.FindName("SplashStatusText")
+
                     if ($bar) { $bar.Value = 100 }
                     if ($txt) { $txt.Text  = "Ready" }
 
-                    # Wait 2 seconds, then fade and close splash
                     $timer = New-Object System.Windows.Threading.DispatcherTimer
                     $timer.Interval = [TimeSpan]::FromSeconds(2)
                     $timer.Add_Tick({
                         $timer.Stop()
 
                         try {
-                            $SplashWindow.Topmost = $false
-
                             $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-                            $anim.From     = 1
-                            $anim.To       = 0
+                            $anim.From = 1
+                            $anim.To = 0
                             $anim.Duration = [TimeSpan]::FromMilliseconds(300)
-
-                            $anim.Add_Completed({
-                                try { $SplashWindow.Close() } catch { }
-                            })
-
                             $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
-                        } catch {
+                        } catch { }
+
+                        $t2 = New-Object System.Windows.Threading.DispatcherTimer
+                        $t2.Interval = [TimeSpan]::FromMilliseconds(330)
+                        $t2.Add_Tick({
+                            $t2.Stop()
                             try { $SplashWindow.Close() } catch { }
-                        }
+                        })
+                        $t2.Start()
                     })
                     $timer.Start()
-                } catch {
-                    try { $SplashWindow.Close() } catch { }
                 }
+                catch { }
             })
         }
 
+        # Keep app alive and interactive
+        $Global:QOTMainWindow = $window
         [void]$window.ShowDialog()
     }
     catch {
-        Write-Error "Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
+        Write-Error "Start-QOTMainWindow : Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
         throw
     }
 }
 
-# -------------------------------------------------------------------
-# TAB SELECTION
-# -------------------------------------------------------------------
-
 function Select-QOTPreferredTab {
-    param(
-        [string]$PreferredTab
-    )
+    param([string]$PreferredTab)
 
     if (-not $script:MainWindow) { return }
 
@@ -301,9 +256,6 @@ function Select-QOTPreferredTab {
     }
 }
 
-# -------------------------------------------------------------------
-# STATUS + SUMMARY HELPERS
-# -------------------------------------------------------------------
 function Set-QOTStatus {
     param([string]$Text)
 
@@ -324,63 +276,8 @@ function Set-QOTSummary {
     }
 }
 
-# -------------------------------------------------------------------
-# SETTINGS VIEW SWAP
-# -------------------------------------------------------------------
-
-function Show-QOTSettingsPage {
-    if (-not $script:MainWindow) { return }
-
-    $MainContentHost = $script:MainWindow.FindName("MainContentHost")
-    $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
-    $BtnSettings     = $script:MainWindow.FindName("BtnSettings")
-
-    if (-not $MainContentHost -or -not $MainTabControl -or -not $BtnSettings) { return }
-
-    $script:LastTab = $MainTabControl.SelectedItem
-
-    if (-not $script:SettingsView) {
-        if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
-            Set-QOTStatus "Settings UI not available"
-            return
-        }
-        $script:SettingsView = Initialize-QOSettingsUI -Window $script:MainWindow
-    }
-
-    $MainContentHost.Content = $script:SettingsView
-
-    $icon = $BtnSettings.Content -as [System.Windows.Controls.TextBlock]
-    if ($icon) { $icon.Text = [char]0xE72B }
-
-    $BtnSettings.ToolTip = "Back"
-    $script:IsSettingsShown = $true
-    Set-QOTStatus "Settings"
-}
-
-function Restore-QOTMainTabs {
-    if (-not $script:MainWindow) { return }
-
-    $MainContentHost = $script:MainWindow.FindName("MainContentHost")
-    $MainTabControl  = $script:MainWindow.FindName("MainTabControl")
-    $BtnSettings     = $script:MainWindow.FindName("BtnSettings")
-
-    if (-not $MainContentHost -or -not $MainTabControl -or -not $BtnSettings) { return }
-
-    $MainContentHost.Content = $MainTabControl
-
-    if ($script:LastTab) { $MainTabControl.SelectedItem = $script:LastTab }
-
-    $icon = $BtnSettings.Content -as [System.Windows.Controls.TextBlock]
-    if ($icon) { $icon.Text = [char]0xE713 }
-
-    $BtnSettings.ToolTip = "Settings"
-    $script:IsSettingsShown = $false
-    Set-QOTStatus "Idle"
-}
-
-# -------------------------------------------------------------------
-# EXPORTS
-# -------------------------------------------------------------------
+function Show-QOTSettingsPage { }
+function Restore-QOTMainTabs { }
 
 Export-ModuleMember -Function `
     New-QOTMainWindow, `
@@ -388,6 +285,4 @@ Export-ModuleMember -Function `
     Start-QOTMainWindow, `
     Select-QOTPreferredTab, `
     Set-QOTStatus, `
-    Set-QOTSummary, `
-    Show-QOTSettingsPage, `
-    Restore-QOTMainTabs
+    Set-QOTSummary
