@@ -20,34 +20,52 @@ function New-QOTSettingsView {
 
     $raw = Get-Content -LiteralPath $xamlPath -Raw
 
-    # Convert Window XAML into a hosted Grid:
-    # 1) Replace <Window ...> with <Grid ...>
-    # 2) Strip Window-only attributes (Title, Height, Width, Topmost, etc)
-    # 3) Rename <Window.Resources> to <Grid.Resources>
-    # 4) Replace closing </Window> with </Grid>
+    # Load as XML so we can edit ONLY the root safely
+    [xml]$doc = $raw
 
-    $raw = $raw -replace '^\s*<Window\b', '<Grid'
+    $win = $doc.DocumentElement
+    if (-not $win -or $win.LocalName -ne "Window") {
+        throw "SettingsWindow.xaml root must be <Window>."
+    }
 
-    # Remove common Window-only attributes from the root element
-    $raw = $raw -replace '\s+Title="[^"]*"', ''
-    $raw = $raw -replace '\s+Height="[^"]*"', ''
-    $raw = $raw -replace '\s+Width="[^"]*"', ''
-    $raw = $raw -replace '\s+Topmost="[^"]*"', ''
-    $raw = $raw -replace '\s+WindowStartupLocation="[^"]*"', ''
-    $raw = $raw -replace '\s+ResizeMode="[^"]*"', ''
-    $raw = $raw -replace '\s+SizeToContent="[^"]*"', ''
-    $raw = $raw -replace '\s+ShowInTaskbar="[^"]*"', ''
-    $raw = $raw -replace '\s+WindowStyle="[^"]*"', ''
-    $raw = $raw -replace '\s+AllowsTransparency="[^"]*"', ''
+    $ns = $win.NamespaceURI
 
-    # Property element rename for resources
-    $raw = $raw -replace '<Window\.Resources>', '<Grid.Resources>'
-    $raw = $raw -replace '</Window\.Resources>', '</Grid.Resources>'
+    # Create <Grid> to replace the <Window>
+    $grid = $doc.CreateElement("Grid", $ns)
 
-    # Close tag rename
-    $raw = $raw -replace '</Window>\s*$', '</Grid>'
+    # Copy all attributes EXCEPT Window-only ones (only on the root!)
+    $removeAttrs = @(
+        "Title","Height","Width","Topmost","WindowStartupLocation",
+        "ResizeMode","SizeToContent","ShowInTaskbar","WindowStyle","AllowsTransparency"
+    )
 
-    $reader = New-Object System.Xml.XmlNodeReader ([xml]$raw)
+    foreach ($a in @($win.Attributes)) {
+        if ($removeAttrs -contains $a.Name) { continue }
+        $null = $grid.Attributes.Append($a.Clone())
+    }
+
+    # Rename Window.Resources to Grid.Resources (property element)
+    foreach ($child in @($win.ChildNodes)) {
+        if ($child.NodeType -ne "Element") { continue }
+
+        if ($child.LocalName -eq "Window.Resources") {
+            $newRes = $doc.CreateElement("Grid.Resources", $ns)
+            foreach ($rChild in @($child.ChildNodes)) {
+                $null = $newRes.AppendChild($rChild.Clone())
+            }
+            $null = $grid.AppendChild($newRes)
+        }
+        else {
+            $null = $grid.AppendChild($child.Clone())
+        }
+    }
+
+    # Replace document root
+    $null = $doc.RemoveChild($win)
+    $null = $doc.AppendChild($grid)
+
+    # Load as WPF element
+    $reader = New-Object System.Xml.XmlNodeReader ($doc)
     $root = [System.Windows.Markup.XamlReader]::Load($reader)
 
     if (-not $root) {
@@ -89,9 +107,7 @@ function New-QOTSettingsView {
     function Refresh-List {
         $list.Items.Clear()
         $s = Ensure-SettingsShape
-        $emails = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-
-        foreach ($e in $emails) {
+        foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
             [void]$list.Items.Add([string]$e)
         }
     }
@@ -129,7 +145,6 @@ function New-QOTSettingsView {
             if (-not $sel) { $hint.Text = "Select an address."; return }
 
             $s = Ensure-SettingsShape
-
             $s.Tickets.EmailIntegration.MonitoredAddresses =
                 @($s.Tickets.EmailIntegration.MonitoredAddresses | Where-Object { $_ -ne $sel })
 
