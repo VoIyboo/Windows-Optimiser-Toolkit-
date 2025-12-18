@@ -2,31 +2,20 @@
 # Settings UI (hosted inside the main window, no popups)
 
 $ErrorActionPreference = "Stop"
-
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
 function New-QOTSettingsView {
-    param(
-        [Parameter(Mandatory)]
-        $Window
-    )
+    param([Parameter(Mandatory)] $Window)
 
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
-    if (-not (Test-Path -LiteralPath $xamlPath)) {
-        throw "SettingsWindow.xaml not found at $xamlPath"
-    }
+    if (-not (Test-Path -LiteralPath $xamlPath)) { throw "SettingsWindow.xaml not found at $xamlPath" }
 
-    # ------------------------------------------------------------
-    # Convert root <Window> to <Grid> safely (keep inner Width values)
-    # ------------------------------------------------------------
+    # Convert root <Window> to <Grid> so it can be hosted
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
-
     $win = $doc.DocumentElement
-    if (-not $win -or $win.LocalName -ne "Window") {
-        throw "SettingsWindow.xaml root must be <Window>."
-    }
+    if (-not $win -or $win.LocalName -ne "Window") { throw "SettingsWindow.xaml root must be <Window>." }
 
     $ns   = $win.NamespaceURI
     $grid = $doc.CreateElement("Grid", $ns)
@@ -46,12 +35,9 @@ function New-QOTSettingsView {
 
         if ($child.LocalName -eq "Window.Resources") {
             $newRes = $doc.CreateElement("Grid.Resources", $ns)
-            foreach ($rChild in @($child.ChildNodes)) {
-                $null = $newRes.AppendChild($rChild.Clone())
-            }
+            foreach ($rChild in @($child.ChildNodes)) { $null = $newRes.AppendChild($rChild.Clone()) }
             $null = $grid.AppendChild($newRes)
-        }
-        else {
+        } else {
             $null = $grid.AppendChild($child.Clone())
         }
     }
@@ -61,56 +47,32 @@ function New-QOTSettingsView {
 
     $reader = New-Object System.Xml.XmlNodeReader ($doc)
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
+    if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    if (-not $root) {
-        throw "Failed to load Settings view from SettingsWindow.xaml"
+    function Find-QONode($r, [string]$n) {
+        [System.Windows.LogicalTreeHelper]::FindLogicalNode($r, $n)
     }
 
-    # ------------------------------------------------------------
-    # Reliable control lookup (LogicalTree)
-    # ------------------------------------------------------------
-    function Find-QONode {
-        param(
-            [Parameter(Mandatory)] $Root,
-            [Parameter(Mandatory)] [string] $Name
-        )
-        return [System.Windows.LogicalTreeHelper]::FindLogicalNode($Root, $Name)
+    $txtEmail = Find-QONode $root "TxtEmail"
+    $btnAdd   = Find-QONode $root "BtnAdd"
+    $btnRem   = Find-QONode $root "BtnRemove"
+    $list     = Find-QONode $root "LstEmails"
+    $hint     = Find-QONode $root "LblHint"
+
+    if (-not $txtEmail) { throw "TxtEmail not found" }
+    if (-not $btnAdd)   { throw "BtnAdd not found" }
+    if (-not $btnRem)   { throw "BtnRemove not found" }
+    if (-not $list)     { throw "LstEmails not found" }
+    if (-not $hint)     { throw "LblHint not found" }
+
+    function Set-Hint([AllowEmptyString()][string]$t) {
+        try {
+            if ($hint -is [System.Windows.Controls.TextBlock]) { $hint.Text = $t; return }
+            if ($hint.PSObject.Properties.Match("Text").Count -gt 0) { $hint.Text = $t; return }
+            if ($hint.PSObject.Properties.Match("Content").Count -gt 0) { $hint.Content = $t; return }
+        } catch { }
     }
 
-    $txtEmail = Find-QONode -Root $root -Name "TxtEmail"
-    $btnAdd   = Find-QONode -Root $root -Name "BtnAdd"
-    $btnRem   = Find-QONode -Root $root -Name "BtnRemove"
-    $list     = Find-QONode -Root $root -Name "LstEmails"
-    $hint     = Find-QONode -Root $root -Name "LblHint"
-
-    if (-not $txtEmail) { throw "TxtEmail not found in SettingsWindow.xaml (name scope issue)" }
-    if (-not $btnAdd)   { throw "BtnAdd not found in SettingsWindow.xaml (name scope issue)" }
-    if (-not $btnRem)   { throw "BtnRemove not found in SettingsWindow.xaml (name scope issue)" }
-    if (-not $list)     { throw "LstEmails not found in SettingsWindow.xaml (name scope issue)" }
-    if (-not $hint)     { throw "LblHint not found in SettingsWindow.xaml (name scope issue)" }
-
-    # ------------------------------------------------------------
-    # Hint setter (no scope issues)
-    # ------------------------------------------------------------
-    $SetHint = [System.Action[string]]{
-        param([string]$Value)
-
-        if ($null -eq $hint) { return }
-
-        if ($hint.PSObject.Properties.Match("Text").Count -gt 0) {
-            $hint.Text = $Value
-            return
-        }
-
-        if ($hint.PSObject.Properties.Match("Content").Count -gt 0) {
-            $hint.Content = $Value
-            return
-        }
-    }
-
-    # ------------------------------------------------------------
-    # Settings helpers
-    # ------------------------------------------------------------
     function Ensure-SettingsShape {
         $s = Get-QOSettings
         if (-not $s) { $s = [pscustomobject]@{} }
@@ -118,11 +80,9 @@ function New-QOTSettingsView {
         if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
             $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
         }
-
         if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
             $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
         }
-
         if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
             $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
         }
@@ -131,9 +91,7 @@ function New-QOTSettingsView {
     }
 
     function Refresh-List {
-        if ($null -eq $list) { return }
         $list.Items.Clear()
-
         $s = Ensure-SettingsShape
         foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
             [void]$list.Items.Add([string]$e)
@@ -141,57 +99,43 @@ function New-QOTSettingsView {
     }
 
     Refresh-List
-    $SetHint.Invoke("")
+    Set-Hint ""
 
-    # ------------------------------------------------------------
-    # Events
-    # ------------------------------------------------------------
     $btnAdd.Add_Click({
         try {
             $addr = ($txtEmail.Text + "").Trim()
-            if (-not $addr) {
-                $SetHint.Invoke("Enter an email address.")
-                return
-            }
+            if (-not $addr) { Set-Hint "Enter an email address."; return }
 
             $s = Ensure-SettingsShape
             $current = @($s.Tickets.EmailIntegration.MonitoredAddresses)
 
-            if ($current -contains $addr) {
-                $SetHint.Invoke("Already exists.")
-                return
-            }
+            if ($current -contains $addr) { Set-Hint "Already exists."; return }
 
             $s.Tickets.EmailIntegration.MonitoredAddresses = @($current + $addr)
             Save-QOSettings -Settings $s
 
             $txtEmail.Text = ""
-            $SetHint.Invoke("Added $addr")
+            Set-Hint "Added $addr"
             Refresh-List
-        }
-        catch {
-            $SetHint.Invoke("Add failed. Check logs.")
+        } catch {
+            Set-Hint ("Add failed: " + $_.Exception.Message)
         }
     })
 
     $btnRem.Add_Click({
         try {
             $sel = $list.SelectedItem
-            if (-not $sel) {
-                $SetHint.Invoke("Select an address.")
-                return
-            }
+            if (-not $sel) { Set-Hint "Select an address."; return }
 
             $s = Ensure-SettingsShape
             $s.Tickets.EmailIntegration.MonitoredAddresses =
                 @($s.Tickets.EmailIntegration.MonitoredAddresses | Where-Object { $_ -ne $sel })
 
             Save-QOSettings -Settings $s
-            $SetHint.Invoke("Removed $sel")
+            Set-Hint "Removed $sel"
             Refresh-List
-        }
-        catch {
-            $SetHint.Invoke("Remove failed. Check logs.")
+        } catch {
+            Set-Hint ("Remove failed: " + $_.Exception.Message)
         }
     })
 
