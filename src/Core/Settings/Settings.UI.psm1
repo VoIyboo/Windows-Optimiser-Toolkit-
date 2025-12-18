@@ -23,14 +23,28 @@ function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
     if (-not $s) { $s = [pscustomobject]@{} }
 
+    # Tickets object
     if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
         $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
     }
+    elseif (-not $s.Tickets) {
+        $s.Tickets = [pscustomobject]@{}
+    }
+
+    # EmailIntegration object
     if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
         $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
     }
+    elseif (-not $s.Tickets.EmailIntegration) {
+        $s.Tickets.EmailIntegration = [pscustomobject]@{}
+    }
+
+    # MonitoredAddresses array
     if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
         $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
+    }
+    elseif (-not $s.Tickets.EmailIntegration.MonitoredAddresses) {
+        $s.Tickets.EmailIntegration.MonitoredAddresses = @()
     }
 
     return $s
@@ -43,9 +57,14 @@ function Save-QOMonitoredAddresses {
     )
 
     $s = Ensure-QOEmailIntegrationSettings
-    $s.Tickets.EmailIntegration.MonitoredAddresses = @(
-        $Collection | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ }
+
+    $clean = @(
+        $Collection |
+        ForEach-Object { ([string]$_).Trim() } |
+        Where-Object { $_ }
     )
+
+    $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
     Save-QOSettings -Settings $s
 }
 
