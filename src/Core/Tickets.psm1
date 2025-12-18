@@ -360,6 +360,8 @@ function Invoke-QOEmailTicketPoll {
 
             $restricted = $null
             try { $restricted = $items.Restrict("[UnRead] = true") } catch { $restricted = $items }
+            # If Restrict fails or returns nothing, keep going with items anyway
+            if (-not $restricted) { $restricted = $items }
 
             $count = 0
 
