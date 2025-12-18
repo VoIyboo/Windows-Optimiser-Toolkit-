@@ -320,8 +320,109 @@ function Set-QOTSummary {
     }
 }
 
-function Show-QOTSettingsPage { }
-function Restore-QOTMainTabs { }
+function Show-QOTSettingsPage {
+    try {
+        if (-not $script:MainWindow) { return }
+
+        $tabControl = $script:MainWindow.FindName("MainTabControl")
+
+        # Remember where we were
+        if ($tabControl) { $script:LastTab = $tabControl.SelectedItem }
+
+        # Find a host area for settings (try common names)
+        $host =
+            $script:MainWindow.FindName("MainContentHost") ??
+            $script:MainWindow.FindName("ContentHost") ??
+            $script:MainWindow.FindName("MainHost")
+
+        if (-not $host) {
+            [System.Windows.MessageBox]::Show(
+                "Settings host control not found in XAML. Add a ContentControl named 'MainContentHost'.",
+                "Settings",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            ) | Out-Null
+            return
+        }
+
+        # Build the settings view once
+        if (-not $script:SettingsView) {
+
+            if (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue) {
+                $script:SettingsView = New-QOTSettingsView
+            }
+            elseif (Get-Command Get-QOTSettingsView -ErrorAction SilentlyContinue) {
+                $script:SettingsView = Get-QOTSettingsView
+            }
+            else {
+                # Safe placeholder if Settings.UI.psm1 doesn't expose a builder yet
+                $grid = New-Object System.Windows.Controls.Grid
+                $grid.Margin = "16"
+
+                $title = New-Object System.Windows.Controls.TextBlock
+                $title.Text = "Settings"
+                $title.FontSize = 22
+                $title.Foreground = [System.Windows.Media.Brushes]::White
+                $title.Margin = "0,0,0,12"
+
+                $hint = New-Object System.Windows.Controls.TextBlock
+                $hint.Text = "Settings UI not wired yet. This is a placeholder panel."
+                $hint.Foreground = [System.Windows.Media.Brushes]::Gainsboro
+
+                $grid.Children.Add($title) | Out-Null
+                $grid.Children.Add($hint)  | Out-Null
+
+                $hint.Margin = "0,40,0,0"
+
+                $script:SettingsView = $grid
+            }
+        }
+
+        # Hide tabs, show settings panel
+        if ($tabControl) { $tabControl.Visibility = "Collapsed" }
+
+        $host.Visibility = "Visible"
+        $host.Content = $script:SettingsView
+
+        $script:IsSettingsShown = $true
+        Set-QOTStatus "Settings"
+    }
+    catch {
+        try { Set-QOTStatus "Settings error" } catch { }
+        throw
+    }
+}
+
+function Restore-QOTMainTabs {
+    try {
+        if (-not $script:MainWindow) { return }
+
+        $tabControl = $script:MainWindow.FindName("MainTabControl")
+
+        $host =
+            $script:MainWindow.FindName("MainContentHost") ??
+            $script:MainWindow.FindName("ContentHost") ??
+            $script:MainWindow.FindName("MainHost")
+
+        if ($host) {
+            $host.Content = $null
+            $host.Visibility = "Collapsed"
+        }
+
+        if ($tabControl) {
+            $tabControl.Visibility = "Visible"
+            if ($script:LastTab) { $tabControl.SelectedItem = $script:LastTab }
+        }
+
+        $script:IsSettingsShown = $false
+        Set-QOTStatus "Idle"
+    }
+    catch {
+        try { Set-QOTStatus "Restore error" } catch { }
+        throw
+    }
+}
+
 
 Export-ModuleMember -Function `
     Set-QOTControlText, `
