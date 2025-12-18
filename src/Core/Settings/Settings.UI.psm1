@@ -21,9 +21,30 @@ function New-QOTSettingsView {
     $raw = Get-Content -LiteralPath $xamlPath -Raw
 
     # Convert Window XAML into a hosted Grid:
-    # - replace <Window ...> with <Grid ...>
-    # - replace </Window> with </Grid>
+    # 1) Replace <Window ...> with <Grid ...>
+    # 2) Strip Window-only attributes (Title, Height, Width, Topmost, etc)
+    # 3) Rename <Window.Resources> to <Grid.Resources>
+    # 4) Replace closing </Window> with </Grid>
+
     $raw = $raw -replace '^\s*<Window\b', '<Grid'
+
+    # Remove common Window-only attributes from the root element
+    $raw = $raw -replace '\s+Title="[^"]*"', ''
+    $raw = $raw -replace '\s+Height="[^"]*"', ''
+    $raw = $raw -replace '\s+Width="[^"]*"', ''
+    $raw = $raw -replace '\s+Topmost="[^"]*"', ''
+    $raw = $raw -replace '\s+WindowStartupLocation="[^"]*"', ''
+    $raw = $raw -replace '\s+ResizeMode="[^"]*"', ''
+    $raw = $raw -replace '\s+SizeToContent="[^"]*"', ''
+    $raw = $raw -replace '\s+ShowInTaskbar="[^"]*"', ''
+    $raw = $raw -replace '\s+WindowStyle="[^"]*"', ''
+    $raw = $raw -replace '\s+AllowsTransparency="[^"]*"', ''
+
+    # Property element rename for resources
+    $raw = $raw -replace '<Window\.Resources>', '<Grid.Resources>'
+    $raw = $raw -replace '</Window\.Resources>', '</Grid.Resources>'
+
+    # Close tag rename
     $raw = $raw -replace '</Window>\s*$', '</Grid>'
 
     $reader = New-Object System.Xml.XmlNodeReader ([xml]$raw)
@@ -48,10 +69,7 @@ function New-QOTSettingsView {
 
     function Ensure-SettingsShape {
         $s = Get-QOSettings
-
-        if (-not $s) {
-            $s = [pscustomobject]@{}
-        }
+        if (-not $s) { $s = [pscustomobject]@{} }
 
         if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
             $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
@@ -70,7 +88,6 @@ function New-QOTSettingsView {
 
     function Refresh-List {
         $list.Items.Clear()
-
         $s = Ensure-SettingsShape
         $emails = @($s.Tickets.EmailIntegration.MonitoredAddresses)
 
