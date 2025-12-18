@@ -19,7 +19,7 @@ function New-QOTSettingsView {
     }
 
     # ------------------------------------------------------------
-    # Convert SettingsWindow.xaml root <Window> to <Grid> safely
+    # Convert root <Window> to <Grid> safely (keep inner Width values)
     # ------------------------------------------------------------
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
 
@@ -67,22 +67,30 @@ function New-QOTSettingsView {
     }
 
     # ------------------------------------------------------------
-    # Controls
+    # Reliable control lookup (LogicalTree)
     # ------------------------------------------------------------
-    $txtEmail = $root.FindName("TxtEmail")
-    $btnAdd   = $root.FindName("BtnAdd")
-    $btnRem   = $root.FindName("BtnRemove")
-    $list     = $root.FindName("LstEmails")
-    $hint     = $root.FindName("LblHint")
+    function Find-QONode {
+        param(
+            [Parameter(Mandatory)] $Root,
+            [Parameter(Mandatory)] [string] $Name
+        )
+        return [System.Windows.LogicalTreeHelper]::FindLogicalNode($Root, $Name)
+    }
 
-    if (-not $txtEmail) { throw "TxtEmail not found in SettingsWindow.xaml" }
-    if (-not $btnAdd)   { throw "BtnAdd not found in SettingsWindow.xaml" }
-    if (-not $btnRem)   { throw "BtnRemove not found in SettingsWindow.xaml" }
-    if (-not $list)     { throw "LstEmails not found in SettingsWindow.xaml" }
-    if (-not $hint)     { throw "LblHint not found in SettingsWindow.xaml" }
+    $txtEmail = Find-QONode -Root $root -Name "TxtEmail"
+    $btnAdd   = Find-QONode -Root $root -Name "BtnAdd"
+    $btnRem   = Find-QONode -Root $root -Name "BtnRemove"
+    $list     = Find-QONode -Root $root -Name "LstEmails"
+    $hint     = Find-QONode -Root $root -Name "LblHint"
+
+    if (-not $txtEmail) { throw "TxtEmail not found in SettingsWindow.xaml (name scope issue)" }
+    if (-not $btnAdd)   { throw "BtnAdd not found in SettingsWindow.xaml (name scope issue)" }
+    if (-not $btnRem)   { throw "BtnRemove not found in SettingsWindow.xaml (name scope issue)" }
+    if (-not $list)     { throw "LstEmails not found in SettingsWindow.xaml (name scope issue)" }
+    if (-not $hint)     { throw "LblHint not found in SettingsWindow.xaml (name scope issue)" }
 
     # ------------------------------------------------------------
-    # Delegate for hint text (always invokable, even in WPF handlers)
+    # Hint setter (no scope issues)
     # ------------------------------------------------------------
     $SetHint = [System.Action[string]]{
         param([string]$Value)
@@ -123,7 +131,9 @@ function New-QOTSettingsView {
     }
 
     function Refresh-List {
+        if ($null -eq $list) { return }
         $list.Items.Clear()
+
         $s = Ensure-SettingsShape
         foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
             [void]$list.Items.Add([string]$e)
