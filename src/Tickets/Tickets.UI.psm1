@@ -1,423 +1,758 @@
-# src\Tickets\Tickets.psm1
-# Storage and basic model for Studio Voly Ticketing System
+
+$path = "C:\Users\amillar\AppData\Local\Temp\QuinnOptimiserToolkit\Windows-Optimiser-Toolkit--main\src\Tickets\Tickets.UI.psm1"
+
+@'
+# Tickets.UI.psm1
+# UI wiring for the Tickets tab (RowDetails email body viewer)
 
 $ErrorActionPreference = "Stop"
 
-Import-Module (Join-Path $PSScriptRoot "..\Core\Settings.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1")  -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction Stop
 
+# -------------------------------------------------------------------
+# State
+# -------------------------------------------------------------------
+$script:TicketsColumnLayoutApplying = $false
+$script:TicketsGrid                 = $null
 
-# NOTE:
-# Do NOT import "$PSScriptRoot\Settings.psm1" (it does not exist in src\Tickets)
-# Do NOT import Tickets.psm1 from inside Tickets.psm1 (recursion).
-# This module is self-contained.
+$script:ExpandedTicketIds = New-Object 'System.Collections.Generic.HashSet[string]'
 
-# =====================================================================
-# SETTINGS ENGINE (LOCAL TO THIS MODULE)
-# =====================================================================
+$script:RowDetailsHeightDefault = 240
+$script:RowDetailsHeight        = $script:RowDetailsHeightDefault
+$script:RowDetailsHeightMin     = 120
+$script:RowDetailsHeightMax     = 900
 
-# Path for settings.json (shared by toolkit)
-$script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
+# -------------------------------------------------------------------
+# Email polling timer (auto refresh)
+# -------------------------------------------------------------------
+$script:TicketsPollTimer = $null
 
-function Get-QOSettings {
-
-    # First run: create defaults
-    if (-not (Test-Path -LiteralPath $script:QOSettingsPath)) {
-
-        $default = [PSCustomObject]@{
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
-        }
-
-        $dir = Split-Path -Parent $script:QOSettingsPath
-        if (-not (Test-Path -LiteralPath $dir)) {
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        }
-
-        $default | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:QOSettingsPath -Encoding UTF8
-        return $default
-    }
-
-    # Read json safely
-    $json = $null
-    try {
-        $json = Get-Content -LiteralPath $script:QOSettingsPath -Raw -ErrorAction Stop
-    }
-    catch {
-        $json = $null
-    }
-
-    if ([string]::IsNullOrWhiteSpace($json)) {
-        return [PSCustomObject]@{
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
-        }
-    }
-
-    $settings = $null
-    try {
-        $settings = $json | ConvertFrom-Json -ErrorAction Stop
-    }
-    catch {
-        # If settings.json is corrupt, fall back to defaults (do not throw here)
-        $settings = [PSCustomObject]@{
-            TicketsColumnLayout   = @()
-            TicketStorePath       = $null
-            LocalTicketBackupPath = $null
-        }
-    }
-
-    # Ensure properties exist
-    if (-not ($settings.PSObject.Properties.Name -contains 'TicketsColumnLayout')) {
-        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @() -Force
-    }
-    if (-not ($settings.PSObject.Properties.Name -contains 'TicketStorePath')) {
-        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null -Force
-    }
-    if (-not ($settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath')) {
-        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null -Force
-    }
-
-    # Always keep layout as an array
-    if ($settings.TicketsColumnLayout -is [string]) {
-        $settings.TicketsColumnLayout = @()
-    }
-    elseif ($settings.TicketsColumnLayout -isnot [System.Collections.IEnumerable]) {
-        $settings.TicketsColumnLayout = @($settings.TicketsColumnLayout)
-    }
-    else {
-        $settings.TicketsColumnLayout = @($settings.TicketsColumnLayout)
-    }
-
-    return $settings
-}
-
-function Save-QOSettings {
+function Start-QOTicketsAutoPoll {
     param(
-        [Parameter(Mandatory)]
-        $Settings
+        [int] $IntervalSeconds = 60
     )
 
-    $dir = Split-Path -Parent $script:QOSettingsPath
-    if (-not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
+    try {
+        if ($script:TicketsPollTimer) {
+            try { $script:TicketsPollTimer.Stop() } catch { }
+            $script:TicketsPollTimer = $null
+        }
 
-    $Settings | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:QOSettingsPath -Encoding UTF8
+        $timer = New-Object System.Windows.Threading.DispatcherTimer
+        $timer.Interval = [TimeSpan]::FromSeconds($IntervalSeconds)
+
+        $timer.add_Tick({
+            try {
+                if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                    Invoke-QOEmailTicketPoll | Out-Null
+                }
+            } catch { }
+
+            try { Update-QOTicketsGrid } catch { }
+        })
+
+        $timer.Start()
+        $script:TicketsPollTimer = $timer
+    } catch {
+        Write-Warning ("Tickets UI: failed to start auto poll. {0}" -f $_.Exception.Message)
+    }
 }
 
-# =====================================================================
-# TICKET STORAGE PATHS
-# =====================================================================
+function Stop-QOTicketsAutoPoll {
+    try {
+        if ($script:TicketsPollTimer) {
+            try { $script:TicketsPollTimer.Stop() } catch { }
+            $script:TicketsPollTimer = $null
+        }
+    } catch { }
+}
 
-$script:TicketStorePath  = $null
-$script:TicketBackupPath = $null
 
-function Initialize-QOTicketStorage {
 
-    if ($script:TicketStorePath -and $script:TicketBackupPath) {
-        return
-    }
+
+# -------------------------------------------------------------------
+# Column layout helpers (order + width)
+# -------------------------------------------------------------------
+function Get-QOTicketsColumnLayout {
+    $s = Get-QOSettings
+    return $s.TicketsColumnLayout
+}
+
+function Save-QOTicketsColumnLayout {
+    param([Parameter(Mandatory)] $DataGrid)
+
+    if ($script:TicketsColumnLayoutApplying) { return }
 
     $settings = Get-QOSettings
 
-    # Default primary store:
-    #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Tickets.json
-    if ([string]::IsNullOrWhiteSpace([string]$settings.TicketStorePath)) {
-        $defaultTicketsDir  = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\Tickets'
-        $defaultTicketsFile = Join-Path $defaultTicketsDir 'Tickets.json'
-        $settings.TicketStorePath = $defaultTicketsFile
-    }
+    $settings.TicketsColumnLayout = @(
+        $DataGrid.Columns |
+        Sort-Object DisplayIndex |
+        ForEach-Object {
+            $widthValue = $null
+            try {
+                $actualWidth = $_.ActualWidth
+                if ($actualWidth -gt 0) { $widthValue = [double]$actualWidth }
+            } catch { }
 
-    # Default backup folder:
-    #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Backups
-    if ([string]::IsNullOrWhiteSpace([string]$settings.LocalTicketBackupPath)) {
-        $defaultBackupDir = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\Tickets\Backups'
-        $settings.LocalTicketBackupPath = $defaultBackupDir
-    }
+            [pscustomobject]@{
+                Header       = $_.Header.ToString()
+                DisplayIndex = $_.DisplayIndex
+                Width        = $widthValue
+            }
+        }
+    )
 
-    # Persist defaults
     Save-QOSettings -Settings $settings
+}
 
-    # Cache
-    $script:TicketStorePath  = [string]$settings.TicketStorePath
-    $script:TicketBackupPath = [string]$settings.LocalTicketBackupPath
+function Apply-QOTicketsColumnLayout {
+    param([Parameter(Mandatory)] $DataGrid)
 
-    # Ensure directories
-    $storeDir = Split-Path -Parent $script:TicketStorePath
-    if (-not (Test-Path -LiteralPath $storeDir)) {
-        New-Item -ItemType Directory -Path $storeDir -Force | Out-Null
+    $layout = Get-QOTicketsColumnLayout
+    if (-not $layout -or $layout.Count -eq 0) { return }
+
+    $script:TicketsColumnLayoutApplying = $true
+    try {
+        foreach ($entry in $layout) {
+            $header = $entry.Header
+            if (-not $header) { continue }
+
+            $col = $DataGrid.Columns |
+                Where-Object { $_.Header.ToString() -eq $header } |
+                Select-Object -First 1
+            if (-not $col) { continue }
+
+            if ($entry.DisplayIndex -ne $null -and [int]$entry.DisplayIndex -ge 0) {
+                $col.DisplayIndex = [int]$entry.DisplayIndex
+            }
+
+            if ($entry.Width -ne $null -and [double]$entry.Width -gt 0) {
+                $col.Width = New-Object System.Windows.Controls.DataGridLength([double]$entry.Width)
+            }
+        }
     }
-
-    if (-not (Test-Path -LiteralPath $script:TicketBackupPath)) {
-        New-Item -ItemType Directory -Path $script:TicketBackupPath -Force | Out-Null
-    }
-
-    # Ensure main tickets file
-    if (-not (Test-Path -LiteralPath $script:TicketStorePath)) {
-        $db = New-QODefaultTicketDatabase
-        $db | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
+    finally {
+        $script:TicketsColumnLayoutApplying = $false
     }
 }
 
-# =====================================================================
-# DATABASE
-# =====================================================================
-
-function New-QODefaultTicketDatabase {
-    [pscustomobject]@{
-        SchemaVersion = 1
-        Tickets       = @()
-    }
+function Apply-QOTicketsColumnOrder {
+    param([Parameter(Mandatory)] $TicketsGrid)
+    Apply-QOTicketsColumnLayout -DataGrid $TicketsGrid
 }
 
-function Get-QOTickets {
+# -------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------
+function Get-QOTicketBodyText {
+    param([Parameter(Mandatory)] $Ticket)
 
-    Initialize-QOTicketStorage
+    foreach ($name in @('EmailBody', 'Body', 'Description', 'RawBody', 'PlainTextBody')) {
+        if ($Ticket.PSObject.Properties.Name -contains $name) {
+            $val = $Ticket.$name
+            if ($val) { return [string]$val }
+        }
+    }
+    return ""
+}
+
+function Get-RowItemIdSafe {
+    param($RowItem)
+
+    if ($null -eq $RowItem) { return $null }
+
+    if ($RowItem.PSObject.Properties.Name -contains 'Id') {
+        $id = [string]$RowItem.Id
+        if (-not [string]::IsNullOrWhiteSpace($id)) { return $id }
+    }
+    return $null
+}
+
+function Set-RowDetailsState {
+    param(
+        [Parameter(Mandatory)] [System.Windows.Controls.DataGridRow] $Row,
+        [Parameter(Mandatory)] [bool] $Expanded
+    )
+    try {
+        $Row.DetailsVisibility = if ($Expanded) { [System.Windows.Visibility]::Visible } else { [System.Windows.Visibility]::Collapsed }
+    } catch { }
+}
+
+function Set-QORowDetailsHeight {
+    param([Parameter(Mandatory)] [double] $NewHeight)
+
+    $h = [Math]::Round($NewHeight)
+
+    if ($h -lt $script:RowDetailsHeightMin) { $h = $script:RowDetailsHeightMin }
+    if ($h -gt $script:RowDetailsHeightMax) { $h = $script:RowDetailsHeightMax }
+
+    $script:RowDetailsHeight = $h
 
     try {
-        $json = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop
-        if ([string]::IsNullOrWhiteSpace($json)) {
-            return New-QODefaultTicketDatabase
-        }
+        if ($script:TicketsGrid) { $script:TicketsGrid.Tag = $script:RowDetailsHeight }
+    } catch { }
+}
 
-        $db = $json | ConvertFrom-Json -ErrorAction Stop
+function Save-QORowDetailsHeightSetting {
+    try {
+        $s = Get-QOSettings
+        $s | Add-Member -NotePropertyName TicketsRowDetailsHeight -NotePropertyValue ([double]$script:RowDetailsHeight) -Force
+        Save-QOSettings -Settings $s
+    } catch { }
+}
 
-        if (-not ($db.PSObject.Properties.Name -contains 'SchemaVersion')) {
-            $db | Add-Member -NotePropertyName 'SchemaVersion' -NotePropertyValue 1 -Force
-        }
-        if (-not ($db.PSObject.Properties.Name -contains 'Tickets')) {
-            $db | Add-Member -NotePropertyName 'Tickets' -NotePropertyValue @() -Force
-        }
+function Set-TicketStatusReadIfNew {
+    param([Parameter(Mandatory)] [string] $Id)
 
-        # Always ensure Tickets is an array
-        if ($null -eq $db.Tickets) {
-            $db.Tickets = @()
-        }
-        elseif ($db.Tickets -is [string]) {
-            $db.Tickets = @($db.Tickets)
-        }
-        elseif ($db.Tickets -isnot [System.Collections.IEnumerable]) {
-            $db.Tickets = @($db.Tickets)
-        }
-        else {
-            $db.Tickets = @($db.Tickets)
-        }
+    try {
+        if (-not (Get-Command Get-QOTickets -ErrorAction SilentlyContinue)) { return }
+        if (-not (Get-Command Save-QOTickets -ErrorAction SilentlyContinue)) { return }
 
-        return $db
+        $db = Get-QOTickets
+        if (-not $db -or -not $db.Tickets) { return }
+
+        $t = @($db.Tickets) | Where-Object { [string]$_.Id -eq $Id } | Select-Object -First 1
+        if (-not $t) { return }
+
+        if ([string]$t.Status -eq 'New') {
+            $t.Status = 'Read'
+            Save-QOTickets -Db $db | Out-Null
+        }
+    } catch { }
+}
+
+function Toggle-TicketRowDetails {
+    param([Parameter(Mandatory)] $RowItem)
+
+    $id = Get-RowItemIdSafe -RowItem $RowItem
+    if (-not $id) { return }
+
+    $expanded = $false
+    if ($script:ExpandedTicketIds.Contains($id)) {
+        [void]$script:ExpandedTicketIds.Remove($id)
+        $expanded = $false
+    } else {
+        [void]$script:ExpandedTicketIds.Add($id)
+        $expanded = $true
+    }
+
+    try {
+        $row = $script:TicketsGrid.ItemContainerGenerator.ContainerFromItem($RowItem)
+        if ($row -is [System.Windows.Controls.DataGridRow]) {
+            Set-RowDetailsState -Row $row -Expanded $expanded
+        }
+    } catch { }
+
+    if ($expanded) {
+        Set-TicketStatusReadIfNew -Id $id
+        Update-QOTicketsGrid
+    }
+}
+
+function Expand-AllTicketDetails {
+    if (-not $script:TicketsGrid) { return }
+
+    foreach ($item in @($script:TicketsGrid.Items)) {
+        $id = Get-RowItemIdSafe -RowItem $item
+        if ($id) { [void]$script:ExpandedTicketIds.Add($id) }
+    }
+
+    try {
+        foreach ($item in @($script:TicketsGrid.Items)) {
+            $row = $script:TicketsGrid.ItemContainerGenerator.ContainerFromItem($item)
+            if ($row -is [System.Windows.Controls.DataGridRow]) { Set-RowDetailsState -Row $row -Expanded $true }
+        }
+    } catch { }
+}
+
+function Collapse-AllTicketDetails {
+    if (-not $script:TicketsGrid) { return }
+
+    $script:ExpandedTicketIds.Clear() | Out-Null
+
+    try {
+        foreach ($item in @($script:TicketsGrid.Items)) {
+            $row = $script:TicketsGrid.ItemContainerGenerator.ContainerFromItem($item)
+            if ($row -is [System.Windows.Controls.DataGridRow]) { Set-RowDetailsState -Row $row -Expanded $false }
+        }
+    } catch { }
+}
+
+# -------------------------------------------------------------------
+# Expander column
+# -------------------------------------------------------------------
+function Ensure-QOTicketsExpanderColumn {
+    param([Parameter(Mandatory)] $Grid)
+
+    $existing = $Grid.Columns | Where-Object { [string]$_.Header -eq " " } | Select-Object -First 1
+    if ($existing) { return }
+
+    $xaml = @"
+<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Button Width="28" Height="22" Padding="0" Margin="2" Focusable="False"
+          Tag="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}}">
+    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14" Foreground="White">
+      <TextBlock.Style>
+        <Style TargetType="{x:Type TextBlock}">
+          <Setter Property="Text" Value="▸"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=DetailsVisibility}" Value="Visible">
+              <Setter Property="Text" Value="▾"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </TextBlock.Style>
+    </TextBlock>
+  </Button>
+</DataTemplate>
+"@
+
+    $template = $null
+    try { $template = [System.Windows.Markup.XamlReader]::Parse($xaml) } catch { }
+
+    $col = New-Object System.Windows.Controls.DataGridTemplateColumn
+    $col.Header = " "
+    $col.Width  = New-Object System.Windows.Controls.DataGridLength(34)
+    $col.CanUserReorder = $false
+    $col.CanUserResize  = $false
+    $col.CellTemplate   = $template
+
+    [void]$Grid.Columns.Add($col)
+}
+
+function Wire-QOTicketsExpanderClicks {
+    param([Parameter(Mandatory)] $Grid)
+
+    $Grid.AddHandler(
+        [System.Windows.Controls.Primitives.ButtonBase]::ClickEvent,
+        [System.Windows.RoutedEventHandler]{
+            param($sender, $e)
+            try {
+                $btn = $e.OriginalSource -as [System.Windows.Controls.Button]
+                if (-not $btn) { return }
+
+                $row = $btn.Tag -as [System.Windows.Controls.DataGridRow]
+                if (-not $row) { return }
+
+                Toggle-TicketRowDetails -RowItem $row.Item
+                $e.Handled = $true
+            } catch { }
+        },
+        $true
+    )
+}
+
+# -------------------------------------------------------------------
+# Grid data binding
+# -------------------------------------------------------------------
+function Update-QOTicketsGrid {
+    if (-not $script:TicketsGrid) { return }
+
+    try {
+        $db = Get-QOTickets
+        $tickets = if ($db -and $db.Tickets) { @($db.Tickets) } else { @() }
     }
     catch {
-        # Backup corrupt DB if it exists
-        try {
-            if (Test-Path -LiteralPath $script:TicketStorePath) {
-                $backupName = Join-Path $script:TicketBackupPath ("Tickets_corrupt_{0}.json" -f (Get-Date -Format 'yyyyMMddHHmmss'))
-                Copy-Item -LiteralPath $script:TicketStorePath -Destination $backupName -ErrorAction SilentlyContinue
-            }
-        } catch {}
-
-        $db = New-QODefaultTicketDatabase
-        $db | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
-        return $db
+        Write-Warning ("Tickets UI: failed to load tickets. {0}" -f $_.Exception.Message)
+        $tickets = @()
     }
+
+    $rows = foreach ($t in $tickets) {
+        $rawCreated = $t.CreatedAt
+        $created    = $null
+
+        if ($rawCreated -is [datetime]) { $created = $rawCreated }
+        elseif ($rawCreated) { [datetime]::TryParse([string]$rawCreated, [ref]$created) | Out-Null }
+
+        $createdString = if ($created) { $created.ToString('dd/MM/yyyy h:mm tt') } else { [string]$rawCreated }
+
+        [pscustomobject]@{
+            Title      = [string]$t.Title
+            CreatedAt  = $createdString
+            Status     = [string]$t.Status
+            Priority   = [string]$t.Priority
+            Id         = [string]$t.Id
+            EmailBody  = (Get-QOTicketBodyText -Ticket $t)
+            AssignedTo = [string]$t.AssignedTo
+        }
+    }
+
+    $script:TicketsGrid.ItemsSource = @($rows)
 }
 
-function Save-QOTickets {
+function Show-QONewTicketDialog {
     param(
-        [Parameter(Mandatory)]
-        $TicketsDb
+        [string] $DefaultTitle = "",
+        [string] $DefaultBody  = ""
     )
 
-    Initialize-QOTicketStorage
+    Add-Type -AssemblyName PresentationFramework | Out-Null
 
-    $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
+    $xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New Ticket"
+        Height="360" Width="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#0F172A"
+        Foreground="White">
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
 
-    # Best effort backup
+    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+      <TextBlock Text="Title" Opacity="0.85"/>
+      <TextBox Name="TbTitle" Height="28" Background="#020617" Foreground="White" BorderBrush="#374151"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Margin="0,0,0,10">
+      <TextBlock Text="Priority" Opacity="0.85"/>
+      <ComboBox Name="CbPriority" Height="28" Background="#020617" Foreground="White" BorderBrush="#374151">
+        <ComboBoxItem Content="Low" IsSelected="True"/>
+        <ComboBoxItem Content="Medium"/>
+        <ComboBoxItem Content="High"/>
+      </ComboBox>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Margin="0,0,0,10">
+      <TextBlock Text="Body" Opacity="0.85"/>
+      <TextBox Name="TbBody" AcceptsReturn="True" TextWrapping="Wrap"
+               VerticalScrollBarVisibility="Auto"
+               Background="#020617" Foreground="White" BorderBrush="#374151"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Name="BtnCancel" Width="90" Height="30" Margin="0,0,10,0" Content="Cancel"
+              Background="#111827" BorderBrush="#374151" Foreground="White"/>
+      <Button Name="BtnCreate" Width="90" Height="30" Content="Create"
+              Background="#2563EB" BorderBrush="#2563EB" Foreground="White"/>
+    </StackPanel>
+  </Grid>
+</Window>
+"@
+
+    $win = [System.Windows.Markup.XamlReader]::Parse($xaml)
+
+    $tbTitle   = $win.FindName("TbTitle")
+    $tbBody    = $win.FindName("TbBody")
+    $cbPrio    = $win.FindName("CbPriority")
+    $btnCancel = $win.FindName("BtnCancel")
+    $btnCreate = $win.FindName("BtnCreate")
+
+    $tbTitle.Text = $DefaultTitle
+    $tbBody.Text  = $DefaultBody
+
+    $result = $null
+
+    $btnCancel.Add_Click({ $win.DialogResult = $false })
+    $btnCreate.Add_Click({
+        $title = [string]$tbTitle.Text
+        $body  = [string]$tbBody.Text
+
+        $prioItem = $cbPrio.SelectedItem
+        $prioText = ""
+        try { $prioText = [string]$prioItem.Content } catch { $prioText = "Low" }
+
+        if ([string]::IsNullOrWhiteSpace($title)) { return }
+
+        $result = [pscustomobject]@{
+            Title    = $title.Trim()
+            Body     = $body
+            Priority = $prioText
+        }
+
+        $win.DialogResult = $true
+    })
+
+    $null = $win.ShowDialog()
+    return $result
+}
+
+
+
+
+# -------------------------------------------------------------------
+# Init
+# -------------------------------------------------------------------
+function Initialize-QOTicketsUI {
+    param(
+        [Parameter(Mandatory)] $TicketsGrid,
+        [Parameter(Mandatory)] $BtnRefreshTickets,
+        [Parameter(Mandatory)] $BtnNewTicket,
+        [Parameter(Mandatory = $false)] $BtnDeleteTicket
+    )
+
+    $script:TicketsGrid = $TicketsGrid
+
     try {
-        $stamp      = Get-Date -Format 'yyyyMMddHHmmss'
-        $backupName = Join-Path $script:TicketBackupPath ("Tickets_{0}.json" -f $stamp)
-        $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $backupName -Encoding UTF8
-    } catch {}
-}
-
-# =====================================================================
-# TICKET CRUD
-# =====================================================================
-
-function New-QOTicket {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Title,
-
-        [string]$Description = '',
-        [string]$Category    = 'General',
-        [string]$Priority    = 'Normal',
-        [string]$Source      = 'Manual',
-        [string]$RequesterName  = $null,
-        [string]$RequesterEmail = $null,
-        [string[]]$Tags         = @()
-    )
-
-    $now      = Get-Date
-    $ticketId = [guid]::NewGuid().ToString()
-    $user     = $env:USERNAME
-
-    $history = @(
-        [pscustomobject]@{
-            At            = $now
-            Action        = 'Created'
-            ByUserName    = $user
-            ByDisplayName = $user
-            FromStatus    = $null
-            ToStatus      = 'New'
-            Notes         = 'Ticket created'
+        $s = Get-QOSettings
+        if ($s.PSObject.Properties.Name -contains 'TicketsRowDetailsHeight') {
+            $val = [double]$s.TicketsRowDetailsHeight
+            if ($val -gt 80) { $script:RowDetailsHeight = $val }
         }
+    } catch { }
+
+    $TicketsGrid.Add_SizeChanged({
+        try {
+            $cap = [Math]::Floor($script:TicketsGrid.ActualHeight * 0.60)
+            if ($cap -lt 200) { $cap = 200 }
+            $script:RowDetailsHeightMax = $cap
+
+            if ($script:RowDetailsHeight -gt $script:RowDetailsHeightMax) {
+                Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeightMax
+                Save-QORowDetailsHeightSetting
+            }
+        } catch { }
+    })
+
+    Set-QORowDetailsHeight -NewHeight $script:RowDetailsHeight
+
+    $TicketsGrid.IsReadOnly            = $true
+    $TicketsGrid.CanUserAddRows        = $false
+    $TicketsGrid.CanUserDeleteRows     = $false
+    $TicketsGrid.CanUserReorderColumns = $true
+    $TicketsGrid.CanUserResizeColumns  = $true
+    $TicketsGrid.SelectionUnit         = "FullRow"
+    $TicketsGrid.SelectionMode         = "Extended"
+
+    try { $TicketsGrid.EnableRowVirtualization    = $false } catch { }
+    try { $TicketsGrid.EnableColumnVirtualization = $true  } catch { }
+
+    try {
+        $TicketsGrid.SetValue(
+            [System.Windows.Controls.ScrollViewer]::CanContentScrollProperty,
+            $false
+        )
+    } catch { }
+
+    try { $TicketsGrid.HorizontalScrollBarVisibility = 'Disabled' } catch { }
+    try { $TicketsGrid.RowDetailsVisibilityMode      = 'Collapsed' } catch { }
+
+    Ensure-QOTicketsExpanderColumn -Grid $TicketsGrid
+    Wire-QOTicketsExpanderClicks   -Grid $TicketsGrid
+
+    $rowDetailsXaml = @"
+<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Border Margin="10,4,10,10"
+          CornerRadius="6"
+          BorderThickness="1"
+          BorderBrush="#374151"
+          Background="#020617"
+          Padding="10"
+          HorizontalAlignment="Stretch">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <ScrollViewer Grid.Row="0"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled"
+                    PanningMode="VerticalFirst"
+                    CanContentScroll="False"
+                    Height="{Binding RelativeSource={RelativeSource AncestorType=DataGrid}, Path=Tag}"
+                    HorizontalAlignment="Stretch">
+        <TextBlock Text="{Binding EmailBody}"
+                   Foreground="White"
+                   TextWrapping="Wrap"
+                   FontSize="13"
+                   LineHeight="18"
+                   HorizontalAlignment="Stretch"/>
+      </ScrollViewer>
+
+      <Thumb Grid.Row="1"
+             Tag="RowDetailsResizer"
+             Height="10"
+             Margin="0,8,0,0"
+             Cursor="SizeNS"
+             Opacity="0.6">
+        <Thumb.Template>
+          <ControlTemplate TargetType="Thumb">
+            <Border Height="10"
+                    CornerRadius="4"
+                    Background="#374151"/>
+          </ControlTemplate>
+        </Thumb.Template>
+      </Thumb>
+    </Grid>
+  </Border>
+</DataTemplate>
+"@
+
+    try {
+        $TicketsGrid.RowDetailsTemplate = [System.Windows.Markup.XamlReader]::Parse($rowDetailsXaml)
+    } catch {
+        Write-Warning ("Tickets UI: failed to apply RowDetailsTemplate. {0}" -f $_.Exception.Message)
+    }
+    
+    $TicketsGrid.Add_Loaded({
+        try {
+            if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                Invoke-QOEmailTicketPoll | Out-Null
+            }
+        } catch { }
+    
+        Update-QOTicketsGrid
+        Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+    
+        Start-QOTicketsAutoPoll -IntervalSeconds 60
+    })
+
+
+    $TicketsGrid.Add_ColumnReordered({
+        param($sender, $eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) { Save-QOTicketsColumnLayout -DataGrid $sender }
+    })
+
+    $TicketsGrid.Add_ColumnDisplayIndexChanged({
+        param($sender, $eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) { Save-QOTicketsColumnLayout -DataGrid $sender }
+    })
+
+    $TicketsGrid.Add_PreviewMouseLeftButtonUp({
+        try {
+            if (-not $script:TicketsColumnLayoutApplying) {
+                Save-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+            }
+        } catch { }
+    })
+
+    $TicketsGrid.AddHandler(
+        [System.Windows.Controls.Primitives.Thumb]::DragDeltaEvent,
+        [System.Windows.Controls.Primitives.DragDeltaEventHandler]{
+            param($sender, $e)
+            try {
+                $thumb = $e.OriginalSource -as [System.Windows.Controls.Primitives.Thumb]
+                if (-not $thumb) { return }
+                if ($thumb.Tag -ne 'RowDetailsResizer') { return }
+
+                $new = [double]$script:RowDetailsHeight + [double]$e.VerticalChange
+                Set-QORowDetailsHeight -NewHeight $new
+                Save-QORowDetailsHeightSetting
+            } catch { }
+        },
+        $true
     )
 
-    [pscustomobject]@{
-        Id             = $ticketId
-        CreatedAt      = $now
-        UpdatedAt      = $now
-        Status         = 'New'
-        Priority       = $Priority
-        Category       = $Category
-        Title          = $Title
-        Description    = $Description
-        Source         = $Source
-        RequesterName  = $RequesterName
-        RequesterEmail = $RequesterEmail
-        Tags           = @($Tags)
-        History        = @($history)
-    }
-}
+    $TicketsGrid.Add_LoadingRow({
+        param($sender, $e)
+        try {
+            $item = $e.Row.Item
+            $id = Get-RowItemIdSafe -RowItem $item
+            if ($id) {
+                $expanded = $script:ExpandedTicketIds.Contains($id)
+                Set-RowDetailsState -Row $e.Row -Expanded $expanded
+            }
+        } catch { }
+    })
 
-function Add-QOTicket {
-    param(
-        [Parameter(Mandatory)]
-        $Ticket
-    )
+    $TicketsGrid.Add_MouseDoubleClick({
+        try {
+            $item = $script:TicketsGrid.SelectedItem
+            if ($item) { Toggle-TicketRowDetails -RowItem $item }
+        } catch { }
+    })
 
-    $db = Get-QOTickets
-    $db.Tickets = @($db.Tickets) + @($Ticket)
+    $TicketsGrid.Add_PreviewKeyDown({
+        param($sender, $e)
+        try {
+            if ($e.Key -ne [System.Windows.Input.Key]::A) { return }
 
-    Save-QOTickets -TicketsDb $db
-    return $Ticket
-}
+            $mods  = [System.Windows.Input.Keyboard]::Modifiers
+            $ctrl  = ($mods -band [System.Windows.Input.ModifierKeys]::Control) -ne 0
+            $shift = ($mods -band [System.Windows.Input.ModifierKeys]::Shift)   -ne 0
+            if (-not $ctrl) { return }
 
-function Get-QOTicketById {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id
-    )
+            if ($shift) { Collapse-AllTicketDetails } else { Expand-AllTicketDetails }
+            $e.Handled = $true
+        } catch { }
+    })
 
-    $db = Get-QOTickets
-    @($db.Tickets) | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
-}
+    $BtnRefreshTickets.Add_Click({
+        try {
+            if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                Invoke-QOEmailTicketPoll | Out-Null
+            }
+        } catch { }
+        Update-QOTicketsGrid
+    })
 
-function Set-QOTicketStatus {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id,
-        [Parameter(Mandatory)]
-        [string]$Status,
-        [string]$Notes = ''
-    )
+    if ($BtnDeleteTicket) {
+        $BtnDeleteTicket.Add_Click({
+            try {
+                $selectedItems = @($script:TicketsGrid.SelectedItems)
+                if (-not $selectedItems -or $selectedItems.Count -lt 1) { return }
 
-    $db = Get-QOTickets
-    $ticket = Get-QOTicketById -Id $Id
-    if (-not $ticket) { throw "Ticket with Id '$Id' not found." }
+                $idsToDelete = @(
+                    foreach ($item in $selectedItems) {
+                        $id = Get-RowItemIdSafe -RowItem $item
+                        if ($id) { $id }
+                    }
+                ) | Select-Object -Unique
 
-    $now = Get-Date
-    $oldStatus = [string]$ticket.Status
+                if (-not $idsToDelete -or $idsToDelete.Count -lt 1) { return }
 
-    $ticket.Status    = $Status
-    $ticket.UpdatedAt = $now
-
-    if (-not ($ticket.PSObject.Properties.Name -contains 'FirstResponseAt')) {
-        $ticket | Add-Member -NotePropertyName FirstResponseAt -NotePropertyValue $null -Force
-    }
-    if (-not ($ticket.PSObject.Properties.Name -contains 'ResolvedAt')) {
-        $ticket | Add-Member -NotePropertyName ResolvedAt -NotePropertyValue $null -Force
-    }
-
-    if (-not $ticket.FirstResponseAt -and $Status -ne 'New') {
-        $ticket.FirstResponseAt = $now
-    }
-
-    if ($Status -eq 'Resolved' -and -not $ticket.ResolvedAt) {
-        $ticket.ResolvedAt = $now
+                foreach ($id in $idsToDelete) {
+                    if (Get-Command Remove-QOTicket -ErrorAction SilentlyContinue) {
+                        Remove-QOTicket -Id $id | Out-Null
+                        [void]$script:ExpandedTicketIds.Remove($id)
+                    }
+                }
+            } catch {
+                Write-Warning ("Tickets UI: failed to delete ticket(s). {0}" -f $_.Exception.Message)
+            }
+            Update-QOTicketsGrid
+        })
     }
 
-    $user = $env:USERNAME
+    $BtnNewTicket.Add_Click({
+        try {
+            $now = Get-Date
 
-    $ticket.History = @($ticket.History) + @(
-        [pscustomobject]@{
-            At            = $now
-            Action        = 'StatusChanged'
-            ByUserName    = $user
-            ByDisplayName = $user
-            FromStatus    = $oldStatus
-            ToStatus      = $Status
-            Notes         = $Notes
+            if (Get-Command New-QOTicket -ErrorAction SilentlyContinue) {
+                $ticket = New-QOTicket `
+                    -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                    -Description "Test ticket created from the UI." `
+                    -Category "Testing" `
+                    -Priority "Low"
+            } else {
+                $ticket = [pscustomobject]@{
+                    Id          = [guid]::NewGuid().ToString()
+                    Title       = ("Test ticket {0}" -f $now.ToString("HH:mm"))
+                    Description = "Test ticket created from the UI."
+                    Category    = "Testing"
+                    Priority    = "Low"
+                    Status      = "New"
+                    CreatedAt   = $now.ToString("o")
+                    AssignedTo  = ""
+                }
+            }
+
+            if (Get-Command Add-QOTicket -ErrorAction SilentlyContinue) {
+                Add-QOTicket -Ticket $ticket | Out-Null
+            } else {
+                throw "Add-QOTicket not found. Tickets.psm1 core is missing Add-QOTicket."
+            }
+        } catch {
+            Write-Warning ("Tickets UI: failed to create ticket. {0}" -f $_.Exception.Message)
         }
-    )
 
-    Save-QOTickets -TicketsDb $db
-    return $ticket
+        Update-QOTicketsGrid
+    })
+
+    Update-QOTicketsGrid
 }
 
-function Set-QOTicketTitle {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id,
-        [Parameter(Mandatory)]
-        [string]$Title
-    )
-
-    $db = Get-QOTickets
-    $ticket = Get-QOTicketById -Id $Id
-    if (-not $ticket) { throw "Ticket with Id '$Id' not found." }
-
-    $ticket.Title     = $Title
-    $ticket.UpdatedAt = Get-Date
-
-    Save-QOTickets -TicketsDb $db
-    return $ticket
-}
-
-function Remove-QOTicket {
-    param(
-        [Parameter(Mandatory)]
-        [string]$Id
-    )
-
-    $db = Get-QOTickets
-    $tickets = @($db.Tickets)
-
-    $beforeCount = $tickets.Count
-    $tickets = @($tickets | Where-Object { $_.Id -ne $Id })
-
-    $db.Tickets = @($tickets)
-    Save-QOTickets -TicketsDb $db
-
-    return ($beforeCount -ne $tickets.Count)
-}
-
-# =====================================================================
-# EXPORTS
-# =====================================================================
-
-Export-ModuleMember -Function `
-    Get-QOSettings, `
-    Save-QOSettings, `
-    Initialize-QOTicketStorage, `
-    New-QODefaultTicketDatabase, `
-    Get-QOTickets, `
-    Save-QOTickets, `
-    New-QOTicket, `
-    Add-QOTicket, `
-    Get-QOTicketById, `
-    Set-QOTicketStatus, `
-    Set-QOTicketTitle, `
-    Remove-QOTicket
+Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid, Apply-QOTicketsColumnOrder
+'@ | Set-Content -Path $path -Encoding UTF8
+"Rewrote: $path"
