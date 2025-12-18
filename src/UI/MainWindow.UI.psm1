@@ -188,6 +188,24 @@ function Start-QOTMainWindow {
             $app = New-Object System.Windows.Application
             $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
         }
+                # Ensure WPF assemblies are loaded
+        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction SilentlyContinue
+
+        # Catch dispatcher exceptions and print the real cause
+        try {
+            $app.add_DispatcherUnhandledException({
+                param($sender, $e)
+
+                Write-Host ""
+                Write-Host "================ WPF UNHANDLED EXCEPTION ================" -ForegroundColor Red
+                Write-Host $e.Exception.ToString() -ForegroundColor Red
+                Write-Host "========================================================" -ForegroundColor Red
+                Write-Host ""
+
+                # Stop PowerShell from crashing so we can read the error
+                $e.Handled = $true
+            })
+        } catch { }
 
         # Close splash AFTER main is rendered, with Ready + 2s + fade.
         if ($SplashWindow) {
