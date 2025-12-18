@@ -1,5 +1,6 @@
 # Intro.ps1
-# Fox splash startup for the Quinn Optimiser Toolkit (progress + ready + fade + swap to Main UI)
+# Fox splash startup for the Quinn Optimiser Toolkit
+# (progress + fade + swap to Main UI)
 
 param(
     [switch]$SkipSplash,
@@ -9,6 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# -------------------------------------------------
+# Log file path (always exists)
+# -------------------------------------------------
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
     if (-not (Test-Path $logDir)) {
@@ -16,39 +20,63 @@ if (-not $LogPath) {
     }
     $LogPath = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 }
+
 $script:QOTLogPath = $LogPath
 
+# -------------------------------------------------
+# Fallback logging (SCRIPT SCOPE, ALWAYS AVAILABLE)
+# -------------------------------------------------
 function script:Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
     )
+
     $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $line = "[$ts] [$Level] $Message"
-    try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
-    if (-not $Quiet) { Write-Host $line }
+
+    try {
+        $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
+    } catch { }
+
+    if (-not $Quiet) {
+        Write-Host $line
+    }
 }
 
+# -------------------------------------------------
+# Silence noisy warnings
+# -------------------------------------------------
 $oldWarningPreference = $WarningPreference
-$WarningPreference = "SilentlyContinue"
+$WarningPreference    = "SilentlyContinue"
 
 try {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
+    # -------------------------------------------------
+    # Resolve root + module paths
+    # -------------------------------------------------
     $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
     $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
+    # -------------------------------------------------
+    # Import Splash UI so New-QOTSplashWindow exists
+    # -------------------------------------------------
     $splashUIModule = Join-Path $rootPath "src\Intro\Splash.UI.psm1"
     if (Test-Path $splashUIModule) {
         Import-Module $splashUIModule -Force -ErrorAction SilentlyContinue
     }
 
+    # -------------------------------------------------
+    # Fox splash (Splash.xaml)
+    # -------------------------------------------------
     $splash = $null
+
     if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
         $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
-        $splash = New-QOTSplashWindow -Path $splashXaml
+        $splash     = New-QOTSplashWindow -Path $splashXaml
 
         if ($splash) {
             $splash.WindowStartupLocation = "CenterScreen"
@@ -62,13 +90,24 @@ try {
             [int]$Percent,
             [string]$Text
         )
+
         if (-not $splash) { return }
+
         $splash.Dispatcher.Invoke([action]{
             $bar = $splash.FindName("SplashProgressBar")
             $txt = $splash.FindName("SplashStatusText")
+
             if ($bar) { $bar.Value = [double]$Percent }
-            if ($txt) { $txt.Text = $Text }
+            if ($txt) { $txt.Text  = $Text }
         })
+    }
+
+    function Refresh-FoxSplash {
+        if (-not $splash) { return }
+        $splash.Dispatcher.Invoke(
+            [action]{},
+            [System.Windows.Threading.DispatcherPriority]::Background
+        )
     }
 
     function FadeOut-AndCloseFoxSplash {
@@ -78,81 +117,65 @@ try {
             $splash.Topmost = $false
 
             $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-            $anim.From = 1
-            $anim.To = 0
+            $anim.From     = 1
+            $anim.To       = 0
             $anim.Duration = [TimeSpan]::FromMilliseconds(300)
 
-            $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+            $splash.BeginAnimation(
+                [System.Windows.Window]::OpacityProperty,
+                $anim
+            )
         })
 
-        $t = New-Object System.Windows.Threading.DispatcherTimer
-        $t.Interval = [TimeSpan]::FromMilliseconds(330)
-        $t.Add_Tick({
-            $t.Stop()
-            try { $splash.Close() } catch { }
-        })
-        $t.Start()
-    }
-
-    function Complete-Intro {
-        param(
-            [string]$Reason = "normal"
-        )
+        Start-Sleep -Milliseconds 330
 
         try {
-            Set-FoxSplash 100 "Ready"
-
-            $timer = New-Object System.Windows.Threading.DispatcherTimer
-            $timer.Interval = [TimeSpan]::FromSeconds(2)
-            $timer.Add_Tick({
-                $timer.Stop()
-                FadeOut-AndCloseFoxSplash
-                Write-QLog "Intro completed ($Reason)" "INFO"
-                try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
-            })
-            $timer.Start()
+            $splash.Dispatcher.Invoke([action]{ $splash.Close() })
         } catch { }
     }
 
-    Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
-    Set-FoxSplash 20 "Loading config..."
-    if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
+    # -------------------------------------------------
+    # Loading stages shown on fox splash
+    # -------------------------------------------------
+    Set-FoxSplash 5   "Starting Quinn Optimiser Toolkit..."
+    Refresh-FoxSplash
+    Start-Sleep -Milliseconds 150
 
-    Set-FoxSplash 40 "Loading logging..."
-    if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
+    Set-FoxSplash 20  "Loading config..."
+    Refresh-FoxSplash
+    if (Test-Path $configModule) {
+        Import-Module $configModule -Force -ErrorAction SilentlyContinue
+    }
 
-    Set-FoxSplash 65 "Loading engine..."
-    if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
+    Set-FoxSplash 40  "Loading logging..."
+    Refresh-FoxSplash
+    if (Test-Path $loggingModule) {
+        Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
+    }
+
+    Set-FoxSplash 65  "Loading engine..."
+    Refresh-FoxSplash
+    if (-not (Test-Path $engineModule)) {
+        throw "Engine module not found at $engineModule"
+    }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    Set-FoxSplash 85 "Preparing UI..."
+    Set-FoxSplash 85  "Preparing UI..."
+    Refresh-FoxSplash
+    Start-Sleep -Milliseconds 200
+
+    Set-FoxSplash 100 "Ready"
+    Refresh-FoxSplash
+    Start-Sleep -Seconds 2
+
+    # -------------------------------------------------
+    # Fade out splash first, then start main UI
+    # -------------------------------------------------
+    FadeOut-AndCloseFoxSplash
+
     Write-QLog "Starting main window" "INFO"
-
-    # Important: Start-QOTMain MUST return the Window object (not a boolean)
-    $mw = Start-QOTMain -RootPath $rootPath
-
-    # Fallback: if ContentRendered never fires, still complete the intro
-    $fallback = New-Object System.Windows.Threading.DispatcherTimer
-    $fallback.Interval = [TimeSpan]::FromSeconds(5)
-    $fallback.Add_Tick({
-        $fallback.Stop()
-        Complete-Intro -Reason "fallback"
-    })
-    $fallback.Start()
-
-    if ($mw) {
-        $mw.Add_ContentRendered({
-            try { $fallback.Stop() } catch { }
-            Complete-Intro -Reason "contentrendered"
-        })
-    }
-    else {
-        try { $fallback.Stop() } catch { }
-        Complete-Intro -Reason "mw-null"
-    }
-
-    # Keep message pump alive so UI is clickable
-    [System.Windows.Threading.Dispatcher]::Run()
+    Start-QOTMain -RootPath $rootPath
+    Write-QLog "Intro completed" "INFO"
 }
 finally {
     $WarningPreference = $oldWarningPreference
