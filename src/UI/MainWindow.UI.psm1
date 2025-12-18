@@ -5,8 +5,8 @@ $ErrorActionPreference = "Stop"
 
 $basePath = Join-Path $PSScriptRoot ".."
 
-Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
-Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Config\Config.psm1")    -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1")  -Force -ErrorAction Stop
 
 Import-Module (Join-Path $basePath "Core\Settings.psm1") -Force -ErrorAction SilentlyContinue
 Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction SilentlyContinue
@@ -14,8 +14,8 @@ Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction Sil
 Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1") -Force -ErrorAction SilentlyContinue
 
 Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")          -Force -ErrorAction Stop
-Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")   -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
 
 $script:IsSettingsShown = $false
 
@@ -180,39 +180,14 @@ function Start-QOTMainWindow {
 
     try {
         $window = Initialize-QOTMainWindow
+
         if (-not $window) {
             throw "Initialize-QOTMainWindow returned null. Main window was not created."
         }
 
-        # Ensure we have a real WPF Application object
-        $app = [System.Windows.Application]::Current
-        if (-not $app) {
-            $app = New-Object System.Windows.Application
-            $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
-        }
-
-        # Ensure WPF assemblies are loaded
-        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction SilentlyContinue
-
-        # Catch dispatcher exceptions and show real error
-        try {
-            $app.add_DispatcherUnhandledException({
-                param($sender, $e)
-
-                Write-Host ""
-                Write-Host "================ WPF UNHANDLED EXCEPTION ================" -ForegroundColor Red
-                Write-Host $e.Exception.ToString() -ForegroundColor Red
-                Write-Host "========================================================" -ForegroundColor Red
-                Write-Host ""
-
-                $e.Handled = $true
-            })
-        } catch { }
-
-        # Close splash AFTER main window is rendered
+        # Close splash AFTER the main window is rendered, with Ready + 2s + fade.
         if ($SplashWindow) {
             $window.Add_ContentRendered({
-
                 try {
                     $bar = $SplashWindow.FindName("SplashProgressBar")
                     $txt = $SplashWindow.FindName("SplashStatusText")
@@ -223,30 +198,21 @@ function Start-QOTMainWindow {
                     $timer = New-Object System.Windows.Threading.DispatcherTimer
                     $timer.Interval = [TimeSpan]::FromSeconds(2)
                     $timer.Add_Tick({
-                        param($senderTimer, $eTimer)
-
-                        try { if ($senderTimer) { $senderTimer.Stop() } } catch { }
+                        $timer.Stop()
 
                         try {
-                            if ($SplashWindow) {
-                                $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-                                $anim.From = 1
-                                $anim.To = 0
-                                $anim.Duration = [TimeSpan]::FromMilliseconds(300)
-                                $SplashWindow.BeginAnimation(
-                                    [System.Windows.Window]::OpacityProperty,
-                                    $anim
-                                )
-                            }
+                            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+                            $anim.From = 1
+                            $anim.To = 0
+                            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+                            $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
                         } catch { }
 
                         $t2 = New-Object System.Windows.Threading.DispatcherTimer
                         $t2.Interval = [TimeSpan]::FromMilliseconds(330)
                         $t2.Add_Tick({
-                            param($senderTimer2, $eTimer2)
-
-                            try { if ($senderTimer2) { $senderTimer2.Stop() } } catch { }
-                            try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
+                            $t2.Stop()
+                            try { $SplashWindow.Close() } catch { }
                         })
                         $t2.Start()
                     })
@@ -256,25 +222,15 @@ function Start-QOTMainWindow {
             })
         }
 
+        # Keep app alive and interactive
         $Global:QOTMainWindow = $window
-        $app.MainWindow = $window
-
-        [void]$window.Show()
-        [void]$app.Run()
+        [void]$window.ShowDialog()
     }
     catch {
-        $msg = $_.Exception.Message
-        try {
-            if ($_.Exception.InnerException) {
-                $msg += "`nInner: " + $_.Exception.InnerException.Message
-            }
-        } catch { }
-
-        Write-Error "Start-QOTMainWindow : Failed to start Quinn Optimiser Toolkit UI.`n$msg"
+        Write-Error "Start-QOTMainWindow : Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
         throw
     }
 }
-
 
 function Select-QOTPreferredTab {
     param([string]$PreferredTab)
@@ -320,102 +276,13 @@ function Set-QOTSummary {
     }
 }
 
-function Show-QOTSettingsPage {
-    try {
-        if (-not $script:MainWindow) { return }
-
-        $host = $script:MainWindow.FindName("MainContentHost")
-        if (-not $host) { return }
-
-        # Save the TabControl once so we can restore it later
-        if (-not $script:TabControl) {
-            $script:TabControl = $script:MainWindow.FindName("MainTabControl")
-        }
-
-        if ($script:TabControl) {
-            $script:LastTab = $script:TabControl.SelectedItem
-        }
-
-        # Build the settings view once
-        if (-not $script:SettingsView) {
-
-            if (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue) {
-                $script:SettingsView = New-QOTSettingsView
-            }
-            elseif (Get-Command Get-QOTSettingsView -ErrorAction SilentlyContinue) {
-                $script:SettingsView = Get-QOTSettingsView
-            }
-            else {
-                # Placeholder panel (so the button visibly works right now)
-                $grid = New-Object System.Windows.Controls.Grid
-                $grid.Margin = "16"
-
-                $title = New-Object System.Windows.Controls.TextBlock
-                $title.Text = "Settings"
-                $title.FontSize = 22
-                $title.Foreground = [System.Windows.Media.Brushes]::White
-                $title.Margin = "0,0,0,12"
-
-                $hint = New-Object System.Windows.Controls.TextBlock
-                $hint.Text = "Settings UI not wired yet. This is a placeholder panel."
-                $hint.Foreground = [System.Windows.Media.Brushes]::Gainsboro
-                $hint.TextWrapping = "Wrap"
-                $hint.Margin = "0,40,0,0"
-
-                $grid.Children.Add($title) | Out-Null
-                $grid.Children.Add($hint)  | Out-Null
-
-                $script:SettingsView = $grid
-            }
-        }
-
-        # Swap content
-        $host.Content = $script:SettingsView
-
-        $script:IsSettingsShown = $true
-        Set-QOTStatus "Settings"
-    }
-    catch {
-        try { Set-QOTStatus "Settings error" } catch { }
-        throw
-    }
-}
-
-function Restore-QOTMainTabs {
-    try {
-        if (-not $script:MainWindow) { return }
-
-        $host = $script:MainWindow.FindName("MainContentHost")
-        if (-not $host) { return }
-
-        if (-not $script:TabControl) {
-            $script:TabControl = $script:MainWindow.FindName("MainTabControl")
-        }
-
-        if ($script:TabControl) {
-            $host.Content = $script:TabControl
-
-            if ($script:LastTab) {
-                $script:TabControl.SelectedItem = $script:LastTab
-            }
-        }
-
-        $script:IsSettingsShown = $false
-        Set-QOTStatus "Idle"
-    }
-    catch {
-        try { Set-QOTStatus "Restore error" } catch { }
-        throw
-    }
-}
+function Show-QOTSettingsPage { }
+function Restore-QOTMainTabs { }
 
 Export-ModuleMember -Function `
-    Set-QOTControlText, `
     New-QOTMainWindow, `
     Initialize-QOTMainWindow, `
     Start-QOTMainWindow, `
     Select-QOTPreferredTab, `
     Set-QOTStatus, `
-    Set-QOTSummary, `
-    Show-QOTSettingsPage, `
-    Restore-QOTMainTabs
+    Set-QOTSummary
