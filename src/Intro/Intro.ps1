@@ -18,7 +18,7 @@ if (-not $LogPath) {
 }
 $script:QOTLogPath = $LogPath
 
-function script:Write-QLog {
+function global:Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
@@ -34,6 +34,11 @@ $WarningPreference = "SilentlyContinue"
 
 try {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+    # Ensure a WPF Application exists (prevents null Current in modules that expect it)
+    if (-not [System.Windows.Application]::Current) {
+        $null = New-Object System.Windows.Application
+        [System.Windows.Application]::Current.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+    }
 
     $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
