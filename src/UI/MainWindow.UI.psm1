@@ -5,31 +5,58 @@ $ErrorActionPreference = "Stop"
 
 function Start-QOTMainWindow {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         $SplashWindow
     )
 
     $basePath = Join-Path $PSScriptRoot ".."
 
-    # Core imports (hard)
+    # ------------------------------------------------------------
+    # Core imports (hard requirements)
+    # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
 
-    # Core imports (your actual structure)
-    Import-Module (Join-Path $basePath "Core\Settings\Settings.psm1") -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Tickets.psm1")           -Force -ErrorAction Stop
+    # ------------------------------------------------------------
+    # Discover Settings core module (path-safe)
+    # ------------------------------------------------------------
+    $settingsPath = Get-ChildItem -Path $basePath -Recurse -File -Filter "Settings.psm1" |
+        Where-Object { $_.FullName -match "\\Core\\Settings\\Settings\.psm1$" } |
+        Select-Object -First 1 -ExpandProperty FullName
 
-    # UI modules (soft)
+    if (-not $settingsPath) {
+        throw "Settings.psm1 not found under Core\Settings"
+    }
+
+    Import-Module $settingsPath -Force -ErrorAction Stop
+
+    # ------------------------------------------------------------
+    # Tickets core (hard requirement for Tickets tab)
+    # ------------------------------------------------------------
+    Import-Module (Join-Path $basePath "Core\Tickets.psm1") -Force -ErrorAction Stop
+
+    # ------------------------------------------------------------
+    # UI modules (soft load)
+    # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # Remove stale function BEFORE importing Tickets UI
+    # Ensure no stale Tickets UI function exists
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
+
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # Import Settings UI from correct location
-    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction SilentlyContinue
+    # Discover Settings UI module safely
+    $settingsUiPath = Get-ChildItem -Path $basePath -Recurse -File -Filter "Settings.UI.psm1" |
+        Where-Object { $_.FullName -match "\\Core\\Settings\\Settings\.UI\.psm1$" } |
+        Select-Object -First 1 -ExpandProperty FullName
 
-    # Load XAML for MainWindow
+    if ($settingsUiPath) {
+        Import-Module $settingsUiPath -Force -ErrorAction SilentlyContinue
+    }
+
+    # ------------------------------------------------------------
+    # Load MainWindow XAML
+    # ------------------------------------------------------------
     $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
         throw "MainWindow.xaml not found at: $xamlPath"
@@ -37,29 +64,41 @@ function Start-QOTMainWindow {
 
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-    $xaml = Get-Content -LiteralPath $xamlPath -Raw
+    $xaml   = Get-Content -LiteralPath $xamlPath -Raw
     $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
     $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
     if (-not $window) {
-        throw "Failed to load MainWindow from XAML."
+        throw "Failed to load MainWindow from XAML"
     }
 
+    # ------------------------------------------------------------
     # Wire Tickets UI
+    # ------------------------------------------------------------
     try {
         if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
             Initialize-QOTicketsUI -Window $window
         }
-    } catch { }
+    }
+    catch {
+        [System.Windows.MessageBox]::Show(
+            "Tickets UI failed to initialise.`r`n$($_.Exception.Message)"
+        ) | Out-Null
+    }
 
-    # Wire Settings button (opens a popup window)
+    # ------------------------------------------------------------
+    # Wire Settings gear button
+    # ------------------------------------------------------------
     try {
         $btnSettings = $window.FindName("BtnSettings")
+
         if ($btnSettings) {
             $btnSettings.Add_Click({
                 try {
                     if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
-                        [System.Windows.MessageBox]::Show("Settings view not available. Check Core\Settings\Settings.UI.psm1 imports.") | Out-Null
+                        [System.Windows.MessageBox]::Show(
+                            "Settings UI not available. Check Settings.UI.psm1 exports."
+                        ) | Out-Null
                         return
                     }
 
@@ -77,18 +116,28 @@ function Start-QOTMainWindow {
                     $null = $sw.ShowDialog()
                 }
                 catch {
-                    [System.Windows.MessageBox]::Show("Failed to open Settings.`r`n$($This.Exception.Message)") | Out-Null
+                    [System.Windows.MessageBox]::Show(
+                        "Failed to open Settings.`r`n$($_.Exception.Message)"
+                    ) | Out-Null
                 }
             })
         }
-    } catch { }
+    }
+    catch {
+        # Never crash the app for settings
+    }
 
-    # Close splash safely
+    # ------------------------------------------------------------
+    # Close splash
+    # ------------------------------------------------------------
     try {
         if ($SplashWindow) { $SplashWindow.Close() }
-    } catch { }
+    }
+    catch { }
 
+    # ------------------------------------------------------------
     # Show main window
+    # ------------------------------------------------------------
     $null = $window.ShowDialog()
 }
 
