@@ -29,6 +29,15 @@ function Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
+function Assert-ScriptBlock {
+    param(
+        [Parameter(Mandatory)]$Value,
+        [Parameter(Mandatory)][string]$Name
+    )
+    if (-not $Value) { throw "$Name is null" }
+    if (-not ($Value -is [scriptblock])) { throw "$Name is not a ScriptBlock. Actual type: $($Value.GetType().FullName)" }
+}
+
 $oldWarningPreference = $WarningPreference
 $WarningPreference = "SilentlyContinue"
 
@@ -57,11 +66,11 @@ try {
         }
     }
 
-    # =================================================================
-    # Scriptblocks stored in variables (callable inside event handlers)
-    # =================================================================
+    # ==========================================================
+    # Scriptblocks kept as variables and invoked via .Invoke()
+    # ==========================================================
 
-    $script:SetFoxSplash = {
+    [scriptblock]$script:SetFoxSplash = {
         param([int]$Percent, [string]$Text)
 
         if (-not $splash) { return }
@@ -74,7 +83,7 @@ try {
         })
     }.GetNewClosure()
 
-    $script:FadeOutAndClose = {
+    [scriptblock]$script:FadeOutAndClose = {
         if (-not $splash) { return }
 
         $splash.Dispatcher.Invoke([action]{
@@ -100,11 +109,11 @@ try {
         $t.Start()
     }.GetNewClosure()
 
-    $script:CompleteIntro = {
+    [scriptblock]$script:CompleteIntro = {
         param([string]$Reason = "normal")
 
         try {
-            & $script:SetFoxSplash 100 "Ready"
+            $script:SetFoxSplash.Invoke(100, "Ready")
 
             $timer = New-Object System.Windows.Threading.DispatcherTimer
             $timer.Interval = [TimeSpan]::FromSeconds(2)
@@ -112,7 +121,7 @@ try {
             $timerLocal = $timer
             $timer.Add_Tick( ({
                 $timerLocal.Stop()
-                & $script:FadeOutAndClose
+                $script:FadeOutAndClose.Invoke()
                 Write-QLog "Intro completed ($Reason)" "INFO"
             }).GetNewClosure() )
 
@@ -120,22 +129,26 @@ try {
         } catch { }
     }.GetNewClosure()
 
-    # =================================================================
-    # Startup sequence
-    # =================================================================
+    Assert-ScriptBlock $script:SetFoxSplash   '$script:SetFoxSplash'
+    Assert-ScriptBlock $script:FadeOutAndClose '$script:FadeOutAndClose'
+    Assert-ScriptBlock $script:CompleteIntro  '$script:CompleteIntro'
 
-    & $script:SetFoxSplash 5  "Starting Quinn Optimiser Toolkit..."
-    & $script:SetFoxSplash 20 "Loading config..."
+    # ==========================================================
+    # Startup sequence
+    # ==========================================================
+
+    $script:SetFoxSplash.Invoke(5,  "Starting Quinn Optimiser Toolkit...")
+    $script:SetFoxSplash.Invoke(20, "Loading config...")
     if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
 
-    & $script:SetFoxSplash 40 "Loading logging..."
+    $script:SetFoxSplash.Invoke(40, "Loading logging...")
     if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
 
-    & $script:SetFoxSplash 65 "Loading engine..."
+    $script:SetFoxSplash.Invoke(65, "Loading engine...")
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    & $script:SetFoxSplash 85 "Preparing UI..."
+    $script:SetFoxSplash.Invoke(85, "Preparing UI...")
     Write-QLog "Starting main window" "INFO"
 
     $mw = $null
@@ -146,20 +159,21 @@ try {
         throw
     }
 
+    Write-QLog ("Start-QOTMain type: " + ($(if ($mw) { $mw.GetType().FullName } else { "NULL" }))) "INFO"
+
     $app = [System.Windows.Application]::Current
     if (-not $app) {
         $app = New-Object System.Windows.Application
         $app.ShutdownMode = [System.Windows.ShutdownMode]::OnLastWindowClose
     }
 
-    # Fallback if ContentRendered never fires
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
 
     $fallbackLocal = $fallback
     $fallback.Add_Tick( ({
         $fallbackLocal.Stop()
-        & $script:CompleteIntro "fallback"
+        $script:CompleteIntro.Invoke("fallback")
     }).GetNewClosure() )
 
     $fallback.Start()
@@ -167,7 +181,7 @@ try {
     if ($mw) {
         $mw.Add_ContentRendered( ({
             try { $fallbackLocal.Stop() } catch { }
-            & $script:CompleteIntro "contentrendered"
+            $script:CompleteIntro.Invoke("contentrendered")
         }).GetNewClosure() )
 
         try { if (-not $mw.IsVisible) { $mw.Show() } } catch { }
@@ -176,7 +190,7 @@ try {
     }
     else {
         try { $fallbackLocal.Stop() } catch { }
-        & $script:CompleteIntro "mw-null"
+        $script:CompleteIntro.Invoke("mw-null")
         try { $app.Shutdown() } catch { }
     }
 }
