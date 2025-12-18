@@ -1,45 +1,8 @@
 # src\Core\Settings\Settings.UI.psm1
-# Settings UI (hosted inside the main window, no popups for normal use)
+# Settings UI (hosted inside MainWindow)
 
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
-
-function Write-QOSettingsUILog {
-    param([string]$Message)
-
-    try {
-        $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
-        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-
-        $path = Join-Path $logDir "SettingsUI.log"
-        $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
-        Add-Content -LiteralPath $path -Value $line -Encoding UTF8
-    }
-    catch { }
-}
-
-function Set-QOHintText {
-    param(
-        $HintControl,
-        [AllowEmptyString()]
-        [string] $Text
-    )
-
-    try {
-        if ($null -eq $HintControl) { return }
-
-        if ($HintControl.PSObject.Properties.Match("Text").Count -gt 0) {
-            $HintControl.Text = $Text
-            return
-        }
-
-        if ($HintControl.PSObject.Properties.Match("Content").Count -gt 0) {
-            $HintControl.Content = $Text
-            return
-        }
-    }
-    catch { }
-}
 
 function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
@@ -58,7 +21,24 @@ function Ensure-QOEmailIntegrationSettings {
     return $s
 }
 
-function Refresh-QOEmailList {
+function Save-QOMonitoredAddressesFromList {
+    param(
+        [Parameter(Mandatory)] $ListControl
+    )
+
+    $s = Ensure-QOEmailIntegrationSettings
+
+    $items = @()
+    foreach ($i in $ListControl.Items) {
+        $v = ([string]$i).Trim()
+        if ($v) { $items += $v }
+    }
+
+    $s.Tickets.EmailIntegration.MonitoredAddresses = $items
+    Save-QOSettings -Settings $s
+}
+
+function Load-QOMonitoredAddressesToList {
     param(
         [Parameter(Mandatory)] $ListControl
     )
@@ -67,7 +47,8 @@ function Refresh-QOEmailList {
 
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
-        [void]$ListControl.Items.Add([string]$e)
+        $v = ([string]$e).Trim()
+        if ($v) { [void]$ListControl.Items.Add($v) }
     }
 }
 
@@ -84,11 +65,8 @@ function New-QOTSettingsView {
         throw "SettingsWindow.xaml not found at $xamlPath"
     }
 
-    Write-QOSettingsUILog "Loading SettingsWindow.xaml"
-
-    # Convert root <Window> to <Grid> so it can be hosted
+    # Load XAML as hosted view (convert root Window to Grid)
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
-
     $win = $doc.DocumentElement
     if (-not $win -or $win.LocalName -ne "Window") {
         throw "SettingsWindow.xaml root must be <Window>."
@@ -138,86 +116,49 @@ function New-QOTSettingsView {
     $btnAdd   = Find-QONode -Root $root -Name "BtnAdd"
     $btnRem   = Find-QONode -Root $root -Name "BtnRemove"
     $list     = Find-QONode -Root $root -Name "LstEmails"
-    $hint     = Find-QONode -Root $root -Name "LblHint"
 
     if (-not $txtEmail) { throw "TxtEmail not found" }
     if (-not $btnAdd)   { throw "BtnAdd not found" }
     if (-not $btnRem)   { throw "BtnRemove not found" }
     if (-not $list)     { throw "LstEmails not found" }
 
-    Refresh-QOEmailList -ListControl $list
-    Set-QOHintText -HintControl $hint -Text ""
+    # Initial load
+    Load-QOMonitoredAddressesToList -ListControl $list
 
-    Write-QOSettingsUILog "Settings UI loaded. Wiring events."
-
+    # Add button: update UI first, then save
     $btnAdd.Add_Click({
-        Write-QOSettingsUILog "Add clicked"
-
         try {
             $addr = ($txtEmail.Text + "").Trim()
-            Write-QOSettingsUILog ("Add input: '" + $addr + "'")
+            if (-not $addr) { return }
 
-            if (-not $addr) {
-                Set-QOHintText -HintControl $hint -Text "Enter an email address."
-                return
+            $exists = $false
+            foreach ($i in $list.Items) {
+                if (([string]$i).Trim().ToLower() -eq $addr.ToLower()) { $exists = $true; break }
             }
 
-            $s = Ensure-QOEmailIntegrationSettings
-            $current = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-
-            if ($current -contains $addr) {
-                Set-QOHintText -HintControl $hint -Text "Already exists."
-                return
+            if (-not $exists) {
+                [void]$list.Items.Add($addr)
             }
-
-            $s.Tickets.EmailIntegration.MonitoredAddresses = @($current + $addr)
-            Save-QOSettings -Settings $s
 
             $txtEmail.Text = ""
-            Refresh-QOEmailList -ListControl $list
-            Set-QOHintText -HintControl $hint -Text "Added $addr"
-
-            Write-QOSettingsUILog "Add succeeded"
+            Save-QOMonitoredAddressesFromList -ListControl $list
         }
         catch {
-            $msg = "Add failed: " + $_.Exception.Message
-            Write-QOSettingsUILog $msg
-            Set-QOHintText -HintControl $hint -Text $msg
-
-            try { [System.Windows.MessageBox]::Show($msg, "Settings") | Out-Null } catch { }
+            # Keep it silent for now. UI already updated.
+            # If you want feedback later we can wire LblHint again.
         }
     })
 
+    # Remove button: update UI first, then save
     $btnRem.Add_Click({
-        Write-QOSettingsUILog "Remove clicked"
-
         try {
             $sel = $list.SelectedItem
-            Write-QOSettingsUILog ("Remove selected: '" + ($sel + "") + "'")
+            if (-not $sel) { return }
 
-            if (-not $sel) {
-                Set-QOHintText -HintControl $hint -Text "Select an address."
-                return
-            }
-
-            $s = Ensure-QOEmailIntegrationSettings
-            $s.Tickets.EmailIntegration.MonitoredAddresses =
-                @($s.Tickets.EmailIntegration.MonitoredAddresses | Where-Object { $_ -ne $sel })
-
-            Save-QOSettings -Settings $s
-
-            Refresh-QOEmailList -ListControl $list
-            Set-QOHintText -HintControl $hint -Text "Removed $sel"
-
-            Write-QOSettingsUILog "Remove succeeded"
+            $list.Items.Remove($sel)
+            Save-QOMonitoredAddressesFromList -ListControl $list
         }
-        catch {
-            $msg = "Remove failed: " + $_.Exception.Message
-            Write-QOSettingsUILog $msg
-            Set-QOHintText -HintControl $hint -Text $msg
-
-            try { [System.Windows.MessageBox]::Show($msg, "Settings") | Out-Null } catch { }
-        }
+        catch { }
     })
 
     return $root
