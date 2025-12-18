@@ -22,7 +22,8 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # UI modules
     # ------------------------------------------------------------
-    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")   -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")          -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -50,65 +51,45 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
-    # Settings gear button (robust loader)
+    # Initialise Settings UI (hosted in the hidden tab)
     # ------------------------------------------------------------
-                $btnSettings = $window.FindName("BtnSettings")
-                $tabs        = $window.FindName("MainTabControl")
-                $tabSettings = $window.FindName("TabSettings")
-                
-                if ($btnSettings -and $tabs -and $tabSettings) {
-                    $btnSettings.Add_Click({
-                        $tabs.SelectedItem = $tabSettings
-                    })
-                }
-
-
-                Import-Module $settingsUiPath -Force -ErrorAction Stop
-
-                $entry = $null
-
-                $entry = Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue
-                if (-not $entry) { $entry = Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue }
-                if (-not $entry) { $entry = Get-Command Show-QOTSettingsWindow -ErrorAction SilentlyContinue }
-
-                if (-not $entry) {
-                    $m = Get-Module | Where-Object { $_.Path -eq $settingsUiPath } | Select-Object -First 1
-                    $exports = ""
-                    if ($m) { $exports = ($m.ExportedCommands.Keys | Sort-Object) -join ", " }
-
-                    if ([string]::IsNullOrWhiteSpace($exports)) { $exports = "(none found)" }
-
-                    [System.Windows.MessageBox]::Show(
-                        "Settings UI loaded, but no known entry function was exported.`r`n`r`nExported commands:`r`n$exports"
-                    ) | Out-Null
-                    return
-                }
-
-                # Call the entry point in a compatible way
-                if ($entry.Name -eq "Show-QOTSettingsWindow") {
-                    & $entry -Owner $window | Out-Null
-                    return
-                }
-
-                $content = & $entry -Window $window
-
-                $sw = New-Object System.Windows.Window
-                $sw.Title = "Settings"
-                $sw.Width = 600
-                $sw.Height = 420
-                $sw.Owner = $window
-                $sw.WindowStartupLocation = "CenterOwner"
-                $sw.Content = $content
-
-                $sw.ShowDialog() | Out-Null
-            }
-            catch {
-                [System.Windows.MessageBox]::Show(
-                    "Failed to open Settings.`r`n$($_.Exception.Message)"
-                ) | Out-Null
-            }
-        })
+    $settingsHost = $window.FindName("SettingsHost")
+    if (-not $settingsHost) {
+        throw "SettingsHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='SettingsHost' />"
     }
+
+    $settingsView = $null
+
+    if (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue) {
+        $settingsView = New-QOTSettingsView -Window $window
+    }
+    elseif (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue) {
+        $settingsView = Initialize-QOSettingsUI -Window $window
+    }
+    else {
+        throw "Settings UI entry function not found. Expected New-QOTSettingsView or Initialize-QOSettingsUI in Core\Settings\Settings.UI.psm1"
+    }
+
+    if (-not $settingsView) {
+        throw "Settings UI returned null. Check Settings.UI.psm1 entry function returns a WPF element."
+    }
+
+    $settingsHost.Content = $settingsView
+
+    # ------------------------------------------------------------
+    # Gear icon switches to Settings tab (tab is hidden)
+    # ------------------------------------------------------------
+    $btnSettings = $window.FindName("BtnSettings")
+    $tabs        = $window.FindName("MainTabControl")
+    $tabSettings = $window.FindName("TabSettings")
+
+    if (-not $btnSettings) { throw "BtnSettings not found in MainWindow.xaml" }
+    if (-not $tabs)        { throw "MainTabControl not found in MainWindow.xaml" }
+    if (-not $tabSettings) { throw "TabSettings not found in MainWindow.xaml" }
+
+    $btnSettings.Add_Click({
+        $tabs.SelectedItem = $tabSettings
+    })
 
     # ------------------------------------------------------------
     # Close splash + show main window
