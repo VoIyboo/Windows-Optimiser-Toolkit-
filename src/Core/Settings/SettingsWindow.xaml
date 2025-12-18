@@ -71,7 +71,7 @@
     <!-- Content only, no full-width layout container -->
     <StackPanel Margin="16"
                 HorizontalAlignment="Left"
-                Width="520">
+                Width="620">
 
         <!-- Section title -->
         <TextBlock Text="Monitored mailbox addresses"
@@ -113,7 +113,7 @@
             </StackPanel>
 
             <TextBox x:Name="TxtEmail"
-                     Width="520"
+                     Width="620"
                      ToolTip="Enter an email address" />
 
         </DockPanel>
