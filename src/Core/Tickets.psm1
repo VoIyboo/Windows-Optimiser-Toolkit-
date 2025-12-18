@@ -289,4 +289,8 @@ function Get-QOKnownAgents {
 
 
 
-Export-ModuleMember -Function Get-QOTickets, Add-QOTicket, Remove-QOTicket, New-QOTicket
+Export-ModuleMember -Function `
+    Get-QOTickets, Save-QOTickets, `
+    Get-QOTicketsStorePath, Ensure-QOTicketsStoreDirectory, `
+    Add-QOTicket, Remove-QOTicket, New-QOTicket, `
+    Invoke-QOEmailTicketPoll
