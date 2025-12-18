@@ -111,9 +111,11 @@ function Start-QOTMain {
             throw "UI module not loaded: Start-QOTMainWindow not found"
         }
 
+        # Important: non blocking so Intro.ps1 can keep its Dispatcher alive
         $win = Start-QOTMainWindow -NonBlocking
-        $Global:QOTMainWindow = $win
+        try { $win.Activate() } catch { }
 
+        $Global:QOTMainWindow = $win
         return $win
     }
     catch {
@@ -121,7 +123,6 @@ function Start-QOTMain {
         throw
     }
 }
-
 
 Export-ModuleMember -Function `
     Start-QOTMain, `
