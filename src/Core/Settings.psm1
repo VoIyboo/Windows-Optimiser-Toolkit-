@@ -1,193 +1,319 @@
-# Settings.psm1
-# Core settings persistence for Quinn Optimiser Toolkit
 
-$ErrorActionPreference = "Stop"
+# Tickets.UI.psm1
+# Simple UI wiring for the Tickets tab
 
-$script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
+Import-Module "$PSScriptRoot\..\Core\Tickets.psm1"   -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Core\Settings.psm1" -Force -ErrorAction SilentlyContinue
 
-function Get-QODefaultSettings {
-    return [PSCustomObject]@{
-        PreferredStartTab     = "Cleaning"
-        TicketsColumnLayout   = @()
-        TicketStorePath       = $null
-        LocalTicketBackupPath = $null
+# Guard so we do not re-save while we are applying the saved layout
+$script:TicketsColumnLayoutApplying = $false
 
-        Tickets = [PSCustomObject]@{
-            EmailIntegration = [PSCustomObject]@{
-                Enabled               = $false
-                MonitoredAddresses    = @()
-                LastProcessedByMailbox = @{}
+function Get-QOTicketsColumnLayout {
+    $settings = Get-QOSettings
+    return $settings.TicketsColumnLayout
+}
+
+function Save-QOTicketsColumnLayout {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
+
+    if ($script:TicketsColumnLayoutApplying) { return }
+
+    $settings = Get-QOSettings
+
+    # Capture current columns by their DisplayIndex and header name + width
+    $layout = @(
+        $DataGrid.Columns |
+        Sort-Object DisplayIndex |
+        ForEach-Object {
+            [pscustomobject]@{
+                Header       = $_.Header.ToString()
+                DisplayIndex = $_.DisplayIndex
+                Width        = if ($_.Width -is [double]) { [double]$_.Width } else { $null }
+            }
+        }
+    )
+
+    $settings.TicketsColumnLayout = $layout
+    Save-QOSettings -Settings $settings
+}
+
+function Apply-QOTicketsColumnLayout {
+    param(
+        [Parameter(Mandatory)]
+        $DataGrid
+    )
+
+    $layout = Get-QOTicketsColumnLayout
+    if (-not $layout -or $layout.Count -eq 0) { return }
+
+    $script:TicketsColumnLayoutApplying = $true
+    try {
+        foreach ($entry in $layout) {
+            $header = $entry.Header
+            if (-not $header) { continue }
+
+            $col = $DataGrid.Columns |
+                   Where-Object { $_.Header.ToString() -eq $header } |
+                   Select-Object -First 1
+
+            if (-not $col) { continue }
+
+            if ($entry.DisplayIndex -ge 0) {
+                $col.DisplayIndex = $entry.DisplayIndex
+            }
+
+            if ($entry.Width -and $entry.Width -gt 0) {
+                $col.Width = [double]$entry.Width
             }
         }
     }
+    finally {
+        $script:TicketsColumnLayoutApplying = $false
+    }
 }
 
-function Repair-QOSettingsShape {
-    param([Parameter(Mandatory)] $s)
+function Update-QOTicketsGrid {
 
-    if (-not $s) { return $s }
+    try {
+        $db = Get-QOTickets
+        $tickets = if ($db.Tickets) { @($db.Tickets) } else { @() }
+    }
+    catch {
+        Write-Warning "Tickets UI: failed to load tickets. $_"
+        $tickets = @()
+    }
 
-    $defaults = Get-QODefaultSettings
+    $view = foreach ($t in $tickets) {
 
-    foreach ($p in @("PreferredStartTab","TicketsColumnLayout","TicketStorePath","LocalTicketBackupPath")) {
-        if (-not ($s.PSObject.Properties.Name -contains $p)) {
-            $s | Add-Member -NotePropertyName $p -NotePropertyValue $defaults.$p -Force
+        $raw     = $t.CreatedAt
+        $created = $null
+
+        if ($raw -is [datetime]) {
+            $created = $raw
+        }
+        elseif ($raw) {
+            [datetime]::TryParse($raw, [ref]$created) | Out-Null
+        }
+
+        $createdString = if ($created) {
+            $created.ToString('dd/MM/yyyy h:mm tt')
+        }
+        else {
+            $raw
+        }
+
+        [PSCustomObject]@{
+            Title     = $t.Title
+            CreatedAt = $createdString
+            Status    = $t.Status
+            Priority  = $t.Priority
+            Id        = $t.Id
+            Category  = $t.Category
         }
     }
 
-    if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
-        $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+    # ⭐ FORCE ARRAY ALWAYS ⭐
+    if ($view -isnot [System.Collections.IEnumerable] -or $view -is [string]) {
+        $view = @($view)
     }
 
-    if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
-        $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
-    }
-
-    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "Enabled")) {
-        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName Enabled -NotePropertyValue $false -Force
-    }
-    $s.Tickets.EmailIntegration.Enabled = [bool]$s.Tickets.EmailIntegration.Enabled
-
-    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
-        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
-    }
-
-    $ma = $s.Tickets.EmailIntegration.MonitoredAddresses
-    if ($null -eq $ma) {
-        $s.Tickets.EmailIntegration.MonitoredAddresses = @()
-    }
-    elseif ($ma -is [string]) {
-        $trim = $ma.Trim()
-        $s.Tickets.EmailIntegration.MonitoredAddresses = if ($trim) { @($trim) } else { @() }
-    }
-    else {
-        $s.Tickets.EmailIntegration.MonitoredAddresses =
-            @($ma) | ForEach-Object { "$_".Trim() } | Where-Object { $_ }
-    }
-
-    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "LastProcessedByMailbox")) {
-        $s.Tickets.EmailIntegration | Add-Member -NotePropertyName LastProcessedByMailbox -NotePropertyValue @{} -Force
-    }
-
-    $lpm = $s.Tickets.EmailIntegration.LastProcessedByMailbox
-
-    if ($null -eq $lpm) {
-        $s.Tickets.EmailIntegration.LastProcessedByMailbox = @{}
-    }
-    elseif ($lpm -is [string]) {
-        $s.Tickets.EmailIntegration.LastProcessedByMailbox = @{}
-    }
-    elseif ($lpm -is [System.Collections.IDictionary]) {
-        # ok
-    }
-    else {
-        # PSCustomObject -> hashtable
-        $ht = @{}
-        foreach ($p in $lpm.PSObject.Properties) {
-            if ($p.Name) { $ht[$p.Name] = $p.Value }
-        }
-        $s.Tickets.EmailIntegration.LastProcessedByMailbox = $ht
-    }
-
-    return $s
+    # Bind to grid
+    $script:TicketsGrid.ItemsSource = $view
 }
+
+function Initialize-QOTicketsUI {
+    param(
+        [Parameter(Mandatory)]
+        $TicketsGrid,
+
+        [Parameter(Mandatory)]
+        $BtnRefreshTickets,
+
+        [Parameter(Mandatory)]
+        $BtnNewTicket
+    )
+
+    # Keep reference
+    $script:TicketsGrid = $TicketsGrid
+
+    # Allow inline editing (Title column is editable in XAML)
+    $TicketsGrid.IsReadOnly           = $false
+    $TicketsGrid.CanUserReorderColumns = $true
+    $TicketsGrid.CanUserResizeColumns  = $true
+
+    # Apply saved layout once the grid is loaded
+    $TicketsGrid.Add_Loaded({
+        Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+    })
+
+    # Save layout whenever columns are reordered
+    $TicketsGrid.Add_ColumnReordered({
+        param($sender,$eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) {
+            Save-QOTicketsColumnLayout -DataGrid $sender
+        }
+    })
+
+    # Save layout whenever a column width is changed
+    $TicketsGrid.Add_ColumnWidthChanged({
+        param($sender,$eventArgs)
+        if (-not $script:TicketsColumnLayoutApplying) {
+            Save-QOTicketsColumnLayout -DataGrid $sender
+        }
+    })
+
+    # Refresh button
+    $BtnRefreshTickets.Add_Click({
+        Update-QOTicketsGrid
+    })
+
+    # New test ticket button
+    $BtnNewTicket.Add_Click({
+        try {
+            $now = Get-Date
+
+            # New-QOTicket creates the in-memory ticket
+            $ticket = New-QOTicket `
+                -Title ("Test ticket {0}" -f $now.ToString("HH:mm")) `
+                -Description "Test ticket created from the UI." `
+                -Category "Testing" `
+                -Priority "Low"
+
+            # Add-QOTicket saves it into Tickets.json
+            Add-QOTicket -Ticket $ticket | Out-Null
+        }
+        catch {
+            Write-Warning "Tickets UI: failed to create test ticket. $_"
+        }
+
+        Update-QOTicketsGrid
+    })
+
+    # Initial load of data
+    Update-QOTicketsGrid
+}
+
+Export-ModuleMember -Function Initialize-QOTicketsUI, Update-QOTicketsGrid
+
+
+# ------------------------------
+# Quinn Optimiser Toolkit Settings helpers
+# ------------------------------
+
+# Where settings.json will live
+$script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
 
 function Get-QOSettings {
-
-    $defaults = Get-QODefaultSettings
-
     if (-not (Test-Path $script:QOSettingsPath)) {
+        # First run: create a default settings object
+        $default = [PSCustomObject]@{
+            TicketsColumnLayout = @()
+        }
+
         $dir = Split-Path $script:QOSettingsPath
         if (-not (Test-Path $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
         }
 
-        $defaults | ConvertTo-Json -Depth 8 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
-        return $defaults
+        $default | ConvertTo-Json -Depth 5 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+        return $default
     }
 
     $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
     if (-not $json) {
-        return $defaults
+        return [PSCustomObject]@{
+            TicketsColumnLayout = @()
+        }
     }
 
-    try {
-        $settings = $json | ConvertFrom-Json -ErrorAction Stop
-    }
-    catch {
-        # Backup the broken file and recreate clean defaults
-        try {
-            $dir = Split-Path $script:QOSettingsPath
-            $stamp = (Get-Date).ToString("yyyyMMdd-HHmmss")
-            $backup = Join-Path $dir ("Settings.broken.{0}.json" -f $stamp)
-            Copy-Item -Path $script:QOSettingsPath -Destination $backup -Force -ErrorAction SilentlyContinue
-        } catch { }
+    $settings = $json | ConvertFrom-Json
 
-        $defaults | ConvertTo-Json -Depth 8 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
-        return $defaults
+    # Make sure TicketsColumnLayout always exists
+    if (-not $settings.PSObject.Properties.Name -contains 'TicketsColumnLayout') {
+        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
     }
 
-    $settings = Repair-QOSettingsShape -s $settings
     return $settings
 }
 
 function Save-QOSettings {
-    param([Parameter(Mandatory)] $Settings)
+    param(
+        [Parameter(Mandatory)]
+        $Settings
+    )
 
     $dir = Split-Path $script:QOSettingsPath
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
-    $Settings = Repair-QOSettingsShape -s $Settings
-    $Settings | ConvertTo-Json -Depth 8 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+    $Settings | ConvertTo-Json -Depth 5 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
 }
 
+# ============================================================
+# Quinn Optimiser Toolkit - Global Settings helpers
+# ============================================================
 
+# Path for settings.json used across the toolkit
+$script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
 
-function Get-QOMonitoredEmailAddresses {
-    $s = Get-QOSettings
-    if ($s -and $s.Tickets -and $s.Tickets.EmailIntegration) {
-        return @($s.Tickets.EmailIntegration.MonitoredAddresses)
-    }
-    return @()
-}
+function Get-QOSettings {
+    if (-not (Test-Path $script:QOSettingsPath)) {
+        # First run: create a default settings object
+        $default = [PSCustomObject]@{
+            TicketsColumnLayout   = @()
+            TicketStorePath       = $null
+            LocalTicketBackupPath = $null
+        }
 
-function Add-QOMonitoredEmailAddress {
-    param([Parameter(Mandatory)][string]$Address)
+        $dir = Split-Path $script:QOSettingsPath
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
 
-    $addr = $Address.Trim()
-    if ([string]::IsNullOrWhiteSpace($addr)) { return $false }
-
-    $s = Get-QOSettings
-    $list = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-
-    if ($list -contains $addr) { return $false }
-
-    $s.Tickets.EmailIntegration.MonitoredAddresses = @($list + $addr | Select-Object -Unique)
-    Save-QOSettings -Settings $s
-    return $true
-}
-
-function Remove-QOMonitoredEmailAddress {
-    param([Parameter(Mandatory)][string]$Address)
-
-    $addr = $Address.Trim()
-    if ([string]::IsNullOrWhiteSpace($addr)) { return $false }
-
-    $s = Get-QOSettings
-    $list = @($s.Tickets.EmailIntegration.MonitoredAddresses)
-
-    $new = @($list | Where-Object { $_ -ne $addr })
-    $changed = ($new.Count -ne $list.Count)
-
-    if ($changed) {
-        $s.Tickets.EmailIntegration.MonitoredAddresses = $new
-        Save-QOSettings -Settings $s
+        $default | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+        return $default
     }
 
-    return $changed
+    $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
+    if (-not $json) {
+        return [PSCustomObject]@{
+            TicketsColumnLayout   = @()
+            TicketStorePath       = $null
+            LocalTicketBackupPath = $null
+        }
+    }
+
+    $settings = $json | ConvertFrom-Json
+
+    if (-not $settings.PSObject.Properties.Name -contains 'TicketsColumnLayout') {
+        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
+    }
+    if (-not $settings.PSObject.Properties.Name -contains 'TicketStorePath') {
+        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
+    }
+    if (-not $settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath') {
+        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
+    }
+
+    return $settings
 }
 
+function Save-QOSettings {
+    param(
+        [Parameter(Mandatory)]
+        $Settings
+    )
+
+    $dir = Split-Path $script:QOSettingsPath
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+}
 
 Export-ModuleMember -Function Get-QOSettings, Save-QOSettings
