@@ -68,7 +68,10 @@ try {
     Write-Host "Bootstrap log:$bootstrapLog"
     Write-Host ""
 
-    & $introPath -LogPath $introLog
+    # Force WPF to run in Windows PowerShell (STA) even if bootstrap was launched from pwsh
+    $psExe = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+    & $psExe -NoProfile -ExecutionPolicy Bypass -STA -File $introPath -LogPath $introLog
+
 }
 finally {
     try { Stop-Transcript | Out-Null } catch { }
