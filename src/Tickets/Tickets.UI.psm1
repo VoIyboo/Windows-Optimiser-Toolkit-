@@ -3,8 +3,10 @@
 
 $ErrorActionPreference = "Stop"
 
-Import-Module "$PSScriptRoot\Settings.psm1" -Force
-Import-Module (Join-Path $PSScriptRoot "Tickets.psm1") -Force
+# NOTE:
+# Do NOT import "$PSScriptRoot\Settings.psm1" (it does not exist in src\Tickets)
+# Do NOT import Tickets.psm1 from inside Tickets.psm1 (recursion).
+# This module is self-contained.
 
 # =====================================================================
 # SETTINGS ENGINE (LOCAL TO THIS MODULE)
@@ -79,6 +81,9 @@ function Get-QOSettings {
         $settings.TicketsColumnLayout = @()
     }
     elseif ($settings.TicketsColumnLayout -isnot [System.Collections.IEnumerable]) {
+        $settings.TicketsColumnLayout = @($settings.TicketsColumnLayout)
+    }
+    else {
         $settings.TicketsColumnLayout = @($settings.TicketsColumnLayout)
     }
 
