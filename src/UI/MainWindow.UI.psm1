@@ -128,6 +128,7 @@ function New-QOTMainWindow {
 
 function Initialize-QOTMainWindow {
     try {
+
         $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
         $window   = New-QOTMainWindow -XamlPath $xamlPath
 
@@ -230,24 +231,22 @@ function Start-QOTMainWindow {
         }
 
         if ($NonBlocking) {
-            # IMPORTANT: Do not output booleans to the pipeline
             [void]$window.Show()
-            try { [void]$window.Activate() } catch { }
+            try { $window.Activate() } catch { }
 
-            # Expose so Intro.ps1 can watch it
             $Global:QOTMainWindow = $window
-
             return $window
         }
 
+        # Blocking path: do not return the boolean result of ShowDialog
         [void]$window.ShowDialog()
+        return $window
     }
     catch {
         Write-Error "Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
         throw
     }
 }
-
 
 # -------------------------------------------------------------------
 # TAB SELECTION
