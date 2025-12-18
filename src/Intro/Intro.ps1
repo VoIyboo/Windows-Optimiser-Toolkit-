@@ -26,7 +26,7 @@ $script:QOTLogPath = $LogPath
 # -------------------------------------------------
 # Fallback logging (SCRIPT SCOPE, ALWAYS AVAILABLE)
 # -------------------------------------------------
-function script:Write-QLog {
+function Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
