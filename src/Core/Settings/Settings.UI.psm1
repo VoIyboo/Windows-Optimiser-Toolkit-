@@ -18,7 +18,10 @@ function New-QOTSettingsView {
         throw "SettingsWindow.xaml not found at $xamlPath"
     }
 
-    # Load SettingsWindow.xaml as XML and replace ONLY the root Window with a Grid
+    # ------------------------------------------------------------
+    # Convert SettingsWindow.xaml root <Window> to <Grid> safely
+    # (only remove Window-only attrs on the root, keep inner widths)
+    # ------------------------------------------------------------
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
 
     $win = $doc.DocumentElement
@@ -26,7 +29,7 @@ function New-QOTSettingsView {
         throw "SettingsWindow.xaml root must be <Window>."
     }
 
-    $ns = $win.NamespaceURI
+    $ns   = $win.NamespaceURI
     $grid = $doc.CreateElement("Grid", $ns)
 
     $removeAttrs = @(
@@ -58,13 +61,15 @@ function New-QOTSettingsView {
     $null = $doc.AppendChild($grid)
 
     $reader = New-Object System.Xml.XmlNodeReader ($doc)
-    $root = [System.Windows.Markup.XamlReader]::Load($reader)
+    $root   = [System.Windows.Markup.XamlReader]::Load($reader)
 
     if (-not $root) {
         throw "Failed to load Settings view from SettingsWindow.xaml"
     }
 
+    # ------------------------------------------------------------
     # Controls
+    # ------------------------------------------------------------
     $txtEmail = $root.FindName("TxtEmail")
     $btnAdd   = $root.FindName("BtnAdd")
     $btnRem   = $root.FindName("BtnRemove")
@@ -77,28 +82,28 @@ function New-QOTSettingsView {
     if (-not $list)     { throw "LstEmails not found in SettingsWindow.xaml" }
     if (-not $hint)     { throw "LblHint not found in SettingsWindow.xaml" }
 
-    function Set-QOControlText {
-        param(
-            [Parameter(Mandatory)] $Control,
-            [Parameter(Mandatory)]
-            [AllowEmptyString()]
-            [string] $Value
-        )
-    
-        if ($null -eq $Control) { return }
-    
-        if ($Control.PSObject.Properties.Match("Text").Count -gt 0) {
-            $Control.Text = $Value
+    # ------------------------------------------------------------
+    # Hint setter that works inside event handlers (closure)
+    # ------------------------------------------------------------
+    $SetHint = {
+        param([AllowEmptyString()][string]$Value)
+
+        if ($null -eq $hint) { return }
+
+        if ($hint.PSObject.Properties.Match("Text").Count -gt 0) {
+            $hint.Text = $Value
             return
         }
-    
-        if ($Control.PSObject.Properties.Match("Content").Count -gt 0) {
-            $Control.Content = $Value
+
+        if ($hint.PSObject.Properties.Match("Content").Count -gt 0) {
+            $hint.Content = $Value
             return
         }
     }
 
-
+    # ------------------------------------------------------------
+    # Settings helpers
+    # ------------------------------------------------------------
     function Ensure-SettingsShape {
         $s = Get-QOSettings
         if (-not $s) { $s = [pscustomobject]@{} }
@@ -127,13 +132,16 @@ function New-QOTSettingsView {
     }
 
     Refresh-List
-    Set-QOControlText -Control $hint -Value ""
+    & $SetHint ""
 
+    # ------------------------------------------------------------
+    # Events
+    # ------------------------------------------------------------
     $btnAdd.Add_Click({
         try {
             $addr = ($txtEmail.Text + "").Trim()
             if (-not $addr) {
-                Set-QOControlText -Control $hint -Value "Enter an email address."
+                & $SetHint "Enter an email address."
                 return
             }
 
@@ -141,7 +149,7 @@ function New-QOTSettingsView {
             $current = @($s.Tickets.EmailIntegration.MonitoredAddresses)
 
             if ($current -contains $addr) {
-                Set-QOControlText -Control $hint -Value "Already exists."
+                & $SetHint "Already exists."
                 return
             }
 
@@ -149,11 +157,11 @@ function New-QOTSettingsView {
             Save-QOSettings -Settings $s
 
             $txtEmail.Text = ""
-            Set-QOControlText -Control $hint -Value "Added $addr"
+            & $SetHint "Added $addr"
             Refresh-List
         }
         catch {
-            Set-QOControlText -Control $hint -Value "Add failed. Check logs."
+            & $SetHint "Add failed. Check logs."
         }
     })
 
@@ -161,7 +169,7 @@ function New-QOTSettingsView {
         try {
             $sel = $list.SelectedItem
             if (-not $sel) {
-                Set-QOControlText -Control $hint -Value "Select an address."
+                & $SetHint "Select an address."
                 return
             }
 
@@ -170,11 +178,11 @@ function New-QOTSettingsView {
                 @($s.Tickets.EmailIntegration.MonitoredAddresses | Where-Object { $_ -ne $sel })
 
             Save-QOSettings -Settings $s
-            Set-QOControlText -Control $hint -Value "Removed $sel"
+            & $SetHint "Removed $sel"
             Refresh-List
         }
         catch {
-            Set-QOControlText -Control $hint -Value "Remove failed. Check logs."
+            & $SetHint "Remove failed. Check logs."
         }
     })
 
