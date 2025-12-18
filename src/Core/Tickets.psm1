@@ -322,21 +322,39 @@ function Invoke-QOEmailTicketPoll {
 
             $inbox = $null
 
+            # Try match by store SMTP first (best case)
             try {
                 foreach ($store in @($ns.Folders)) {
                     try {
                         $storeSmtp = $null
                         try { $storeSmtp = $store.Store.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x0C1F001E") } catch { }
                         if ($storeSmtp -and ([string]$storeSmtp).ToLower() -eq ([string]$addr).ToLower()) {
-                            $inbox = $store.Folders.Item("Inbox")
-                            break
+                            try { $inbox = $store.Folders.Item("Inbox") } catch { $inbox = $null }
+                            if ($inbox) { break }
                         }
                     } catch { }
                 }
             } catch { }
-
+            
+            # Fallback: search any top level mailbox that contains an Inbox (shared mailboxes often land here)
+            if (-not $inbox) {
+                try {
+                    foreach ($root in @($ns.Folders)) {
+                        try {
+                            $candidate = $null
+                            try { $candidate = $root.Folders.Item("Inbox") } catch { $candidate = $null }
+                            if (-not $candidate) { continue }
+            
+                            # If we can read current user SMTP, we can accept any Inbox and filter messages later.
+                            $inbox = $candidate
+                            break
+                        } catch { }
+                    }
+                } catch { }
+            }
+            
             if (-not $inbox) { continue }
-
+            
             $items = $inbox.Items
             $items.Sort("[ReceivedTime]", $true)
 
