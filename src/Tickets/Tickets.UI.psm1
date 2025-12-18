@@ -3,6 +3,10 @@
 
 $ErrorActionPreference = "Stop"
 
+Import-Module (Join-Path $PSScriptRoot "..\Core\Settings.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1")  -Force -ErrorAction Stop
+
+
 # NOTE:
 # Do NOT import "$PSScriptRoot\Settings.psm1" (it does not exist in src\Tickets)
 # Do NOT import Tickets.psm1 from inside Tickets.psm1 (recursion).
