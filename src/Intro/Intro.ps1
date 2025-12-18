@@ -1,6 +1,6 @@
 # Intro.ps1
 # Fox splash startup for the Quinn Optimiser Toolkit
-# (progress + fade + swap to Main UI)
+# MainWindow.UI.psm1 will handle "Ready", wait 2s, fade, then close the splash.
 
 param(
     [switch]$SkipSplash,
@@ -10,9 +10,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# -------------------------------------------------
-# Log file path (always exists)
-# -------------------------------------------------
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
     if (-not (Test-Path $logDir)) {
@@ -23,9 +20,6 @@ if (-not $LogPath) {
 
 $script:QOTLogPath = $LogPath
 
-# -------------------------------------------------
-# Fallback logging (SCRIPT SCOPE, ALWAYS AVAILABLE)
-# -------------------------------------------------
 function Write-QLog {
     param(
         [string]$Message,
@@ -35,45 +29,29 @@ function Write-QLog {
     $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $line = "[$ts] [$Level] $Message"
 
-    try {
-        $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8
-    } catch { }
-
-    if (-not $Quiet) {
-        Write-Host $line
-    }
+    try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
+    if (-not $Quiet) { Write-Host $line }
 }
 
-# -------------------------------------------------
-# Silence noisy warnings
-# -------------------------------------------------
 $oldWarningPreference = $WarningPreference
 $WarningPreference    = "SilentlyContinue"
 
 try {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-    # -------------------------------------------------
-    # Resolve root + module paths
-    # -------------------------------------------------
     $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
     $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
-    # -------------------------------------------------
-    # Import Splash UI so New-QOTSplashWindow exists
-    # -------------------------------------------------
+    # Load Splash UI module so New-QOTSplashWindow exists
     $splashUIModule = Join-Path $rootPath "src\Intro\Splash.UI.psm1"
     if (Test-Path $splashUIModule) {
         Import-Module $splashUIModule -Force -ErrorAction SilentlyContinue
     }
 
-    # -------------------------------------------------
-    # Fox splash (Splash.xaml)
-    # -------------------------------------------------
+    # Create fox splash
     $splash = $null
-
     if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
         $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
         $splash     = New-QOTSplashWindow -Path $splashXaml
@@ -104,78 +82,40 @@ try {
 
     function Refresh-FoxSplash {
         if (-not $splash) { return }
-        $splash.Dispatcher.Invoke(
-            [action]{},
-            [System.Windows.Threading.DispatcherPriority]::Background
-        )
+        $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
     }
 
-    function FadeOut-AndCloseFoxSplash {
-        if (-not $splash) { return }
-
-        $splash.Dispatcher.Invoke([action]{
-            $splash.Topmost = $false
-
-            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-            $anim.From     = 1
-            $anim.To       = 0
-            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
-
-            $splash.BeginAnimation(
-                [System.Windows.Window]::OpacityProperty,
-                $anim
-            )
-        })
-
-        Start-Sleep -Milliseconds 330
-
-        try {
-            $splash.Dispatcher.Invoke([action]{ $splash.Close() })
-        } catch { }
-    }
-
-    # -------------------------------------------------
-    # Loading stages shown on fox splash
-    # -------------------------------------------------
-    Set-FoxSplash 5   "Starting Quinn Optimiser Toolkit..."
+    # Progress phases
+    Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
     Refresh-FoxSplash
     Start-Sleep -Milliseconds 150
 
-    Set-FoxSplash 20  "Loading config..."
+    Set-FoxSplash 20 "Loading config..."
     Refresh-FoxSplash
     if (Test-Path $configModule) {
         Import-Module $configModule -Force -ErrorAction SilentlyContinue
     }
 
-    Set-FoxSplash 40  "Loading logging..."
+    Set-FoxSplash 40 "Loading logging..."
     Refresh-FoxSplash
     if (Test-Path $loggingModule) {
         Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
     }
 
-    Set-FoxSplash 65  "Loading engine..."
+    Set-FoxSplash 65 "Loading engine..."
     Refresh-FoxSplash
     if (-not (Test-Path $engineModule)) {
         throw "Engine module not found at $engineModule"
     }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    Set-FoxSplash 85  "Preparing UI..."
+    Set-FoxSplash 85 "Preparing UI..."
     Refresh-FoxSplash
-    Start-Sleep -Milliseconds 200
-
-    Set-FoxSplash 100 "Ready"
-    Refresh-FoxSplash
-    Start-Sleep -Seconds 2
-
-    # -------------------------------------------------
-    # Fade out splash first, then start main UI
-    # -------------------------------------------------
-    FadeOut-AndCloseFoxSplash
 
     Write-QLog "Starting main window" "INFO"
-    Start-QOTMain -RootPath $rootPath
-    Write-QLog "Intro completed" "INFO"
+
+    # Important: MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
+    Start-QOTMain -RootPath $rootPath -SplashWindow $splash
 }
 finally {
     $WarningPreference = $oldWarningPreference
