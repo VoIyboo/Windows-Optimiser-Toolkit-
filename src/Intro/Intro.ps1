@@ -10,9 +10,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# -------------------------------------------------
-# Log file path (always exists)
-# -------------------------------------------------
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
     if (-not (Test-Path $logDir)) {
@@ -23,14 +20,9 @@ if (-not $LogPath) {
 
 $script:QOTLogPath = $LogPath
 
-# -------------------------------------------------
-# Fallback logging (ALWAYS AVAILABLE, even inside event handlers)
-# -------------------------------------------------
-function global:Write-QLog {
-    param(
-        [string]$Message,
-        [string]$Level = "INFO"
-    )
+# This logger is a scriptblock, so it works reliably even when called from other scopes.
+$script:QOTLog = {
+    param([string]$Message, [string]$Level = "INFO")
 
     $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $line = "[$ts] [$Level] $Message"
@@ -39,9 +31,6 @@ function global:Write-QLog {
     if (-not $Quiet) { Write-Host $line }
 }
 
-# -------------------------------------------------
-# Silence noisy warnings
-# -------------------------------------------------
 $oldWarningPreference = $WarningPreference
 $WarningPreference    = "SilentlyContinue"
 
@@ -73,10 +62,7 @@ try {
     }
 
     function Set-FoxSplash {
-        param(
-            [int]$Percent,
-            [string]$Text
-        )
+        param([int]$Percent, [string]$Text)
 
         if (-not $splash) { return }
 
@@ -94,37 +80,32 @@ try {
         $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
     }
 
-    # Progress phases
     Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
     Refresh-FoxSplash
     Start-Sleep -Milliseconds 150
 
     Set-FoxSplash 20 "Loading config..."
     Refresh-FoxSplash
-    if (Test-Path $configModule) {
-        Import-Module $configModule -Force -ErrorAction SilentlyContinue
-    }
+    if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
 
     Set-FoxSplash 40 "Loading logging..."
     Refresh-FoxSplash
-    if (Test-Path $loggingModule) {
-        Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
-    }
+    if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
 
     Set-FoxSplash 65 "Loading engine..."
     Refresh-FoxSplash
-    if (-not (Test-Path $engineModule)) {
-        throw "Engine module not found at $engineModule"
-    }
+    if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
     Set-FoxSplash 85 "Preparing UI..."
     Refresh-FoxSplash
 
-    Write-QLog "Starting main window" "INFO"
+    & $script:QOTLog "Starting main window" "INFO"
 
-    # Important: Start-QOTMain must accept -SplashWindow OR ignore it safely.
+    # MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
     Start-QOTMain -RootPath $rootPath -SplashWindow $splash
+
+    & $script:QOTLog "Intro handed off to main window" "INFO"
 }
 finally {
     $WarningPreference = $oldWarningPreference
