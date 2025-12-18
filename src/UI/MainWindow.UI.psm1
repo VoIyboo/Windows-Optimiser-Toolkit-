@@ -12,21 +12,22 @@ function Start-QOTMainWindow {
     $basePath = Join-Path $PSScriptRoot ".."
 
     # Core imports (hard)
-    Import-Module (Join-Path $basePath "Core\Config\Config.psm1")     -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1")   -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
 
-    # Core imports (use your actual folder structure)
+    # Core imports (your actual structure)
     Import-Module (Join-Path $basePath "Core\Settings\Settings.psm1") -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Tickets.psm1")           -Force -ErrorAction Stop
 
-    # UI modules (soft so one broken tab doesn't kill the app)
-    Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")               -Force -ErrorAction SilentlyContinue
+    # UI modules (soft)
+    Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # IMPORTANT: remove stale function BEFORE importing Tickets UI
+    # Remove stale function BEFORE importing Tickets UI
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction SilentlyContinue
+    # Import Settings UI from correct location
+    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction SilentlyContinue
 
     # Load XAML for MainWindow
     $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
@@ -51,23 +52,32 @@ function Start-QOTMainWindow {
         }
     } catch { }
 
-    # Wire Settings button
+    # Wire Settings button (opens a popup window)
     try {
         $btnSettings = $window.FindName("BtnSettings")
         if ($btnSettings) {
             $btnSettings.Add_Click({
                 try {
-                    if (Get-Command Show-QOSettingsWindow -ErrorAction SilentlyContinue) {
-                        Show-QOSettingsWindow -Owner $window
+                    if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
+                        [System.Windows.MessageBox]::Show("Settings view not available. Check Core\Settings\Settings.UI.psm1 imports.") | Out-Null
+                        return
                     }
-                    elseif (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue) {
-                        Initialize-QOSettingsUI -Window $window
-                    }
-                    else {
-                        [System.Windows.MessageBox]::Show("Settings UI function not found. Check Core\Settings\Settings.UI.psm1 exports.") | Out-Null
-                    }
-                } catch {
-                    [System.Windows.MessageBox]::Show("Failed to open Settings.`r`n$($_.Exception.Message)") | Out-Null
+
+                    $content = New-QOTSettingsView
+
+                    $sw = New-Object System.Windows.Window
+                    $sw.Title = "Settings"
+                    $sw.Width = 520
+                    $sw.Height = 360
+                    $sw.WindowStartupLocation = "CenterOwner"
+                    $sw.Owner = $window
+                    $sw.Background = [System.Windows.Media.Brushes]::Transparent
+                    $sw.Content = $content
+
+                    $null = $sw.ShowDialog()
+                }
+                catch {
+                    [System.Windows.MessageBox]::Show("Failed to open Settings.`r`n$($This.Exception.Message)") | Out-Null
                 }
             })
         }
