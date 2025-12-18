@@ -18,17 +18,6 @@ if (-not $LogPath) {
 }
 $script:QOTLogPath = $LogPath
 
-function Write-QLog {
-    param(
-        [string]$Message,
-        [string]$Level = "INFO"
-    )
-    $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $line = "[$ts] [$Level] $Message"
-    try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
-    if (-not $Quiet) { Write-Host $line }
-}
-
 function Assert-ScriptBlock {
     param(
         [Parameter(Mandatory)]$Value,
@@ -52,7 +41,6 @@ function Get-MainWindowFromResult {
         }
 
         $p = $Result.PSObject.Properties
-
         if ($p["MainWindow"] -and $Result.MainWindow -is [System.Windows.Window]) { return $Result.MainWindow }
         if ($p["Window"]     -and $Result.Window     -is [System.Windows.Window]) { return $Result.Window }
         if ($p["UI"]         -and $Result.UI         -is [System.Windows.Window]) { return $Result.UI }
@@ -66,6 +54,18 @@ $WarningPreference = "SilentlyContinue"
 
 try {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+
+    # Make logging callable inside timers / event handlers
+    [scriptblock]$script:WriteLog = {
+        param(
+            [string]$Message,
+            [string]$Level = "INFO"
+        )
+        $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $line = "[$ts] [$Level] $Message"
+        try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
+        if (-not $Quiet) { Write-Host $line }
+    }.GetNewClosure()
 
     $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
@@ -145,13 +145,14 @@ try {
             $timer.Add_Tick( ({
                 try { $timerLocal.Stop() } catch { }
                 try { $script:FadeOutAndClose.Invoke() } catch { }
-                Write-QLog "Intro completed ($Reason)" "INFO"
+                $script:WriteLog.Invoke("Intro completed ($Reason)", "INFO")
             }).GetNewClosure() )
 
             $timer.Start()
         } catch { }
     }.GetNewClosure()
 
+    Assert-ScriptBlock $script:WriteLog        '$script:WriteLog'
     Assert-ScriptBlock $script:SetFoxSplash    '$script:SetFoxSplash'
     Assert-ScriptBlock $script:FadeOutAndClose '$script:FadeOutAndClose'
     Assert-ScriptBlock $script:CompleteIntro   '$script:CompleteIntro'
@@ -172,14 +173,14 @@ try {
     Import-Module $engineModule -Force -ErrorAction Stop
 
     $script:SetFoxSplash.Invoke(85, "Preparing UI...")
-    Write-QLog "Starting main window" "INFO"
+    $script:WriteLog.Invoke("Starting main window", "INFO")
 
     $startResult = $null
     try {
         $startResult = Start-QOTMain -RootPath $rootPath
     } catch {
-        Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
-        Write-QLog ("Stack: " + $_.ScriptStackTrace) "ERROR"
+        $script:WriteLog.Invoke(("Start-QOTMain failed: " + $_.Exception.Message), "ERROR")
+        $script:WriteLog.Invoke(("Stack: " + $_.ScriptStackTrace), "ERROR")
         throw
     }
 
@@ -188,8 +189,8 @@ try {
     $startType = $(if ($startResult) { $startResult.GetType().FullName } else { "NULL" })
     $mwType    = $(if ($mw) { $mw.GetType().FullName } else { "NULL" })
 
-    Write-QLog ("Start-QOTMain returned type: " + $startType) "INFO"
-    Write-QLog ("Resolved main window type: " + $mwType) "INFO"
+    $script:WriteLog.Invoke(("Start-QOTMain returned type: " + $startType), "INFO")
+    $script:WriteLog.Invoke(("Resolved main window type: " + $mwType), "INFO")
 
     $app = [System.Windows.Application]::Current
     if (-not $app) {
@@ -216,7 +217,7 @@ try {
                 try { $script:CompleteIntro.Invoke("contentrendered") } catch { }
             }).GetNewClosure() )
         } catch {
-            Write-QLog ("Failed to attach ContentRendered: " + $_.Exception.Message) "WARN"
+            $script:WriteLog.Invoke(("Failed to attach ContentRendered: " + $_.Exception.Message), "WARN")
         }
 
         try { if (-not $mw.IsVisible) { $mw.Show() } } catch { }
@@ -224,13 +225,13 @@ try {
         try {
             [void]$app.Run()
         } catch {
-            Write-QLog ("App.Run failed: " + $_.Exception.Message) "ERROR"
-            Write-QLog ("Stack: " + $_.ScriptStackTrace) "ERROR"
+            $script:WriteLog.Invoke(("App.Run failed: " + $_.Exception.Message), "ERROR")
+            $script:WriteLog.Invoke(("Stack: " + $_.ScriptStackTrace), "ERROR")
             try { $script:CompleteIntro.Invoke("run-exception") } catch { }
         }
     }
     else {
-        Write-QLog "Main window could not be resolved. Skipping app loop." "ERROR"
+        $script:WriteLog.Invoke("Main window could not be resolved. Skipping app loop.", "ERROR")
         try { $fallbackLocal.Stop() } catch { }
         try { $script:CompleteIntro.Invoke("mw-null") } catch { }
         try { $app.Shutdown() } catch { }
