@@ -316,7 +316,6 @@
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <!-- These buttons can exist, UI code can hide them -->
                                 <StackPanel Grid.Row="0"
                                             Orientation="Horizontal"
                                             HorizontalAlignment="Right"
@@ -369,7 +368,6 @@
                                           GridLinesVisibility="Horizontal"
                                           BorderBrush="{StaticResource BorderBrush}">
 
-                                    <!-- Grey out already installed rows -->
                                     <DataGrid.RowStyle>
                                         <Style TargetType="DataGridRow">
                                             <Setter Property="Background" Value="#020617"/>
@@ -429,8 +427,10 @@
                     </Grid>
                 </TabItem>
 
-                <!-- Settings (NEW TAB) -->
-                <TabItem x:Name="TabSettings" Header="Settings">
+                <!-- Settings (HIDDEN TAB, GEAR ONLY) -->
+                <TabItem x:Name="TabSettings"
+                         Header="Settings"
+                         Visibility="Collapsed">
                     <Grid Margin="5,10,5,5">
                         <GroupBox Header="Settings" Margin="0">
                             <ContentControl x:Name="SettingsHost" />
