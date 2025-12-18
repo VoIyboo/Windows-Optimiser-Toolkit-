@@ -1,13 +1,14 @@
 # Engine.psm1
 # Coordinates major operations by calling the feature modules
-# Splash is handled by Intro.ps1 + MainWindow.UI.psm1
+# Splash is NOT handled here. Intro.ps1 owns creating the splash.
+# MainWindow.UI.psm1 handles "Ready", wait 2s, fade, close when SplashWindow is passed.
 
 $ErrorActionPreference = "Stop"
 
 Import-Module "$PSScriptRoot\..\Config\Config.psm1"   -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction SilentlyContinue
 
-# Feature modules (best effort)
+# Import feature modules (best effort)
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1"           -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction SilentlyContinue
 
@@ -17,11 +18,13 @@ Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps.psm1" -Force -ErrorAct
 
 # Advanced
 Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"      -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1" -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"  -Force -ErrorAction SilentlyContinue
 
 function Set-QOTStatus {
     param([string]$Text)
-    try { Write-QLog "STATUS: $Text" } catch { }
+
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "STATUS: $Text" } } catch { }
+
     if (Get-Command Set-QOTSummary -ErrorAction SilentlyContinue) {
         Set-QOTSummary -Text $Text
     }
@@ -29,11 +32,11 @@ function Set-QOTStatus {
 
 function Set-QOTProgress {
     param([int]$Percent)
-    try { Write-QLog "Progress: $Percent%" } catch { }
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Progress: $Percent%" } } catch { }
 }
 
 function Invoke-QOTRun {
-    try { Write-QLog "Starting full run" } catch { }
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Starting full run" } } catch { }
     Set-QOTStatus "Running..."
     Set-QOTProgress 0
 
@@ -44,29 +47,29 @@ function Invoke-QOTRun {
         if (Get-Command Start-QOTTweaks -ErrorAction SilentlyContinue) { Start-QOTTweaks }
         Set-QOTProgress 66
 
-        try { Write-QLog "Run completed" } catch { }
+        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Run completed" } } catch { }
         Set-QOTProgress 100
         Set-QOTStatus "Completed"
     }
     catch {
-        try { Write-QLog "Error during run: $($_.Exception.Message)" "ERROR" } catch { }
+        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Error during run: $($_.Exception.Message)" "ERROR" } } catch { }
         Set-QOTStatus "Error occurred"
     }
 }
 
 function Invoke-QOTAdvancedRun {
-    try { Write-QLog "Starting Advanced run" } catch { }
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Starting Advanced run" } } catch { }
     Set-QOTStatus "Running Advanced Tasks..."
 
     try {
         if (Get-Command Start-QOTAdvancedCleaning -ErrorAction SilentlyContinue) { Start-QOTAdvancedCleaning }
         if (Get-Command Start-QOTNetworkFix -ErrorAction SilentlyContinue) { Start-QOTNetworkFix }
 
-        try { Write-QLog "Advanced run completed" } catch { }
+        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Advanced run completed" } } catch { }
         Set-QOTStatus "Advanced Completed"
     }
     catch {
-        try { Write-QLog "Error in advanced run: $($_.Exception.Message)" "ERROR" } catch { }
+        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Error in advanced run: $($_.Exception.Message)" "ERROR" } } catch { }
         Set-QOTStatus "Advanced Error"
     }
 }
@@ -77,12 +80,12 @@ function Invoke-QOTStartupWarmup {
         [string]$RootPath
     )
 
-    try { Write-QLog "Startup warmup: begin" } catch { }
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Startup warmup: begin" } } catch { }
 
     try { if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) { $null = Test-QOTWingetAvailable } } catch { }
     try { if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) { $null = Get-QOTCommonAppsCatalogue } } catch { }
 
-    try { Write-QLog "Startup warmup: end" } catch { }
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Startup warmup: end" } } catch { }
 }
 
 function Start-QOTMain {
@@ -90,10 +93,11 @@ function Start-QOTMain {
         [Parameter(Mandatory)]
         [string]$RootPath,
 
+        [Parameter(Mandatory = $false)]
         [System.Windows.Window]$SplashWindow
     )
 
-    try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
+    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Start-QOTMain called. Root = $RootPath" } } catch { }
 
     if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
         $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
@@ -110,7 +114,7 @@ function Start-QOTMain {
         throw "UI module not loaded: Start-QOTMainWindow not found"
     }
 
-    # Start main window (modal). The UI module will handle splash closing.
+    # This call blocks (ShowDialog) and keeps the app alive, while ContentRendered can still close the splash.
     Start-QOTMainWindow -SplashWindow $SplashWindow
 }
 
