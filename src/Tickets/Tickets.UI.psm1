@@ -382,6 +382,102 @@ function Update-QOTicketsGrid {
     $script:TicketsGrid.ItemsSource = @($rows)
 }
 
+function Show-QONewTicketDialog {
+    param(
+        [string] $DefaultTitle = "",
+        [string] $DefaultBody  = ""
+    )
+
+    Add-Type -AssemblyName PresentationFramework | Out-Null
+
+    $xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New Ticket"
+        Height="360" Width="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#0F172A"
+        Foreground="White">
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+      <TextBlock Text="Title" Opacity="0.85"/>
+      <TextBox Name="TbTitle" Height="28" Background="#020617" Foreground="White" BorderBrush="#374151"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Margin="0,0,0,10">
+      <TextBlock Text="Priority" Opacity="0.85"/>
+      <ComboBox Name="CbPriority" Height="28" Background="#020617" Foreground="White" BorderBrush="#374151">
+        <ComboBoxItem Content="Low" IsSelected="True"/>
+        <ComboBoxItem Content="Medium"/>
+        <ComboBoxItem Content="High"/>
+      </ComboBox>
+    </StackPanel>
+
+    <StackPanel Grid.Row="2" Margin="0,0,0,10">
+      <TextBlock Text="Body" Opacity="0.85"/>
+      <TextBox Name="TbBody" AcceptsReturn="True" TextWrapping="Wrap"
+               VerticalScrollBarVisibility="Auto"
+               Background="#020617" Foreground="White" BorderBrush="#374151"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Name="BtnCancel" Width="90" Height="30" Margin="0,0,10,0" Content="Cancel"
+              Background="#111827" BorderBrush="#374151" Foreground="White"/>
+      <Button Name="BtnCreate" Width="90" Height="30" Content="Create"
+              Background="#2563EB" BorderBrush="#2563EB" Foreground="White"/>
+    </StackPanel>
+  </Grid>
+</Window>
+"@
+
+    $win = [System.Windows.Markup.XamlReader]::Parse($xaml)
+
+    $tbTitle   = $win.FindName("TbTitle")
+    $tbBody    = $win.FindName("TbBody")
+    $cbPrio    = $win.FindName("CbPriority")
+    $btnCancel = $win.FindName("BtnCancel")
+    $btnCreate = $win.FindName("BtnCreate")
+
+    $tbTitle.Text = $DefaultTitle
+    $tbBody.Text  = $DefaultBody
+
+    $result = $null
+
+    $btnCancel.Add_Click({ $win.DialogResult = $false })
+    $btnCreate.Add_Click({
+        $title = [string]$tbTitle.Text
+        $body  = [string]$tbBody.Text
+
+        $prioItem = $cbPrio.SelectedItem
+        $prioText = ""
+        try { $prioText = [string]$prioItem.Content } catch { $prioText = "Low" }
+
+        if ([string]::IsNullOrWhiteSpace($title)) { return }
+
+        $result = [pscustomobject]@{
+            Title    = $title.Trim()
+            Body     = $body
+            Priority = $prioText
+        }
+
+        $win.DialogResult = $true
+    })
+
+    $null = $win.ShowDialog()
+    return $result
+}
+
+
+
+
 # -------------------------------------------------------------------
 # Init
 # -------------------------------------------------------------------
