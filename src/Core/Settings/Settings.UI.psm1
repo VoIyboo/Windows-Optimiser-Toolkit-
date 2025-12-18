@@ -6,8 +6,7 @@ Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction S
 
 function Set-QOHintText {
     param(
-        [Parameter(Mandatory)] $HintControl,
-        [Parameter(Mandatory)]
+        $HintControl,
         [AllowEmptyString()]
         [string] $Text
     )
