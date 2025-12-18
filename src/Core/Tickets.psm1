@@ -287,6 +287,107 @@ function Get-QOKnownAgents {
     }
 }
 
+function Invoke-QOEmailTicketPoll {
+    param(
+        [int] $MaxItemsPerMailbox = 10
+    )
+
+    $mailboxes = @()
+
+    if (Get-Command Get-QOMonitoredEmailAddresses -ErrorAction SilentlyContinue) {
+        $mailboxes = @(Get-QOMonitoredEmailAddresses)
+    } else {
+        $s = Get-QOSettings
+        if ($s -and $s.PSObject.Properties.Name -contains "MonitoredEmailAddresses") {
+            $mailboxes = @($s.MonitoredEmailAddresses)
+        }
+    }
+
+    $mailboxes = @($mailboxes | Where-Object { $_ -and -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+
+    if (-not $mailboxes -or $mailboxes.Count -lt 1) {
+        return @()
+    }
+
+    $created = @()
+
+    try {
+        $outlook = $null
+        try { $outlook = [Runtime.InteropServices.Marshal]::GetActiveObject("Outlook.Application") } catch { }
+        if (-not $outlook) { $outlook = New-Object -ComObject Outlook.Application }
+
+        $ns = $outlook.GetNamespace("MAPI")
+
+        foreach ($addr in $mailboxes) {
+
+            $inbox = $null
+
+            try {
+                foreach ($store in @($ns.Folders)) {
+                    try {
+                        $storeSmtp = $null
+                        try { $storeSmtp = $store.Store.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x0C1F001E") } catch { }
+                        if ($storeSmtp -and ([string]$storeSmtp).ToLower() -eq ([string]$addr).ToLower()) {
+                            $inbox = $store.Folders.Item("Inbox")
+                            break
+                        }
+                    } catch { }
+                }
+            } catch { }
+
+            if (-not $inbox) { continue }
+
+            $items = $inbox.Items
+            $items.Sort("[ReceivedTime]", $true)
+
+            $restricted = $null
+            try { $restricted = $items.Restrict("[UnRead] = true") } catch { $restricted = $items }
+
+            $count = 0
+
+            foreach ($m in @($restricted)) {
+                if ($count -ge $MaxItemsPerMailbox) { break }
+                $count++
+
+                try {
+                    if (-not $m.Subject) { continue }
+
+                    $msgId = $null
+                    try { $msgId = [string]$m.EntryID } catch { }
+
+                    $db = Get-QOTickets
+                    $existing = $false
+                    if ($msgId) {
+                        $existing = @($db.Tickets) | Where-Object { $_.PSObject.Properties.Name -contains "SourceMessageId" -and [string]$_.SourceMessageId -eq $msgId } | Select-Object -First 1
+                    }
+                    if ($existing) { continue }
+
+                    $body = ""
+                    try { $body = [string]$m.Body } catch { }
+
+                    $t = New-QOTicket -Title ([string]$m.Subject) -Description $body -Category "Email" -Priority "Normal"
+                    $t | Add-Member -NotePropertyName SourceMailbox   -NotePropertyValue ([string]$addr) -Force
+                    $t | Add-Member -NotePropertyName SourceMessageId -NotePropertyValue ([string]$msgId) -Force
+                    $t | Add-Member -NotePropertyName ReceivedAt      -NotePropertyValue ((Get-Date).ToString("o")) -Force
+
+                    Add-QOTicket -Ticket $t | Out-Null
+                    $created += $t
+
+                    try {
+                        $m.UnRead = $false
+                        $m.Save()
+                    } catch { }
+
+                } catch { }
+            }
+        }
+
+    } catch {
+        return @()
+    }
+
+    return @($created)
+}
 
 
 Export-ModuleMember -Function `
