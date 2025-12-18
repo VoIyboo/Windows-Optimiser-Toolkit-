@@ -4,6 +4,9 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
+# Remember the last textbox the user was typing into (before clicking buttons)
+$script:QO_LastFocusedTextBox = $null
+
 function Write-QOSettingsUILog {
     param([string]$Message)
 
@@ -162,11 +165,33 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
+    # Capture the textbox the user was typing into BEFORE focus moves to the button
+    $btnAdd.Add_PreviewMouseDown({
+        try {
+            $fe = [System.Windows.Input.Keyboard]::FocusedElement
+            if ($fe -is [System.Windows.Controls.TextBox]) {
+                $script:QO_LastFocusedTextBox = $fe
+            }
+        } catch { }
+    })
+
+    $btnRem.Add_PreviewMouseDown({
+        try {
+            $fe = [System.Windows.Input.Keyboard]::FocusedElement
+            if ($fe -is [System.Windows.Controls.TextBox]) {
+                $script:QO_LastFocusedTextBox = $fe
+            }
+        } catch { }
+    })
+
     # Add
     $btnAdd.Add_Click({
         try {
-            $addr = ($txtEmail.Text + "").Trim()
-            Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
+            $inputBox = $script:QO_LastFocusedTextBox
+            if (-not $inputBox) { $inputBox = $txtEmail }  # fallback
+
+            $addr = (($inputBox.Text + "").Trim())
+            Write-QOSettingsUILog ("Add clicked. Using TextBox Name='" + ($inputBox.Name + "") + "' Input='" + $addr + "'")
 
             if (-not $addr) { return }
 
@@ -174,13 +199,13 @@ function New-QOTSettingsView {
             foreach ($x in $addresses) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
                     Write-QOSettingsUILog "Already existed"
-                    $txtEmail.Text = ""
+                    $inputBox.Text = ""
                     return
                 }
             }
 
             $addresses.Add($addr)
-            $txtEmail.Text = ""
+            $inputBox.Text = ""
 
             Save-QOMonitoredAddresses -Collection $addresses
             Write-QOSettingsUILog "Added + saved"
