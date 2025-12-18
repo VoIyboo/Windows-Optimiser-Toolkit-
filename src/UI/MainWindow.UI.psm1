@@ -1,288 +1,55 @@
-# MainWindow.UI.psm1
+# src\UI\MainWindow.UI.psm1
 # WPF main window loader for the Quinn Optimiser Toolkit (Studio Voly Edition)
 
 $ErrorActionPreference = "Stop"
 
-$basePath = Join-Path $PSScriptRoot ".."
-
-Import-Module (Join-Path $basePath "Core\Config\Config.psm1")    -Force -ErrorAction Stop
-Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1")  -Force -ErrorAction Stop
-
-Import-Module (Join-Path $basePath "Core\Settings.psm1") -Force -ErrorAction SilentlyContinue
-Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction SilentlyContinue
-
-Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1") -Force -ErrorAction SilentlyContinue
-
-Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
-
-$script:IsSettingsShown = $false
-
-$script:MainWindow   = $null
-$script:StatusLabel  = $null
-$script:SummaryText  = $null
-$script:MainProgress = $null
-$script:RunButton    = $null
-$script:SettingsView = $null
-$script:LastTab      = $null
-
-function Set-QOTControlText {
-    param(
-        [Parameter(Mandatory)] $Control,
-        [Parameter(Mandatory)] [string] $Value
-    )
-
-    if (-not $Control) { return }
-
-    try {
-        if ($Control -is [System.Windows.Controls.TextBlock] -or $Control -is [System.Windows.Controls.TextBox]) {
-            $Control.Text = $Value
-            return
-        }
-
-        if ($Control -is [System.Windows.Controls.Label] -or $Control -is [System.Windows.Controls.ContentControl]) {
-            $Control.Content = $Value
-            return
-        }
-
-        if ($Control.PSObject.Properties.Name -contains 'Text')    { $Control.Text    = $Value; return }
-        if ($Control.PSObject.Properties.Name -contains 'Content') { $Control.Content = $Value; return }
-    } catch { }
-}
-
-function New-QOTMainWindow {
-    param(
-        [Parameter(Mandatory)]
-        [string]$XamlPath
-    )
-
-    if (-not (Test-Path -LiteralPath $XamlPath)) {
-        throw "Main window XAML not found at: $XamlPath"
-    }
-
-    try {
-        $xamlText = Get-Content -LiteralPath $XamlPath -Raw
-        $xml      = [xml]$xamlText
-        $reader   = New-Object System.Xml.XmlNodeReader $xml
-        $window   = [Windows.Markup.XamlReader]::Load($reader)
-
-        if (-not $window) {
-            throw "XamlReader returned null (unknown XAML parse failure)."
-        }
-
-        $iconPath = Join-Path $PSScriptRoot "icon.ico"
-        if (Test-Path -LiteralPath $iconPath) {
-            Add-Type -AssemblyName PresentationCore -ErrorAction SilentlyContinue
-
-            $bmp = New-Object System.Windows.Media.Imaging.BitmapImage
-            $bmp.BeginInit()
-            $bmp.UriSource = New-Object System.Uri($iconPath, [System.UriKind]::Absolute)
-            $bmp.EndInit()
-            $window.Icon = $bmp
-        }
-
-        return $window
-    }
-    catch {
-        throw "Failed to load MainWindow.xaml. $($_.Exception.Message)"
-    }
-}
-
-function Initialize-QOTMainWindow {
-    try {
-        $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
-        $window   = New-QOTMainWindow -XamlPath $xamlPath
-
-        if (-not $window) {
-            throw "New-QOTMainWindow returned null."
-        }
-
-        $script:MainWindow   = $window
-        $script:StatusLabel  = $window.FindName("StatusLabel")
-        $script:SummaryText  = $window.FindName("SummaryText")
-        $script:MainProgress = $window.FindName("MainProgress")
-        $script:RunButton    = $window.FindName("RunButton")
-
-        # Apps Tab
-        $BtnScanApps      = $window.FindName("BtnScanApps")
-        $BtnUninstallApps = $window.FindName("BtnUninstallSelected")
-        $AppsGrid         = $window.FindName("AppsGrid")
-        $InstallGrid      = $window.FindName("InstallGrid")
-
-        if (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue) {
-            if ($BtnScanApps -and $BtnUninstallApps -and $AppsGrid -and $InstallGrid) {
-                Initialize-QOTAppsUI `
-                    -BtnScanApps          $BtnScanApps `
-                    -BtnUninstallSelected $BtnUninstallApps `
-                    -AppsGrid             $AppsGrid `
-                    -InstallGrid          $InstallGrid `
-                    -RunButton            $script:RunButton
-            }
-        }
-
-        # Tickets Tab
-        $TicketsGrid       = $window.FindName("TicketsGrid")
-        $BtnNewTicket      = $window.FindName("BtnNewTicket")
-        $BtnRefreshTickets = $window.FindName("BtnRefreshTickets")
-        $BtnDeleteTicket   = $window.FindName("BtnDeleteTicket")
-
-        if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
-            if ($TicketsGrid -and $BtnNewTicket -and $BtnRefreshTickets -and $BtnDeleteTicket) {
-                Initialize-QOTicketsUI `
-                    -TicketsGrid       $TicketsGrid `
-                    -BtnRefreshTickets $BtnRefreshTickets `
-                    -BtnNewTicket      $BtnNewTicket `
-                    -BtnDeleteTicket   $BtnDeleteTicket
-            }
-        }
-
-        # Settings button
-        $BtnSettings = $window.FindName("BtnSettings")
-        if ($BtnSettings) {
-            $BtnSettings.Add_Click({
-                if ($script:IsSettingsShown) { Restore-QOTMainTabs }
-                else { Show-QOTSettingsPage }
-            })
-        }
-
-        # Settings init
-        if (-not $global:QOSettings) {
-            if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
-                $global:QOSettings = Get-QOSettings
-            } else {
-                $global:QOSettings = [pscustomobject]@{ PreferredStartTab = "Cleaning" }
-            }
-        }
-
-        Select-QOTPreferredTab -PreferredTab $global:QOSettings.PreferredStartTab
-
-        Set-QOTControlText -Control $script:StatusLabel -Value "Idle"
-
-        if ($script:MainProgress) {
-            $script:MainProgress.Minimum = 0
-            $script:MainProgress.Maximum = 100
-            $script:MainProgress.Value   = 0
-        }
-
-        return $window
-    }
-    catch {
-        throw "Initialize-QOTMainWindow failed: $($_.Exception.Message)"
-    }
-}
-
 function Start-QOTMainWindow {
     param(
-        [Parameter(Mandatory = $false)]
-        [System.Windows.Window]$SplashWindow
+        [Parameter(Mandatory = $true)]
+        $SplashWindow
     )
 
+    $basePath = Join-Path $PSScriptRoot ".."
+
+    # Core imports (hard)
+    Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
+
+    # Core imports (soft)
+    Import-Module (Join-Path $basePath "Core\Settings.psm1") -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $basePath "Core\Tickets.psm1")  -Force -ErrorAction SilentlyContinue
+
+    # UI modules (soft)
+    Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")     -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $basePath "UI\Settings.UI.psm1")   -Force -ErrorAction SilentlyContinue
+
+    # If an earlier module defined Initialize-QOTicketsUI, remove it so the correct one can load
+    Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
+
+    # Load XAML for MainWindow
+    $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
+    if (-not (Test-Path -LiteralPath $xamlPath)) {
+        throw "MainWindow.xaml not found at: $xamlPath"
+    }
+
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+
+    $xaml = Get-Content -LiteralPath $xamlPath -Raw
+    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
+    $window = [System.Windows.Markup.XamlReader]::Load($reader)
+
+    if (-not $window) {
+        throw "Failed to load MainWindow from XAML."
+    }
+
+    # Close splash safely
     try {
-        $window = Initialize-QOTMainWindow
+        if ($SplashWindow) { $SplashWindow.Close() }
+    } catch { }
 
-        if (-not $window) {
-            throw "Initialize-QOTMainWindow returned null. Main window was not created."
-        }
-
-        # Close splash AFTER the main window is rendered, with Ready + 2s + fade.
-        if ($SplashWindow) {
-            $window.Add_ContentRendered({
-                try {
-                    $bar = $SplashWindow.FindName("SplashProgressBar")
-                    $txt = $SplashWindow.FindName("SplashStatusText")
-
-                    if ($bar) { $bar.Value = 100 }
-                    if ($txt) { $txt.Text  = "Ready" }
-
-                    $timer = New-Object System.Windows.Threading.DispatcherTimer
-                    $timer.Interval = [TimeSpan]::FromSeconds(2)
-                    $timer.Add_Tick({
-                        $timer.Stop()
-
-                        try {
-                            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-                            $anim.From = 1
-                            $anim.To = 0
-                            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
-                            $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
-                        } catch { }
-
-                        $t2 = New-Object System.Windows.Threading.DispatcherTimer
-                        $t2.Interval = [TimeSpan]::FromMilliseconds(330)
-                        $t2.Add_Tick({
-                            $t2.Stop()
-                            try { $SplashWindow.Close() } catch { }
-                        })
-                        $t2.Start()
-                    })
-                    $timer.Start()
-                }
-                catch { }
-            })
-        }
-
-        # Keep app alive and interactive
-        $Global:QOTMainWindow = $window
-        [void]$window.ShowDialog()
-    }
-    catch {
-        Write-Error "Start-QOTMainWindow : Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
-        throw
-    }
+    # Show main window
+    $null = $window.ShowDialog()
 }
 
-function Select-QOTPreferredTab {
-    param([string]$PreferredTab)
-
-    if (-not $script:MainWindow) { return }
-
-    $tabControl = $script:MainWindow.FindName("MainTabControl")
-    if (-not $tabControl) { return }
-
-    $targetTab = switch ($PreferredTab) {
-        'Cleaning' { $script:MainWindow.FindName("TabCleaning") }
-        'Apps'     { $script:MainWindow.FindName("TabApps") }
-        'Advanced' { $script:MainWindow.FindName("TabAdvanced") }
-        'Tickets'  { $script:MainWindow.FindName("TabTickets") }
-        default    { $script:MainWindow.FindName("TabCleaning") }
-    }
-
-    if ($targetTab -and $tabControl.Items.Contains($targetTab)) {
-        $tabControl.SelectedItem = $targetTab
-    }
-    elseif ($tabControl.Items.Count -gt 0) {
-        $tabControl.SelectedIndex = 0
-    }
-}
-
-function Set-QOTStatus {
-    param([string]$Text)
-
-    if ($script:StatusLabel) {
-        $script:StatusLabel.Dispatcher.Invoke({
-            Set-QOTControlText -Control $script:StatusLabel -Value $Text
-        })
-    }
-}
-
-function Set-QOTSummary {
-    param([string]$Text)
-
-    if ($script:SummaryText) {
-        $script:SummaryText.Dispatcher.Invoke({
-            Set-QOTControlText -Control $script:SummaryText -Value $Text
-        })
-    }
-}
-
-function Show-QOTSettingsPage { }
-function Restore-QOTMainTabs { }
-
-Export-ModuleMember -Function `
-    New-QOTMainWindow, `
-    Initialize-QOTMainWindow, `
-    Start-QOTMainWindow, `
-    Select-QOTPreferredTab, `
-    Set-QOTStatus, `
-    Set-QOTSummary
+Export-ModuleMember -Function Start-QOTMainWindow
