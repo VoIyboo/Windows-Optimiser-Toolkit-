@@ -12,7 +12,7 @@ function Start-QOTMainWindow {
     $basePath = Join-Path $PSScriptRoot ".."
 
     # ------------------------------------------------------------
-    # Core modules (paths confirmed)
+    # Core modules
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Core\Config\Config.psm1")   -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
@@ -23,7 +23,12 @@ function Start-QOTMainWindow {
     # UI modules
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")   -Force -ErrorAction Stop
-    # IMPORTANT: DO NOT import Settings.UI.psm1 here
+
+    # Settings UI is optional but should exist in your repo
+    $settingsUiPath = Join-Path $basePath "Core\Settings.UI.psm1"
+    if (Test-Path $settingsUiPath) {
+        Import-Module $settingsUiPath -Force -ErrorAction Stop
+    }
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -59,7 +64,7 @@ function Start-QOTMainWindow {
             try {
                 if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
                     [System.Windows.MessageBox]::Show(
-                        "Settings UI not loaded. Settings.UI.psm1 is missing from this build."
+                        "Settings UI is not available."
                     ) | Out-Null
                     return
                 }
@@ -87,7 +92,10 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Close splash + show main window
     # ------------------------------------------------------------
-    try { if ($SplashWindow) { $SplashWindow.Close() } } catch {}
+    try {
+        if ($SplashWindow) { $SplashWindow.Close() }
+    } catch { }
+
     $window.ShowDialog() | Out-Null
 }
 
