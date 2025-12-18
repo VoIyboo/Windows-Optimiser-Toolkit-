@@ -1,18 +1,19 @@
-# Tickets.psm1
+# src\Tickets\Tickets.psm1
 # Storage and basic model for Studio Voly Ticketing System
 
-# Import Settings module (even though we have local helpers here)
-Import-Module "$PSScriptRoot\Settings.psm1" -Force
+$ErrorActionPreference = "Stop"
 
 # =====================================================================
-# SETTINGS ENGINE (LOCAL TO TICKETS MODULE)
+# SETTINGS ENGINE (LOCAL TO THIS MODULE)
 # =====================================================================
 
-# Path for settings.json
+# Path for settings.json (shared by toolkit)
 $script:QOSettingsPath = Join-Path $env:LOCALAPPDATA "QuinnOptimiserToolkit\Settings.json"
 
 function Get-QOSettings {
-    if (-not (Test-Path $script:QOSettingsPath)) {
+
+    # First run: create defaults
+    if (-not (Test-Path -LiteralPath $script:QOSettingsPath)) {
 
         $default = [PSCustomObject]@{
             TicketsColumnLayout   = @()
@@ -20,17 +21,25 @@ function Get-QOSettings {
             LocalTicketBackupPath = $null
         }
 
-        $dir = Split-Path $script:QOSettingsPath
-        if (-not (Test-Path $dir)) {
+        $dir = Split-Path -Parent $script:QOSettingsPath
+        if (-not (Test-Path -LiteralPath $dir)) {
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
         }
 
-        $default | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+        $default | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:QOSettingsPath -Encoding UTF8
         return $default
     }
 
-    $json = Get-Content -Path $script:QOSettingsPath -Raw -ErrorAction SilentlyContinue
-    if (-not $json) {
+    # Read json safely
+    $json = $null
+    try {
+        $json = Get-Content -LiteralPath $script:QOSettingsPath -Raw -ErrorAction Stop
+    }
+    catch {
+        $json = $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($json)) {
         return [PSCustomObject]@{
             TicketsColumnLayout   = @()
             TicketStorePath       = $null
@@ -38,16 +47,36 @@ function Get-QOSettings {
         }
     }
 
-    $settings = $json | ConvertFrom-Json
+    $settings = $null
+    try {
+        $settings = $json | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        # If settings.json is corrupt, fall back to defaults (do not throw here)
+        $settings = [PSCustomObject]@{
+            TicketsColumnLayout   = @()
+            TicketStorePath       = $null
+            LocalTicketBackupPath = $null
+        }
+    }
 
-    if (-not $settings.PSObject.Properties.Name -contains 'TicketsColumnLayout') {
-        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @()
+    # Ensure properties exist
+    if (-not ($settings.PSObject.Properties.Name -contains 'TicketsColumnLayout')) {
+        $settings | Add-Member -NotePropertyName TicketsColumnLayout -NotePropertyValue @() -Force
     }
-    if (-not $settings.PSObject.Properties.Name -contains 'TicketStorePath') {
-        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
+    if (-not ($settings.PSObject.Properties.Name -contains 'TicketStorePath')) {
+        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null -Force
     }
-    if (-not $settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath') {
-        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
+    if (-not ($settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath')) {
+        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null -Force
+    }
+
+    # Always keep layout as an array
+    if ($settings.TicketsColumnLayout -is [string]) {
+        $settings.TicketsColumnLayout = @()
+    }
+    elseif ($settings.TicketsColumnLayout -isnot [System.Collections.IEnumerable]) {
+        $settings.TicketsColumnLayout = @($settings.TicketsColumnLayout)
     }
 
     return $settings
@@ -59,12 +88,12 @@ function Save-QOSettings {
         $Settings
     )
 
-    $dir = Split-Path $script:QOSettingsPath
-    if (-not (Test-Path $dir)) {
+    $dir = Split-Path -Parent $script:QOSettingsPath
+    if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
-    $Settings | ConvertTo-Json -Depth 6 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
+    $Settings | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:QOSettingsPath -Encoding UTF8
 }
 
 # =====================================================================
@@ -80,21 +109,11 @@ function Initialize-QOTicketStorage {
         return
     }
 
-    # Load settings
     $settings = Get-QOSettings
-
-    # Ensure the properties exist on the settings object
-    if (-not ($settings.PSObject.Properties.Name -contains 'TicketStorePath')) {
-        $settings | Add-Member -NotePropertyName TicketStorePath -NotePropertyValue $null
-    }
-
-    if (-not ($settings.PSObject.Properties.Name -contains 'LocalTicketBackupPath')) {
-        $settings | Add-Member -NotePropertyName LocalTicketBackupPath -NotePropertyValue $null
-    }
 
     # Default primary store:
     #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Tickets.json
-    if ([string]::IsNullOrWhiteSpace($settings.TicketStorePath)) {
+    if ([string]::IsNullOrWhiteSpace([string]$settings.TicketStorePath)) {
         $defaultTicketsDir  = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\Tickets'
         $defaultTicketsFile = Join-Path $defaultTicketsDir 'Tickets.json'
         $settings.TicketStorePath = $defaultTicketsFile
@@ -102,17 +121,17 @@ function Initialize-QOTicketStorage {
 
     # Default backup folder:
     #   %LOCALAPPDATA%\StudioVoly\QuinnToolkit\Tickets\Backups
-    if ([string]::IsNullOrWhiteSpace($settings.LocalTicketBackupPath)) {
+    if ([string]::IsNullOrWhiteSpace([string]$settings.LocalTicketBackupPath)) {
         $defaultBackupDir = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\Tickets\Backups'
         $settings.LocalTicketBackupPath = $defaultBackupDir
     }
 
-    # Persist any new defaults back to settings.json
+    # Persist defaults
     Save-QOSettings -Settings $settings
 
     # Cache
-    $script:TicketStorePath  = $settings.TicketStorePath
-    $script:TicketBackupPath = $settings.LocalTicketBackupPath
+    $script:TicketStorePath  = [string]$settings.TicketStorePath
+    $script:TicketBackupPath = [string]$settings.LocalTicketBackupPath
 
     # Ensure directories
     $storeDir = Split-Path -Parent $script:TicketStorePath
@@ -152,26 +171,37 @@ function Get-QOTickets {
             return New-QODefaultTicketDatabase
         }
 
-        $db = $json | ConvertFrom-Json
+        $db = $json | ConvertFrom-Json -ErrorAction Stop
 
-        if (-not $db.PSObject.Properties.Name.Contains('SchemaVersion')) {
-            $db | Add-Member -NotePropertyName 'SchemaVersion' -NotePropertyValue 1
+        if (-not ($db.PSObject.Properties.Name -contains 'SchemaVersion')) {
+            $db | Add-Member -NotePropertyName 'SchemaVersion' -NotePropertyValue 1 -Force
         }
-        if (-not $db.PSObject.Properties.Name.Contains('Tickets')) {
-            $db | Add-Member -NotePropertyName 'Tickets' -NotePropertyValue @()
+        if (-not ($db.PSObject.Properties.Name -contains 'Tickets')) {
+            $db | Add-Member -NotePropertyName 'Tickets' -NotePropertyValue @() -Force
         }
 
-        if ($db.Tickets -isnot [System.Collections.IEnumerable]) {
+        # Always ensure Tickets is an array
+        if ($null -eq $db.Tickets) {
+            $db.Tickets = @()
+        }
+        elseif ($db.Tickets -is [string]) {
+            $db.Tickets = @($db.Tickets)
+        }
+        elseif ($db.Tickets -isnot [System.Collections.IEnumerable]) {
+            $db.Tickets = @($db.Tickets)
+        }
+        else {
             $db.Tickets = @($db.Tickets)
         }
 
         return $db
     }
     catch {
+        # Backup corrupt DB if it exists
         try {
             if (Test-Path -LiteralPath $script:TicketStorePath) {
                 $backupName = Join-Path $script:TicketBackupPath ("Tickets_corrupt_{0}.json" -f (Get-Date -Format 'yyyyMMddHHmmss'))
-                Copy-Item -LiteralPath $script:TicketStorePath $backupName -ErrorAction SilentlyContinue
+                Copy-Item -LiteralPath $script:TicketStorePath -Destination $backupName -ErrorAction SilentlyContinue
             }
         } catch {}
 
@@ -191,6 +221,7 @@ function Save-QOTickets {
 
     $TicketsDb | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
 
+    # Best effort backup
     try {
         $stamp      = Get-Date -Format 'yyyyMMddHHmmss'
         $backupName = Join-Path $script:TicketBackupPath ("Tickets_{0}.json" -f $stamp)
@@ -244,8 +275,8 @@ function New-QOTicket {
         Source         = $Source
         RequesterName  = $RequesterName
         RequesterEmail = $RequesterEmail
-        Tags           = $Tags
-        History        = $history
+        Tags           = @($Tags)
+        History        = @($history)
     }
 }
 
@@ -256,14 +287,7 @@ function Add-QOTicket {
     )
 
     $db = Get-QOTickets
-
-    $tickets = @()
-    if ($db.Tickets) {
-        $tickets = @($db.Tickets)
-    }
-
-    $tickets += $Ticket
-    $db.Tickets = $tickets
+    $db.Tickets = @($db.Tickets) + @($Ticket)
 
     Save-QOTickets -TicketsDb $db
     return $Ticket
@@ -276,9 +300,7 @@ function Get-QOTicketById {
     )
 
     $db = Get-QOTickets
-    $tickets = $db.Tickets
-
-    $tickets | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
+    @($db.Tickets) | Where-Object { $_.Id -eq $Id } | Select-Object -First 1
 }
 
 function Set-QOTicketStatus {
@@ -295,10 +317,17 @@ function Set-QOTicketStatus {
     if (-not $ticket) { throw "Ticket with Id '$Id' not found." }
 
     $now = Get-Date
+    $oldStatus = [string]$ticket.Status
 
-    $oldStatus = $ticket.Status
     $ticket.Status    = $Status
     $ticket.UpdatedAt = $now
+
+    if (-not ($ticket.PSObject.Properties.Name -contains 'FirstResponseAt')) {
+        $ticket | Add-Member -NotePropertyName FirstResponseAt -NotePropertyValue $null -Force
+    }
+    if (-not ($ticket.PSObject.Properties.Name -contains 'ResolvedAt')) {
+        $ticket | Add-Member -NotePropertyName ResolvedAt -NotePropertyValue $null -Force
+    }
 
     if (-not $ticket.FirstResponseAt -and $Status -ne 'New') {
         $ticket.FirstResponseAt = $now
@@ -310,15 +339,17 @@ function Set-QOTicketStatus {
 
     $user = $env:USERNAME
 
-    $ticket.History += [pscustomobject]@{
-        At            = $now
-        Action        = 'StatusChanged'
-        ByUserName    = $user
-        ByDisplayName = $user
-        FromStatus    = $oldStatus
-        ToStatus      = $Status
-        Notes         = $Notes
-    }
+    $ticket.History = @($ticket.History) + @(
+        [pscustomobject]@{
+            At            = $now
+            Action        = 'StatusChanged'
+            ByUserName    = $user
+            ByDisplayName = $user
+            FromStatus    = $oldStatus
+            ToStatus      = $Status
+            Notes         = $Notes
+        }
+    )
 
     Save-QOTickets -TicketsDb $db
     return $ticket
@@ -343,7 +374,6 @@ function Set-QOTicketTitle {
     return $ticket
 }
 
-
 function Remove-QOTicket {
     param(
         [Parameter(Mandatory)]
@@ -351,28 +381,24 @@ function Remove-QOTicket {
     )
 
     $db = Get-QOTickets
-
-    $tickets = if ($db.Tickets) { @($db.Tickets) } else { @() }
+    $tickets = @($db.Tickets)
 
     $beforeCount = $tickets.Count
-
-    # Remove matching ticket
     $tickets = @($tickets | Where-Object { $_.Id -ne $Id })
 
-    $db.Tickets = $tickets
+    $db.Tickets = @($tickets)
     Save-QOTickets -TicketsDb $db
 
-    # Return true if something was removed
     return ($beforeCount -ne $tickets.Count)
 }
-
-
 
 # =====================================================================
 # EXPORTS
 # =====================================================================
 
 Export-ModuleMember -Function `
+    Get-QOSettings, `
+    Save-QOSettings, `
     Initialize-QOTicketStorage, `
     New-QODefaultTicketDatabase, `
     Get-QOTickets, `
