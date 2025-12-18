@@ -7,12 +7,13 @@
         Background="#0F172A">
 
     <Window.Resources>
-
         <SolidColorBrush x:Key="AccentBrush" Color="#2563EB" />
         <SolidColorBrush x:Key="CardBrush" Color="#020617" />
         <SolidColorBrush x:Key="BorderBrush" Color="#374151" />
         <SolidColorBrush x:Key="TextSubtle" Color="#9CA3AF" />
+        <SolidColorBrush x:Key="LineBrush" Color="#E5E7EB" />
 
+        <!-- Icon button -->
         <Style x:Key="IconButton" TargetType="Button">
             <Setter Property="Width" Value="34" />
             <Setter Property="Height" Value="34" />
@@ -20,7 +21,6 @@
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="HorizontalAlignment" Value="Right" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -39,7 +39,6 @@
 
         <Style TargetType="TextBox">
             <Setter Property="Height" Value="34" />
-            <Setter Property="MinWidth" Value="260" />
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
@@ -67,80 +66,92 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-
     </Window.Resources>
 
-    <!-- No extra "Settings" title here.
-         MainWindow already provides the Settings header. -->
-    <Grid Margin="0">
+    <!-- Keep the view simple because MainWindow already provides the Settings container -->
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <GroupBox Header="Ticketing"
-                  Background="{StaticResource CardBrush}"
-                  BorderBrush="{StaticResource BorderBrush}"
-                  BorderThickness="1"
-                  Margin="0">
+        <!-- Section title -->
+        <TextBlock Grid.Row="0"
+                   Text="Monitored mailbox addresses"
+                   Foreground="White"
+                   FontSize="14"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,8" />
 
-            <Grid Margin="12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+        <!-- Simple white separator (no blue line) -->
+        <Border Grid.Row="1"
+                Height="1"
+                Background="{StaticResource LineBrush}"
+                Opacity="0.35"
+                Margin="0,0,0,14" />
 
-                <TextBlock Grid.Row="0"
-                           Text="Monitored mailbox addresses"
-                           Foreground="#E5E7EB"
-                           Margin="0,0,0,8"/>
+        <!-- Limit width to about half, left aligned -->
+        <Grid Grid.Row="2" HorizontalAlignment="Left">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="420"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-                <!-- Input + icons aligned properly -->
-                <DockPanel Grid.Row="1" LastChildFill="True" Margin="0,0,0,10">
+            <TextBox x:Name="TxtEmail"
+                     Grid.Column="0"
+                     Margin="0,0,10,0"
+                     ToolTip="Enter an email address" />
 
-                    <StackPanel DockPanel.Dock="Right"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center">
+            <Button x:Name="BtnAdd"
+                    Grid.Column="1"
+                    Style="{StaticResource IconButton}"
+                    Margin="0,0,6,0"
+                    ToolTip="Add address">
+                <TextBlock FontFamily="Segoe MDL2 Assets"
+                           FontSize="16"
+                           Text="&#xE710;" />
+            </Button>
 
-                        <Button x:Name="BtnAdd"
-                                Style="{StaticResource IconButton}"
-                                Margin="0,0,6,0"
-                                ToolTip="Add address">
-                            <TextBlock FontFamily="Segoe MDL2 Assets"
-                                       FontSize="16"
-                                       Text="&#xE710;"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Button>
+            <Button x:Name="BtnRemove"
+                    Grid.Column="2"
+                    Style="{StaticResource IconButton}"
+                    Margin="0"
+                    ToolTip="Remove selected address">
+                <TextBlock FontFamily="Segoe MDL2 Assets"
+                           FontSize="16"
+                           Text="&#xE74D;" />
+            </Button>
+        </Grid>
 
-                        <Button x:Name="BtnRemove"
-                                Style="{StaticResource IconButton}"
-                                Margin="0"
-                                ToolTip="Remove selected address">
-                            <TextBlock FontFamily="Segoe MDL2 Assets"
-                                       FontSize="16"
-                                       Text="&#xE74D;"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Button>
+        <!-- Spacing -->
+        <Border Grid.Row="3" Height="14" Background="Transparent"/>
 
-                    </StackPanel>
+        <!-- Completed box look (bordered container), half width -->
+        <Border Grid.Row="4"
+                Width="520"
+                HorizontalAlignment="Left"
+                Background="{StaticResource CardBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="8">
 
-                    <TextBox x:Name="TxtEmail"
-                             ToolTip="Enter an email address"/>
+            <ListBox x:Name="LstEmails"
+                     MinHeight="190"
+                     BorderThickness="0"
+                     Background="Transparent"/>
+        </Border>
 
-                </DockPanel>
-
-                <ListBox x:Name="LstEmails"
-                         Grid.Row="2"
-                         MinHeight="170" />
-
-                <TextBlock x:Name="LblHint"
-                           Grid.Row="3"
-                           Margin="0,10,0,0"
-                           Foreground="{StaticResource TextSubtle}"
-                           FontSize="12"/>
-
-            </Grid>
-        </GroupBox>
-
+        <!-- Hint -->
+        <TextBlock x:Name="LblHint"
+                   Grid.Row="5"
+                   Margin="0,12,0,0"
+                   Foreground="{StaticResource TextSubtle}"
+                   FontSize="12" />
     </Grid>
 </Window>
