@@ -593,11 +593,20 @@ function Initialize-QOTicketsUI {
     } catch {
         Write-Warning ("Tickets UI: failed to apply RowDetailsTemplate. {0}" -f $_.Exception.Message)
     }
-
+    
     $TicketsGrid.Add_Loaded({
+        try {
+            if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                Invoke-QOEmailTicketPoll | Out-Null
+            }
+        } catch { }
+    
         Update-QOTicketsGrid
         Apply-QOTicketsColumnLayout -DataGrid $script:TicketsGrid
+    
+        Start-QOTicketsAutoPoll -IntervalSeconds 60
     })
+
 
     $TicketsGrid.Add_ColumnReordered({
         param($sender, $eventArgs)
