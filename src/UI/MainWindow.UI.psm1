@@ -24,8 +24,8 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")   -Force -ErrorAction Stop
 
-    # IMPORTANT: Settings UI lives directly under Core
-    Import-Module (Join-Path $basePath "Core\Settings.UI.psm1")     -Force -ErrorAction Stop
+    # ✅ CORRECT Settings UI path (inside Core\Settings)
+    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -61,7 +61,7 @@ function Start-QOTMainWindow {
             try {
                 if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
                     [System.Windows.MessageBox]::Show(
-                        "Settings UI loaded but entry point not found."
+                        "Settings UI entry point not found."
                     ) | Out-Null
                     return
                 }
