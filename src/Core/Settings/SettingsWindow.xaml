@@ -6,6 +6,72 @@
         WindowStartupLocation="CenterOwner"
         Background="#0F172A">
 
+    <Window.Resources>
+
+        <!-- Colours -->
+        <SolidColorBrush x:Key="AccentBrush" Color="#2563EB" />
+        <SolidColorBrush x:Key="CardBrush" Color="#020617" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#374151" />
+        <SolidColorBrush x:Key="TextSubtle" Color="#9CA3AF" />
+
+        <!-- Icon button -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="5">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- TextBox styling -->
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <!-- ListBox styling -->
+        <Style TargetType="ListBox">
+            <Setter Property="Background" Value="{StaticResource CardBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Padding" Value="6" />
+        </Style>
+
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#0B1220" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#2563EB" />
+                    <Setter Property="Foreground" Value="White" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -20,47 +86,76 @@
 
         <GroupBox Grid.Row="1"
                   Header="Ticketing"
-                  Background="#020617"
-                  BorderBrush="#374151"
-                  BorderThickness="1">
+                  Background="{StaticResource CardBrush}"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1"
+                  Margin="0">
 
-            <StackPanel Margin="12">
+            <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <TextBlock Text="Monitored mailbox addresses"
+                <TextBlock Grid.Row="0"
+                           Text="Monitored mailbox addresses"
                            Foreground="#E5E7EB"
-                           Margin="0,0,0,6"/>
+                           Margin="0,0,0,8"/>
 
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <!-- Input + icon buttons -->
+                <Grid Grid.Row="1" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
                     <TextBox x:Name="TxtEmail"
-                             Width="320"
-                             Margin="0,0,8,0"
-                             Background="#020617"
-                             Foreground="White"
-                             BorderBrush="#374151"/>
+                             Grid.Column="0"
+                             Margin="0,0,10,0"
+                             ToolTip="Enter an email address" />
 
+                    <!-- Add (plus icon) -->
                     <Button x:Name="BtnAdd"
-                            Content="Add"
-                            Width="80"
-                            Margin="0,0,6,0"/>
+                            Grid.Column="1"
+                            Style="{StaticResource IconButton}"
+                            ToolTip="Add address">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Text="&#xE710;"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
 
+                    <!-- Remove (bin icon) -->
                     <Button x:Name="BtnRemove"
-                            Content="Remove"
-                            Width="80"/>
-                </StackPanel>
+                            Grid.Column="2"
+                            Style="{StaticResource IconButton}"
+                            Margin="0"
+                            ToolTip="Remove selected address">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Text="&#xE74D;"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
 
+                <!-- List -->
                 <ListBox x:Name="LstEmails"
-                         Height="160"
-                         Background="#020617"
-                         Foreground="White"
-                         BorderBrush="#374151"/>
+                         Grid.Row="2"
+                         MinHeight="170" />
 
+                <!-- Hint -->
                 <TextBlock x:Name="LblHint"
-                           Margin="0,8,0,0"
-                           Foreground="#9CA3AF"
-                           FontSize="12"/>
+                           Grid.Row="3"
+                           Margin="0,10,0,0"
+                           Foreground="{StaticResource TextSubtle}"
+                           FontSize="12" />
 
-            </StackPanel>
+            </Grid>
         </GroupBox>
     </Grid>
 </Window>
-
