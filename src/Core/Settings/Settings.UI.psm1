@@ -4,6 +4,18 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
+function Write-QOSettingsUILog {
+    param([string]$Message)
+
+    try {
+        $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        $path = Join-Path $logDir "SettingsUI.log"
+        Add-Content -LiteralPath $path -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding UTF8
+    }
+    catch { }
+}
+
 function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
     if (-not $s) { $s = [pscustomobject]@{} }
@@ -21,35 +33,15 @@ function Ensure-QOEmailIntegrationSettings {
     return $s
 }
 
-function Save-QOMonitoredAddressesFromList {
+function Save-QOMonitoredAddresses {
     param(
-        [Parameter(Mandatory)] $ListControl
+        [Parameter(Mandatory)]
+        [System.Collections.ObjectModel.ObservableCollection[string]] $Collection
     )
 
     $s = Ensure-QOEmailIntegrationSettings
-
-    $items = @()
-    foreach ($i in $ListControl.Items) {
-        $v = ([string]$i).Trim()
-        if ($v) { $items += $v }
-    }
-
-    $s.Tickets.EmailIntegration.MonitoredAddresses = $items
+    $s.Tickets.EmailIntegration.MonitoredAddresses = @($Collection | Where-Object { $_ -and $_.Trim() } )
     Save-QOSettings -Settings $s
-}
-
-function Load-QOMonitoredAddressesToList {
-    param(
-        [Parameter(Mandatory)] $ListControl
-    )
-
-    $ListControl.Items.Clear()
-
-    $s = Ensure-QOEmailIntegrationSettings
-    foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
-        $v = ([string]$e).Trim()
-        if ($v) { [void]$ListControl.Items.Add($v) }
-    }
 }
 
 function New-QOTSettingsView {
@@ -65,7 +57,9 @@ function New-QOTSettingsView {
         throw "SettingsWindow.xaml not found at $xamlPath"
     }
 
-    # Load XAML as hosted view (convert root Window to Grid)
+    Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
+
+    # Convert root <Window> to <Grid> so it can be hosted
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $win = $doc.DocumentElement
     if (-not $win -or $win.LocalName -ne "Window") {
@@ -122,43 +116,64 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found" }
     if (-not $list)     { throw "LstEmails not found" }
 
-    # Initial load
-    Load-QOMonitoredAddressesToList -ListControl $list
+    # Build collection from settings and bind to UI
+    $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
 
-    # Add button: update UI first, then save
+    $s = Ensure-QOEmailIntegrationSettings
+    foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
+        $v = ([string]$e).Trim()
+        if ($v) { $addresses.Add($v) }
+    }
+
+    # Bind list to collection (this fixes the "Items.Add does nothing" problem)
+    $list.ItemsSource = $addresses
+
+    Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
+
     $btnAdd.Add_Click({
         try {
             $addr = ($txtEmail.Text + "").Trim()
+            Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
+
             if (-not $addr) { return }
 
+            # Case-insensitive duplicate check
             $exists = $false
-            foreach ($i in $list.Items) {
-                if (([string]$i).Trim().ToLower() -eq $addr.ToLower()) { $exists = $true; break }
+            foreach ($x in $addresses) {
+                if (($x + "").Trim().ToLower() -eq $addr.ToLower()) { $exists = $true; break }
             }
 
             if (-not $exists) {
-                [void]$list.Items.Add($addr)
+                $addresses.Add($addr)   # UI updates instantly
+                Write-QOSettingsUILog "Added to collection"
+            }
+            else {
+                Write-QOSettingsUILog "Already existed"
             }
 
             $txtEmail.Text = ""
-            Save-QOMonitoredAddressesFromList -ListControl $list
+            Save-QOMonitoredAddresses -Collection $addresses
+            Write-QOSettingsUILog "Saved settings"
         }
         catch {
-            # Keep it silent for now. UI already updated.
-            # If you want feedback later we can wire LblHint again.
+            Write-QOSettingsUILog ("Add failed: " + $_.Exception.Message)
         }
     })
 
-    # Remove button: update UI first, then save
     $btnRem.Add_Click({
         try {
             $sel = $list.SelectedItem
+            Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
+
             if (-not $sel) { return }
 
-            $list.Items.Remove($sel)
-            Save-QOMonitoredAddressesFromList -ListControl $list
+            [void]$addresses.Remove([string]$sel)  # UI updates instantly
+            Save-QOMonitoredAddresses -Collection $addresses
+            Write-QOSettingsUILog "Removed and saved"
         }
-        catch { }
+        catch {
+            Write-QOSettingsUILog ("Remove failed: " + $_.Exception.Message)
+        }
     })
 
     return $root
