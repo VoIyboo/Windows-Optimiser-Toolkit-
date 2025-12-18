@@ -213,7 +213,7 @@ function Initialize-QOTMainWindow {
 
 function Start-QOTMainWindow {
     param(
-        [switch]$NonBlocking,
+        [Parameter(Mandatory = $false)]
         [System.Windows.Window]$SplashWindow
     )
 
@@ -226,21 +226,44 @@ function Start-QOTMainWindow {
 
         if ($SplashWindow) {
             $window.Add_ContentRendered({
-                try { $SplashWindow.Close() } catch { }
+                try {
+                    # Update splash to Ready
+                    $bar = $SplashWindow.FindName("SplashProgressBar")
+                    $txt = $SplashWindow.FindName("SplashStatusText")
+                    if ($bar) { $bar.Value = 100 }
+                    if ($txt) { $txt.Text  = "Ready" }
+
+                    # Wait 2 seconds, then fade and close splash
+                    $timer = New-Object System.Windows.Threading.DispatcherTimer
+                    $timer.Interval = [TimeSpan]::FromSeconds(2)
+                    $timer.Add_Tick({
+                        $timer.Stop()
+
+                        try {
+                            $SplashWindow.Topmost = $false
+
+                            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+                            $anim.From     = 1
+                            $anim.To       = 0
+                            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+
+                            $anim.Add_Completed({
+                                try { $SplashWindow.Close() } catch { }
+                            })
+
+                            $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+                        } catch {
+                            try { $SplashWindow.Close() } catch { }
+                        }
+                    })
+                    $timer.Start()
+                } catch {
+                    try { $SplashWindow.Close() } catch { }
+                }
             })
         }
 
-        if ($NonBlocking) {
-            [void]$window.Show()
-            try { $window.Activate() } catch { }
-
-            $Global:QOTMainWindow = $window
-            return $window
-        }
-
-        # Blocking path: do not return the boolean result of ShowDialog
         [void]$window.ShowDialog()
-        return $window
     }
     catch {
         Write-Error "Failed to start Quinn Optimiser Toolkit UI.`n$($_.Exception.Message)"
