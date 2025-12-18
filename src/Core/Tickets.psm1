@@ -41,7 +41,7 @@ function Initialize-QOTicketStorage {
     $settings = Ensure-QOSettingProperty -Settings $settings -Name "TicketsColumnLayout"   -DefaultValue @()
 
     if ([string]::IsNullOrWhiteSpace([string]$settings.TicketStorePath)) {
-        $defaultDir  = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets"
+        $defaultDir = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets"
         $settings.TicketStorePath = (Join-Path $defaultDir "Tickets.json")
     }
 
@@ -98,6 +98,9 @@ function Save-QOTickets {
 
     Initialize-QOTicketStorage
 
+    if (-not ($Database.PSObject.Properties.Name -contains "Tickets")) {
+        $Database | Add-Member -NotePropertyName "Tickets" -NotePropertyValue @()
+    }
     if ($null -eq $Database.Tickets) { $Database.Tickets = @() } else { $Database.Tickets = @($Database.Tickets) }
 
     try {
@@ -114,19 +117,18 @@ function Save-QOTickets {
 function New-QOTicket {
     param(
         [Parameter(Mandatory)] [string]$Title,
-        [string]$Status = "Open",
         [string]$Priority = "Normal"
     )
 
     $now = Get-Date
 
     [pscustomobject]@{
-        Id       = ([guid]::NewGuid().ToString())
-        Title    = $Title
-        Created  = $now.ToString("yyyy-MM-dd HH:mm:ss")
-        Status   = $Status
-        Priority = $Priority
-        Updated  = $now.ToString("yyyy-MM-dd HH:mm:ss")
+        Id        = ([guid]::NewGuid().ToString())
+        Title     = $Title
+        CreatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
+        Status    = "Open"
+        Priority  = $Priority
+        UpdatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
     }
 }
 
@@ -143,7 +145,9 @@ function Get-QOTicketById {
     param([Parameter(Mandatory)] [string]$Id)
 
     $db = Get-QOTickets
-    foreach ($t in @($db.Tickets)) { if ([string]$t.Id -eq $Id) { return $t } }
+    foreach ($t in @($db.Tickets)) {
+        if ([string]$t.Id -eq $Id) { return $t }
+    }
     return $null
 }
 
@@ -152,7 +156,9 @@ function Remove-QOTicket {
 
     $db = Get-QOTickets
     $before = @($db.Tickets).Count
+
     $db.Tickets = @($db.Tickets | Where-Object { [string]$_.Id -ne $Id })
+
     Save-QOTickets -Database $db
     return (@($db.Tickets).Count -lt $before)
 }
@@ -168,8 +174,8 @@ function Set-QOTicketStatus {
 
     foreach ($t in @($db.Tickets)) {
         if ([string]$t.Id -eq $Id) {
-            $t.Status  = $Status
-            $t.Updated = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            $t.Status = $Status
+            $t.UpdatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
             $changed = $true
             break
         }
@@ -190,8 +196,8 @@ function Set-QOTicketTitle {
 
     foreach ($t in @($db.Tickets)) {
         if ([string]$t.Id -eq $Id) {
-            $t.Title   = $Title
-            $t.Updated = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            $t.Title = $Title
+            $t.UpdatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
             $changed = $true
             break
         }
