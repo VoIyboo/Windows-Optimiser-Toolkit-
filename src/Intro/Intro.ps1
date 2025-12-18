@@ -9,94 +9,51 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# -------------------------------------------------------------------
-# Logging bootstrap (Intro owns this)
-# -------------------------------------------------------------------
-
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
-    if (-not (Test-Path -LiteralPath $logDir)) {
+    if (-not (Test-Path $logDir)) {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     }
     $LogPath = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 }
-
 $script:QOTLogPath = $LogPath
 
-function Write-QLog {
+function script:Write-QLog {
     param(
         [string]$Message,
         [string]$Level = "INFO"
     )
-
     $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $line = "[$ts] [$Level] $Message"
-
     try { $line | Add-Content -Path $script:QOTLogPath -Encoding UTF8 } catch { }
     if (-not $Quiet) { Write-Host $line }
 }
 
-# Store an unbreakable reference to the logger (imports cannot delete this variable)
-$script:QLogFunc = ${function:Write-QLog}
-
-function Invoke-QLog {
-    param(
-        [string]$Message,
-        [string]$Level = "INFO"
-    )
-
-    try {
-        & $script:QLogFunc $Message $Level
-    } catch {
-        try { Write-Host "[LOGFAIL] $Message" } catch { }
-    }
-}
-
 $oldWarningPreference = $WarningPreference
-$WarningPreference    = "SilentlyContinue"
+$WarningPreference = "SilentlyContinue"
 
 try {
-    # -------------------------------------------------------------------
-    # WPF core
-    # -------------------------------------------------------------------
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-    # Ensure a WPF Application exists (prevents null Current in modules that expect it)
-    if (-not [System.Windows.Application]::Current) {
-        $null = New-Object System.Windows.Application
-        [System.Windows.Application]::Current.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
-    }
+    $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
+    $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
+    $engineModule  = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
 
-    # -------------------------------------------------------------------
-    # Paths
-    # -------------------------------------------------------------------
-    $rootPath       = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    $configModule   = Join-Path $rootPath "src\Core\Config\Config.psm1"
-    $loggingModule  = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
-    $engineModule   = Join-Path $rootPath "src\Core\Engine\Engine.psm1"
     $splashUIModule = Join-Path $rootPath "src\Intro\Splash.UI.psm1"
-    $splashXaml     = Join-Path $rootPath "src\Intro\Splash.xaml"
-
-    # -------------------------------------------------------------------
-    # Splash UI load (best effort)
-    # -------------------------------------------------------------------
-    if (Test-Path -LiteralPath $splashUIModule) {
+    if (Test-Path $splashUIModule) {
         Import-Module $splashUIModule -Force -ErrorAction SilentlyContinue
     }
 
     $splash = $null
-
     if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
-        if (Test-Path -LiteralPath $splashXaml) {
-            try { $splash = New-QOTSplashWindow -Path $splashXaml } catch { $splash = $null }
-        }
+        $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
+        $splash = New-QOTSplashWindow -Path $splashXaml
 
         if ($splash) {
-            try {
-                $splash.WindowStartupLocation = "CenterScreen"
-                $splash.Topmost = $true
-                $splash.Show()
-            } catch { }
+            $splash.WindowStartupLocation = "CenterScreen"
+            $splash.Topmost = $true
+            $splash.Show()
         }
     }
 
@@ -105,34 +62,28 @@ try {
             [int]$Percent,
             [string]$Text
         )
-
         if (-not $splash) { return }
-
-        try {
-            $splash.Dispatcher.Invoke([action]{
-                $bar = $splash.FindName("SplashProgressBar")
-                $txt = $splash.FindName("SplashStatusText")
-                if ($bar) { $bar.Value = [double]$Percent }
-                if ($txt) { $txt.Text  = $Text }
-            })
-        } catch { }
+        $splash.Dispatcher.Invoke([action]{
+            $bar = $splash.FindName("SplashProgressBar")
+            $txt = $splash.FindName("SplashStatusText")
+            if ($bar) { $bar.Value = [double]$Percent }
+            if ($txt) { $txt.Text = $Text }
+        })
     }
 
     function FadeOut-AndCloseFoxSplash {
         if (-not $splash) { return }
 
-        try {
-            $splash.Dispatcher.Invoke([action]{
-                try { $splash.Topmost = $false } catch { }
+        $splash.Dispatcher.Invoke([action]{
+            $splash.Topmost = $false
 
-                $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-                $anim.From     = 1
-                $anim.To       = 0
-                $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+            $anim.From = 1
+            $anim.To = 0
+            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
 
-                try { $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim) } catch { }
-            })
-        } catch { }
+            $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+        })
 
         $t = New-Object System.Windows.Threading.DispatcherTimer
         $t.Interval = [TimeSpan]::FromMilliseconds(330)
@@ -156,50 +107,31 @@ try {
             $timer.Add_Tick({
                 $timer.Stop()
                 FadeOut-AndCloseFoxSplash
-                Invoke-QLog "Intro completed ($Reason)" "INFO"
+                Write-QLog "Intro completed ($Reason)" "INFO"
                 try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
             })
             $timer.Start()
         } catch { }
     }
 
-    # -------------------------------------------------------------------
-    # Load modules (best effort except Engine)
-    # -------------------------------------------------------------------
     Set-FoxSplash 5  "Starting Quinn Optimiser Toolkit..."
     Set-FoxSplash 20 "Loading config..."
-    if (Test-Path -LiteralPath $configModule) {
-        Import-Module $configModule -Force -ErrorAction SilentlyContinue
-    }
+    if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
 
     Set-FoxSplash 40 "Loading logging..."
-    if (Test-Path -LiteralPath $loggingModule) {
-        Import-Module $loggingModule -Force -ErrorAction SilentlyContinue
-    }
+    if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
 
     Set-FoxSplash 65 "Loading engine..."
-    if (-not (Test-Path -LiteralPath $engineModule)) {
-        throw "Engine module not found at $engineModule"
-    }
+    if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    # -------------------------------------------------------------------
-    # Start main window
-    # -------------------------------------------------------------------
     Set-FoxSplash 85 "Preparing UI..."
-    Invoke-QLog "Starting main window" "INFO"
+    Write-QLog "Starting main window" "INFO"
 
-    $mw = $null
-    try {
-        $mw = Start-QOTMain -RootPath $rootPath
-    } catch {
-        Invoke-QLog "Start-QOTMain threw: $($_.Exception.Message)" "ERROR"
-        $mw = $null
-    }
+    # Important: Start-QOTMain MUST return the Window object (not a boolean)
+    $mw = Start-QOTMain -RootPath $rootPath
 
-    # -------------------------------------------------------------------
-    # Fallback completion if ContentRendered never fires
-    # -------------------------------------------------------------------
+    # Fallback: if ContentRendered never fires, still complete the intro
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
     $fallback.Add_Tick({
@@ -209,42 +141,18 @@ try {
     $fallback.Start()
 
     if ($mw) {
-        try {
-            $mw.Add_ContentRendered({
-                try { $fallback.Stop() } catch { }
-                Complete-Intro -Reason "contentrendered"
-            })
-        } catch {
+        $mw.Add_ContentRendered({
             try { $fallback.Stop() } catch { }
-            Complete-Intro -Reason "contentrendered-hook-failed"
-        }
+            Complete-Intro -Reason "contentrendered"
+        })
     }
     else {
         try { $fallback.Stop() } catch { }
         Complete-Intro -Reason "mw-null"
     }
 
-    # -------------------------------------------------------------------
-    # Keep message pump alive so UI remains clickable
-    # -------------------------------------------------------------------
-    try {
-        $app = [System.Windows.Application]::Current
-        if ($app) {
-            if ($mw) {
-                $null = $app.Run($mw)
-            }
-            else {
-                $null = $app.Run()
-            }
-        }
-        else {
-            [System.Windows.Threading.Dispatcher]::Run()
-        }
-    }
-    catch {
-        Invoke-QLog "Message pump failed: $($_.Exception.Message)" "ERROR"
-        throw
-    }
+    # Keep message pump alive so UI is clickable
+    [System.Windows.Threading.Dispatcher]::Run()
 }
 finally {
     $WarningPreference = $oldWarningPreference
