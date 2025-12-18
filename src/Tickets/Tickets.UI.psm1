@@ -23,6 +23,54 @@ $script:RowDetailsHeightMin     = 120
 $script:RowDetailsHeightMax     = 900
 
 # -------------------------------------------------------------------
+# Email polling timer (auto refresh)
+# -------------------------------------------------------------------
+$script:TicketsPollTimer = $null
+
+function Start-QOTicketsAutoPoll {
+    param(
+        [int] $IntervalSeconds = 60
+    )
+
+    try {
+        if ($script:TicketsPollTimer) {
+            try { $script:TicketsPollTimer.Stop() } catch { }
+            $script:TicketsPollTimer = $null
+        }
+
+        $timer = New-Object System.Windows.Threading.DispatcherTimer
+        $timer.Interval = [TimeSpan]::FromSeconds($IntervalSeconds)
+
+        $timer.add_Tick({
+            try {
+                if (Get-Command Invoke-QOEmailTicketPoll -ErrorAction SilentlyContinue) {
+                    Invoke-QOEmailTicketPoll | Out-Null
+                }
+            } catch { }
+
+            try { Update-QOTicketsGrid } catch { }
+        })
+
+        $timer.Start()
+        $script:TicketsPollTimer = $timer
+    } catch {
+        Write-Warning ("Tickets UI: failed to start auto poll. {0}" -f $_.Exception.Message)
+    }
+}
+
+function Stop-QOTicketsAutoPoll {
+    try {
+        if ($script:TicketsPollTimer) {
+            try { $script:TicketsPollTimer.Stop() } catch { }
+            $script:TicketsPollTimer = $null
+        }
+    } catch { }
+}
+
+
+
+
+# -------------------------------------------------------------------
 # Column layout helpers (order + width)
 # -------------------------------------------------------------------
 function Get-QOTicketsColumnLayout {
