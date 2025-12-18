@@ -486,7 +486,6 @@ $rowDetailsXaml = @"
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
-      <!-- Email body -->
       <ScrollViewer Grid.Row="0"
                     VerticalScrollBarVisibility="Auto"
                     HorizontalScrollBarVisibility="Disabled"
@@ -503,7 +502,6 @@ $rowDetailsXaml = @"
                    HorizontalAlignment="Stretch"/>
       </ScrollViewer>
 
-      <!-- Drag handle -->
       <Thumb Grid.Row="1"
              Tag="RowDetailsResizer"
              Height="10"
@@ -523,6 +521,7 @@ $rowDetailsXaml = @"
   </Border>
 </DataTemplate>
 "@
+
 
 
 
