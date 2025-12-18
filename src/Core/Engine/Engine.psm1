@@ -1,13 +1,13 @@
 # Engine.psm1
 # Coordinates major operations by calling the feature modules
-# Splash is NOT handled here. Intro.ps1 owns the splash.
+# Splash is handled by Intro.ps1 + MainWindow.UI.psm1
 
 $ErrorActionPreference = "Stop"
 
 Import-Module "$PSScriptRoot\..\Config\Config.psm1"   -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction SilentlyContinue
 
-# Import feature modules (best effort)
+# Feature modules (best effort)
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\CleaningAndMain\Cleaning.psm1"           -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\..\TweaksAndCleaning\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction SilentlyContinue
 
@@ -16,14 +16,12 @@ Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps.psm1"     -Force -ErrorAct
 Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps.psm1" -Force -ErrorAction SilentlyContinue
 
 # Advanced
-Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"     -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"      -Force -ErrorAction SilentlyContinue
 Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1" -Force -ErrorAction SilentlyContinue
 
 function Set-QOTStatus {
     param([string]$Text)
-
     try { Write-QLog "STATUS: $Text" } catch { }
-
     if (Get-Command Set-QOTSummary -ErrorAction SilentlyContinue) {
         Set-QOTSummary -Text $Text
     }
@@ -90,38 +88,30 @@ function Invoke-QOTStartupWarmup {
 function Start-QOTMain {
     param(
         [Parameter(Mandatory)]
-        [string]$RootPath
+        [string]$RootPath,
+
+        [System.Windows.Window]$SplashWindow
     )
 
-    try {
-        try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
+    try { Write-QLog "Start-QOTMain called. Root = $RootPath" } catch { }
 
-        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-            $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
-            $uiModule = [System.IO.Path]::GetFullPath($uiModule)
+    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+        $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
+        $uiModule = [System.IO.Path]::GetFullPath($uiModule)
 
-            if (-not (Test-Path -LiteralPath $uiModule)) {
-                throw "UI module file missing: $uiModule"
-            }
-
-            Import-Module $uiModule -Force -ErrorAction Stop
+        if (-not (Test-Path -LiteralPath $uiModule)) {
+            throw "UI module file missing: $uiModule"
         }
 
-        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-            throw "UI module not loaded: Start-QOTMainWindow not found"
-        }
-
-        # Important: non blocking so Intro.ps1 can keep its Dispatcher alive
-        $win = Start-QOTMainWindow -NonBlocking
-        try { $win.Activate() } catch { }
-
-        $Global:QOTMainWindow = $win
-        return $win
+        Import-Module $uiModule -Force -ErrorAction Stop
     }
-    catch {
-        try { Write-QLog "Start-QOTMain failed: $($_.Exception.Message)" "ERROR" } catch { }
-        throw
+
+    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+        throw "UI module not loaded: Start-QOTMainWindow not found"
     }
+
+    # Start main window (modal). The UI module will handle splash closing.
+    Start-QOTMainWindow -SplashWindow $SplashWindow
 }
 
 Export-ModuleMember -Function `
