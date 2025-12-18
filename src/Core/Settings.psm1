@@ -143,4 +143,51 @@ function Save-QOSettings {
     $Settings | ConvertTo-Json -Depth 8 | Set-Content -Path $script:QOSettingsPath -Encoding UTF8
 }
 
+
+
+function Get-QOMonitoredEmailAddresses {
+    $s = Get-QOSettings
+    if ($s -and $s.Tickets -and $s.Tickets.EmailIntegration) {
+        return @($s.Tickets.EmailIntegration.MonitoredAddresses)
+    }
+    return @()
+}
+
+function Add-QOMonitoredEmailAddress {
+    param([Parameter(Mandatory)][string]$Address)
+
+    $addr = $Address.Trim()
+    if ([string]::IsNullOrWhiteSpace($addr)) { return $false }
+
+    $s = Get-QOSettings
+    $list = @($s.Tickets.EmailIntegration.MonitoredAddresses)
+
+    if ($list -contains $addr) { return $false }
+
+    $s.Tickets.EmailIntegration.MonitoredAddresses = @($list + $addr | Select-Object -Unique)
+    Save-QOSettings -Settings $s
+    return $true
+}
+
+function Remove-QOMonitoredEmailAddress {
+    param([Parameter(Mandatory)][string]$Address)
+
+    $addr = $Address.Trim()
+    if ([string]::IsNullOrWhiteSpace($addr)) { return $false }
+
+    $s = Get-QOSettings
+    $list = @($s.Tickets.EmailIntegration.MonitoredAddresses)
+
+    $new = @($list | Where-Object { $_ -ne $addr })
+    $changed = ($new.Count -ne $list.Count)
+
+    if ($changed) {
+        $s.Tickets.EmailIntegration.MonitoredAddresses = $new
+        Save-QOSettings -Settings $s
+    }
+
+    return $changed
+}
+
+
 Export-ModuleMember -Function Get-QOSettings, Save-QOSettings
