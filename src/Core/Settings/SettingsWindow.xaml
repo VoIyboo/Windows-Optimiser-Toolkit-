@@ -68,74 +68,57 @@
         </Style>
     </Window.Resources>
 
-    <!-- Keep the view simple because MainWindow already provides the Settings container -->
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <!-- Content only, no full-width layout container -->
+    <StackPanel Margin="16"
+                HorizontalAlignment="Left"
+                Width="520">
 
         <!-- Section title -->
-        <TextBlock Grid.Row="0"
-                   Text="Monitored mailbox addresses"
+        <TextBlock Text="Monitored mailbox addresses"
                    Foreground="White"
                    FontSize="14"
                    FontWeight="SemiBold"
                    Margin="0,0,0,8" />
 
-        <!-- Simple white separator (no blue line) -->
-        <Border Grid.Row="1"
-                Height="1"
+        <!-- Thin white separator -->
+        <Border Height="1"
                 Background="{StaticResource LineBrush}"
-                Opacity="0.35"
+                Opacity="0.25"
                 Margin="0,0,0,14" />
 
-        <!-- Limit width to about half, left aligned -->
-        <Grid Grid.Row="2" HorizontalAlignment="Left">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="420"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+        <!-- Input row -->
+        <DockPanel LastChildFill="True"
+                   Margin="0,0,0,14">
+
+            <StackPanel DockPanel.Dock="Right"
+                        Orientation="Horizontal">
+
+                <Button x:Name="BtnAdd"
+                        Style="{StaticResource IconButton}"
+                        Margin="0,0,6,0"
+                        ToolTip="Add address">
+                    <TextBlock FontFamily="Segoe MDL2 Assets"
+                               FontSize="16"
+                               Text="&#xE710;" />
+                </Button>
+
+                <Button x:Name="BtnRemove"
+                        Style="{StaticResource IconButton}"
+                        ToolTip="Remove selected address">
+                    <TextBlock FontFamily="Segoe MDL2 Assets"
+                               FontSize="16"
+                               Text="&#xE74D;" />
+                </Button>
+
+            </StackPanel>
 
             <TextBox x:Name="TxtEmail"
-                     Grid.Column="0"
-                     Margin="0,0,10,0"
                      ToolTip="Enter an email address" />
 
-            <Button x:Name="BtnAdd"
-                    Grid.Column="1"
-                    Style="{StaticResource IconButton}"
-                    Margin="0,0,6,0"
-                    ToolTip="Add address">
-                <TextBlock FontFamily="Segoe MDL2 Assets"
-                           FontSize="16"
-                           Text="&#xE710;" />
-            </Button>
+        </DockPanel>
 
-            <Button x:Name="BtnRemove"
-                    Grid.Column="2"
-                    Style="{StaticResource IconButton}"
-                    Margin="0"
-                    ToolTip="Remove selected address">
-                <TextBlock FontFamily="Segoe MDL2 Assets"
-                           FontSize="16"
-                           Text="&#xE74D;" />
-            </Button>
-        </Grid>
-
-        <!-- Spacing -->
-        <Border Grid.Row="3" Height="14" Background="Transparent"/>
-
-        <!-- Completed box look (bordered container), half width -->
-        <Border Grid.Row="4"
-                Width="520"
-                HorizontalAlignment="Left"
-                Background="{StaticResource CardBrush}"
+        <!-- Completed list box -->
+        <Border Background="{StaticResource CardBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
@@ -144,14 +127,14 @@
             <ListBox x:Name="LstEmails"
                      MinHeight="190"
                      BorderThickness="0"
-                     Background="Transparent"/>
+                     Background="Transparent" />
         </Border>
 
         <!-- Hint -->
         <TextBlock x:Name="LblHint"
-                   Grid.Row="5"
                    Margin="0,12,0,0"
                    Foreground="{StaticResource TextSubtle}"
                    FontSize="12" />
-    </Grid>
+
+    </StackPanel>
 </Window>
