@@ -3,6 +3,9 @@
 
 $ErrorActionPreference = "Stop"
 
+Import-Module (Join-Path $PSScriptRoot "..\Core\Settings.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1")  -Force -ErrorAction Stop
+
 # =====================================================================
 # SETTINGS ENGINE (LOCAL TO THIS MODULE)
 # =====================================================================
