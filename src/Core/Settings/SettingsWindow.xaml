@@ -71,7 +71,7 @@
     <!-- Content only, no full-width layout container -->
     <StackPanel Margin="16"
                 HorizontalAlignment="Left"
-                Width="520">
+                Width="820">
 
         <!-- Section title -->
         <TextBlock Text="Monitored mailbox addresses"
