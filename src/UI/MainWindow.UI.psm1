@@ -73,3 +73,4 @@ function Start-QOTMainWindow {
 }
 
 Export-ModuleMember -Function Start-QOTMainWindow
+
