@@ -38,6 +38,29 @@ function Assert-ScriptBlock {
     if (-not ($Value -is [scriptblock])) { throw "$Name is not a ScriptBlock. Actual type: $($Value.GetType().FullName)" }
 }
 
+function Get-MainWindowFromResult {
+    param([Parameter(Mandatory)]$Result)
+
+    if (-not $Result) { return $null }
+
+    if ($Result -is [System.Windows.Window]) { return $Result }
+
+    try {
+        if ($Result -is [hashtable]) {
+            if ($Result.ContainsKey("MainWindow") -and $Result["MainWindow"] -is [System.Windows.Window]) { return $Result["MainWindow"] }
+            if ($Result.ContainsKey("Window")     -and $Result["Window"]     -is [System.Windows.Window]) { return $Result["Window"] }
+        }
+
+        $p = $Result.PSObject.Properties
+
+        if ($p["MainWindow"] -and $Result.MainWindow -is [System.Windows.Window]) { return $Result.MainWindow }
+        if ($p["Window"]     -and $Result.Window     -is [System.Windows.Window]) { return $Result.Window }
+        if ($p["UI"]         -and $Result.UI         -is [System.Windows.Window]) { return $Result.UI }
+    } catch { }
+
+    return $null
+}
+
 $oldWarningPreference = $WarningPreference
 $WarningPreference = "SilentlyContinue"
 
@@ -102,7 +125,7 @@ try {
 
         $tLocal = $t
         $t.Add_Tick( ({
-            $tLocal.Stop()
+            try { $tLocal.Stop() } catch { }
             try { $splash.Close() } catch { }
         }).GetNewClosure() )
 
@@ -120,8 +143,8 @@ try {
 
             $timerLocal = $timer
             $timer.Add_Tick( ({
-                $timerLocal.Stop()
-                $script:FadeOutAndClose.Invoke()
+                try { $timerLocal.Stop() } catch { }
+                try { $script:FadeOutAndClose.Invoke() } catch { }
                 Write-QLog "Intro completed ($Reason)" "INFO"
             }).GetNewClosure() )
 
@@ -129,9 +152,9 @@ try {
         } catch { }
     }.GetNewClosure()
 
-    Assert-ScriptBlock $script:SetFoxSplash   '$script:SetFoxSplash'
+    Assert-ScriptBlock $script:SetFoxSplash    '$script:SetFoxSplash'
     Assert-ScriptBlock $script:FadeOutAndClose '$script:FadeOutAndClose'
-    Assert-ScriptBlock $script:CompleteIntro  '$script:CompleteIntro'
+    Assert-ScriptBlock $script:CompleteIntro   '$script:CompleteIntro'
 
     # ==========================================================
     # Startup sequence
@@ -151,15 +174,22 @@ try {
     $script:SetFoxSplash.Invoke(85, "Preparing UI...")
     Write-QLog "Starting main window" "INFO"
 
-    $mw = $null
+    $startResult = $null
     try {
-        $mw = Start-QOTMain -RootPath $rootPath
+        $startResult = Start-QOTMain -RootPath $rootPath
     } catch {
         Write-QLog ("Start-QOTMain failed: " + $_.Exception.Message) "ERROR"
+        Write-QLog ("Stack: " + $_.ScriptStackTrace) "ERROR"
         throw
     }
 
-    Write-QLog ("Start-QOTMain type: " + ($(if ($mw) { $mw.GetType().FullName } else { "NULL" }))) "INFO"
+    $mw = Get-MainWindowFromResult -Result $startResult
+
+    $startType = $(if ($startResult) { $startResult.GetType().FullName } else { "NULL" })
+    $mwType    = $(if ($mw) { $mw.GetType().FullName } else { "NULL" })
+
+    Write-QLog ("Start-QOTMain returned type: " + $startType) "INFO"
+    Write-QLog ("Resolved main window type: " + $mwType) "INFO"
 
     $app = [System.Windows.Application]::Current
     if (-not $app) {
@@ -167,30 +197,42 @@ try {
         $app.ShutdownMode = [System.Windows.ShutdownMode]::OnLastWindowClose
     }
 
+    # Fallback if ContentRendered never fires
     $fallback = New-Object System.Windows.Threading.DispatcherTimer
     $fallback.Interval = [TimeSpan]::FromSeconds(5)
 
     $fallbackLocal = $fallback
     $fallback.Add_Tick( ({
-        $fallbackLocal.Stop()
-        $script:CompleteIntro.Invoke("fallback")
+        try { $fallbackLocal.Stop() } catch { }
+        try { $script:CompleteIntro.Invoke("fallback") } catch { }
     }).GetNewClosure() )
 
     $fallback.Start()
 
     if ($mw) {
-        $mw.Add_ContentRendered( ({
-            try { $fallbackLocal.Stop() } catch { }
-            $script:CompleteIntro.Invoke("contentrendered")
-        }).GetNewClosure() )
+        try {
+            $mw.Add_ContentRendered( ({
+                try { $fallbackLocal.Stop() } catch { }
+                try { $script:CompleteIntro.Invoke("contentrendered") } catch { }
+            }).GetNewClosure() )
+        } catch {
+            Write-QLog ("Failed to attach ContentRendered: " + $_.Exception.Message) "WARN"
+        }
 
         try { if (-not $mw.IsVisible) { $mw.Show() } } catch { }
 
-        [void]$app.Run()
+        try {
+            [void]$app.Run()
+        } catch {
+            Write-QLog ("App.Run failed: " + $_.Exception.Message) "ERROR"
+            Write-QLog ("Stack: " + $_.ScriptStackTrace) "ERROR"
+            try { $script:CompleteIntro.Invoke("run-exception") } catch { }
+        }
     }
     else {
+        Write-QLog "Main window could not be resolved. Skipping app loop." "ERROR"
         try { $fallbackLocal.Stop() } catch { }
-        $script:CompleteIntro.Invoke("mw-null")
+        try { $script:CompleteIntro.Invoke("mw-null") } catch { }
         try { $app.Shutdown() } catch { }
     }
 }
