@@ -23,7 +23,9 @@ function Start-QOTMainWindow {
     # UI modules
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")   -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "UI\Settings\SettingsWindow.UI.psm1") -Force -ErrorAction Stop
+
+    # ✅ ACTUAL Settings UI location (from your screenshot)
+    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1") -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -57,7 +59,24 @@ function Start-QOTMainWindow {
     if ($btnSettings) {
         $btnSettings.Add_Click({
             try {
-                Show-QOTSettingsWindow -Owner $window
+                if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
+                    [System.Windows.MessageBox]::Show(
+                        "Settings UI entry point not found."
+                    ) | Out-Null
+                    return
+                }
+
+                $content = New-QOTSettingsView
+
+                $sw = New-Object System.Windows.Window
+                $sw.Title = "Settings"
+                $sw.Width = 600
+                $sw.Height = 420
+                $sw.Owner = $window
+                $sw.WindowStartupLocation = "CenterOwner"
+                $sw.Content = $content
+
+                $sw.ShowDialog() | Out-Null
             }
             catch {
                 [System.Windows.MessageBox]::Show(
