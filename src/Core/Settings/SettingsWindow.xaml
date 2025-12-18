@@ -113,7 +113,7 @@
             </StackPanel>
 
             <TextBox x:Name="TxtEmail"
-                     Width="260"
+                     Width="520"
                      ToolTip="Enter an email address" />
 
         </DockPanel>
