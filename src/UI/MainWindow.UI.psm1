@@ -3,6 +3,24 @@
 
 $ErrorActionPreference = "Stop"
 
+function Find-QOTFile {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$FileName,
+        [string[]]$PreferRegex = @()
+    )
+
+    $all = @(Get-ChildItem -Path $Root -Recurse -File -Filter $FileName -ErrorAction SilentlyContinue)
+    if ($all.Count -eq 0) { return $null }
+
+    foreach ($rx in $PreferRegex) {
+        $hit = $all | Where-Object { $_.FullName -match $rx } | Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+
+    return ($all | Select-Object -First 1).FullName
+}
+
 function Start-QOTMainWindow {
     param(
         [Parameter(Mandatory)]
@@ -18,20 +36,21 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1") -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
-    # Discover Settings core module (path-safe)
+    # Find + import Settings core (path-flexible)
     # ------------------------------------------------------------
-    $settingsPath = Get-ChildItem -Path $basePath -Recurse -File -Filter "Settings.psm1" |
-        Where-Object { $_.FullName -match "\\Core\\Settings\\Settings\.psm1$" } |
-        Select-Object -First 1 -ExpandProperty FullName
+    $settingsPath = Find-QOTFile -Root (Join-Path $basePath "Core") -FileName "Settings.psm1" -PreferRegex @(
+        "\\Core\\Settings\\Settings\.psm1$",
+        "\\Core\\Settings\.psm1$"
+    )
 
     if (-not $settingsPath) {
-        throw "Settings.psm1 not found under Core\Settings"
+        throw "Could not locate Settings.psm1 anywhere under: $(Join-Path $basePath 'Core')"
     }
 
     Import-Module $settingsPath -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
-    # Tickets core (hard requirement for Tickets tab)
+    # Tickets core (required for Tickets tab)
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Core\Tickets.psm1") -Force -ErrorAction Stop
 
@@ -42,13 +61,14 @@ function Start-QOTMainWindow {
 
     # Ensure no stale Tickets UI function exists
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Force -ErrorAction SilentlyContinue
 
-    # Discover Settings UI module safely
-    $settingsUiPath = Get-ChildItem -Path $basePath -Recurse -File -Filter "Settings.UI.psm1" |
-        Where-Object { $_.FullName -match "\\Core\\Settings\\Settings\.UI\.psm1$" } |
-        Select-Object -First 1 -ExpandProperty FullName
+    # Settings UI (optional)
+    $settingsUiPath = Find-QOTFile -Root $basePath -FileName "Settings.UI.psm1" -PreferRegex @(
+        "\\Core\\Settings\\Settings\.UI\.psm1$",
+        "\\UI\\Settings\.UI\.psm1$",
+        "\\Settings\.UI\.psm1$"
+    )
 
     if ($settingsUiPath) {
         Import-Module $settingsUiPath -Force -ErrorAction SilentlyContinue
@@ -81,9 +101,7 @@ function Start-QOTMainWindow {
         }
     }
     catch {
-        [System.Windows.MessageBox]::Show(
-            "Tickets UI failed to initialise.`r`n$($_.Exception.Message)"
-        ) | Out-Null
+        [System.Windows.MessageBox]::Show("Tickets UI failed to initialise.`r`n$($_.Exception.Message)") | Out-Null
     }
 
     # ------------------------------------------------------------
@@ -95,14 +113,16 @@ function Start-QOTMainWindow {
         if ($btnSettings) {
             $btnSettings.Add_Click({
                 try {
-                    if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
-                        [System.Windows.MessageBox]::Show(
-                            "Settings UI not available. Check Settings.UI.psm1 exports."
-                        ) | Out-Null
+                    if (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue) {
+                        $content = New-QOTSettingsView
+                    }
+                    elseif (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue) {
+                        $content = Initialize-QOSettingsUI -Window $null
+                    }
+                    else {
+                        [System.Windows.MessageBox]::Show("Settings UI function not found. Check Settings.UI.psm1 exports.") | Out-Null
                         return
                     }
-
-                    $content = New-QOTSettingsView
 
                     $sw = New-Object System.Windows.Window
                     $sw.Title = "Settings"
@@ -116,24 +136,18 @@ function Start-QOTMainWindow {
                     $null = $sw.ShowDialog()
                 }
                 catch {
-                    [System.Windows.MessageBox]::Show(
-                        "Failed to open Settings.`r`n$($_.Exception.Message)"
-                    ) | Out-Null
+                    [System.Windows.MessageBox]::Show("Failed to open Settings.`r`n$($_.Exception.Message)") | Out-Null
                 }
             })
         }
-    }
-    catch {
-        # Never crash the app for settings
-    }
+    } catch { }
 
     # ------------------------------------------------------------
     # Close splash
     # ------------------------------------------------------------
     try {
         if ($SplashWindow) { $SplashWindow.Close() }
-    }
-    catch { }
+    } catch { }
 
     # ------------------------------------------------------------
     # Show main window
