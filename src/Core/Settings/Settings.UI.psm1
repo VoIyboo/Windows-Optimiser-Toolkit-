@@ -135,7 +135,7 @@ function Test-EmailFormat {
 # UI Builder
 # -------------------------------------------------------------------
 function Initialize-QOSettingsUI {
-    param([Parameter(Mandatory)] $Window)
+    param([Parameter(Mandatory = $false)] $Window)
 
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
@@ -280,7 +280,6 @@ function Initialize-QOSettingsUI {
 }
 
 function New-QOTSettingsView {
-    # Wrapper so MainWindow.UI.psm1 can request a settings panel easily
     return (Initialize-QOSettingsUI -Window $null)
 }
 
