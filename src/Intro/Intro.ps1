@@ -1,11 +1,10 @@
-# Intro.ps1
+ Intro.ps1
 # Fox splash startup for the Quinn Optimiser Toolkit (progress + fade + swap to Main UI)
+# Fox splash startup for the Quinn Optimiser Toolkit (progress + ready + fade + swap to Main UI)
 
 param(
     [switch]$SkipSplash,
-    [string]$LogPath,
-    [switch]$Quiet
-)
+@@ -9,9 +9,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 
@@ -15,9 +14,7 @@ $ErrorActionPreference = "Stop"
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
     if (-not (Test-Path $logDir)) {
-        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    }
-    $LogPath = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+@@ -21,52 +18,34 @@ if (-not $LogPath) {
 }
 $script:QOTLogPath = $LogPath
 
@@ -70,16 +67,7 @@ try {
     if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
         $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
         $splash = New-QOTSplashWindow -Path $splashXaml
-
-        if ($splash) {
-            $splash.WindowStartupLocation = "CenterScreen"
-            $splash.Topmost = $true
-            $splash.Show()
-        }
-    }
-
-    function Set-FoxSplash {
-        param(
+@@ -83,130 +62,78 @@ try {
             [int]$Percent,
             [string]$Text
         )
@@ -102,6 +90,12 @@ try {
         try {
             $splash.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
         } catch { }
+        $splash.Dispatcher.Invoke([action]{
+            $bar = $splash.FindName("SplashProgressBar")
+            $txt = $splash.FindName("SplashStatusText")
+            if ($bar) { $bar.Value = [double]$Percent }
+            if ($txt) { $txt.Text = $Text }
+        })
     }
 
     function FadeOut-AndCloseFoxSplash {
@@ -115,16 +109,31 @@ try {
                 $anim.From = 1
                 $anim.To = 0
                 $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+        $splash.Dispatcher.Invoke([action]{
+            $splash.Topmost = $false
 
                 $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
             })
         } catch { }
+            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+            $anim.From = 1
+            $anim.To = 0
+            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
 
         Start-Sleep -Milliseconds 330
+            $splash.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+        })
 
         try {
             $splash.Dispatcher.Invoke([action]{ $splash.Close() })
         } catch { }
+        $t = New-Object System.Windows.Threading.DispatcherTimer
+        $t.Interval = [TimeSpan]::FromMilliseconds(330)
+        $t.Add_Tick({
+            $t.Stop()
+            try { $splash.Close() } catch { }
+        })
+        $t.Start()
     }
 
     # -------------------------------------------------
@@ -181,6 +190,28 @@ try {
         }
 
         Start-Sleep -Milliseconds 100
+    $mw = Start-QOTMain -RootPath $rootPath
+
+    if ($mw) {
+        $mw.Add_ContentRendered({
+            try {
+                Set-FoxSplash 100 "Ready"
+
+                $timer = New-Object System.Windows.Threading.DispatcherTimer
+                $timer.Interval = [TimeSpan]::FromSeconds(2)
+                $timer.Add_Tick({
+                    $timer.Stop()
+                    FadeOut-AndCloseFoxSplash
+                    Write-QLog "Intro completed" "INFO"
+                })
+                $timer.Start()
+            } catch { }
+        })
+    }
+    else {
+        Set-FoxSplash 100 "Ready"
+        FadeOut-AndCloseFoxSplash
+        Write-QLog "Intro completed" "INFO"
     }
 
     # Now show Ready for 2 seconds, then fade away
@@ -191,6 +222,8 @@ try {
     FadeOut-AndCloseFoxSplash
 
     Write-QLog "Intro completed" "INFO"
+    # Keep message pump alive so UI is clickable
+    [System.Windows.Threading.Dispatcher]::Run()
 }
 finally {
     $WarningPreference = $oldWarningPreference
@@ -209,4 +242,3 @@ if ($Global:QOTMainWindow) {
         # If we can't run the dispatcher, just exit gracefully
     }
 }
-
