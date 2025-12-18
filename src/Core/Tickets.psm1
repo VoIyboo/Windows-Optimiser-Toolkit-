@@ -293,34 +293,34 @@ function Invoke-QOEmailTicketPoll {
     )
 
     $mailboxes = @()
-
     if (Get-Command Get-QOMonitoredEmailAddresses -ErrorAction SilentlyContinue) {
         $mailboxes = @(Get-QOMonitoredEmailAddresses)
     } else {
         $s = Get-QOSettings
-        if ($s -and $s.PSObject.Properties.Name -contains "MonitoredEmailAddresses") {
-            $mailboxes = @($s.MonitoredEmailAddresses)
+        if ($s -and $s.Tickets -and $s.Tickets.EmailIntegration) {
+            $mailboxes = @($s.Tickets.EmailIntegration.MonitoredAddresses)
         }
     }
-
+    
     $mailboxes = @(
         $mailboxes |
         Where-Object { $_ -and -not [string]::IsNullOrWhiteSpace([string]$_) } |
         ForEach-Object { ([string]$_).Trim() } |
         Select-Object -Unique
     )
-
+    
     if (-not $mailboxes -or $mailboxes.Count -lt 1) {
         return @()
     }
-
-    $created = @()
-
-    function Get-QOUnreadMailItemsFromFolder {
-        param(
-            [Parameter(Mandatory)] $Folder,
-            [int] $Max = 25
-        )
+    
+    
+        $created = @()
+    
+        function Get-QOUnreadMailItemsFromFolder {
+            param(
+                [Parameter(Mandatory)] $Folder,
+                [int] $Max = 25
+            )
 
         $out = @()
 
