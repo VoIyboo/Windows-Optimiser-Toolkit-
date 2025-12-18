@@ -59,12 +59,15 @@ function Start-QOTMainWindow {
     if ($btnSettings) {
         $btnSettings.Add_Click({
             try {
-                if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
+                if (-not (Get-Command Initialize-QOSettingsUI -ErrorAction SilentlyContinue)) {
                     [System.Windows.MessageBox]::Show(
                         "Settings UI entry point not found."
                     ) | Out-Null
                     return
                 }
+                
+                $content = Initialize-QOSettingsUI
+
 
                 $content = New-QOTSettingsView
 
