@@ -355,60 +355,93 @@ function Invoke-QOEmailTicketPoll {
             
             if (-not $inbox) { continue }
             
-            $items = $inbox.Items
-            $items.Sort("[ReceivedTime]", $true)
-
-            $restricted = $null
-            try { $restricted = $items.Restrict("[UnRead] = true") } catch { $restricted = $items }
-            # If Restrict fails or returns nothing, keep going with items anyway
-            if (-not $restricted) { $restricted = $items }
-
-            $count = 0
-
-            foreach ($m in @($restricted)) {
-                if ($count -ge $MaxItemsPerMailbox) { break }
-                $count++
-
+           function Get-QOUnreadMailItemsFromFolder {
+                param(
+                    [Parameter(Mandatory)] $Folder,
+                    [int] $Max = 25
+                )
+            
+                $out = @()
+            
                 try {
-                    if (-not $m.Subject) { continue }
-
-                    $msgId = $null
-                    try { $msgId = [string]$m.EntryID } catch { }
-
-                    $db = Get-QOTickets
-                    $existing = $false
-                    if ($msgId) {
-                        $existing = @($db.Tickets) | Where-Object { $_.PSObject.Properties.Name -contains "SourceMessageId" -and [string]$_.SourceMessageId -eq $msgId } | Select-Object -First 1
+                    $items = $Folder.Items
+                    $items.Sort("[ReceivedTime]", $true)
+            
+                    $restricted = $null
+                    try { $restricted = $items.Restrict("[UnRead] = true") } catch { $restricted = $items }
+                    if (-not $restricted) { $restricted = $items }
+            
+                    $i = 0
+                    foreach ($m in @($restricted)) {
+                        if ($i -ge $Max) { break }
+                        $i++
+                        $out += $m
                     }
-                    if ($existing) { continue }
-
-                    $body = ""
-                    try { $body = [string]$m.Body } catch { }
-
-                    $t = New-QOTicket -Title ([string]$m.Subject) -Description $body -Category "Email" -Priority "Normal"
-                    $t | Add-Member -NotePropertyName SourceMailbox   -NotePropertyValue ([string]$addr) -Force
-                    $t | Add-Member -NotePropertyName SourceMessageId -NotePropertyValue ([string]$msgId) -Force
-                    $t | Add-Member -NotePropertyName ReceivedAt      -NotePropertyValue ((Get-Date).ToString("o")) -Force
-
-                    Add-QOTicket -Ticket $t | Out-Null
-                    $created += $t
-
-                    try {
-                        $m.UnRead = $false
-                        $m.Save()
-                    } catch { }
-
                 } catch { }
+            
+                return @($out)
             }
-        }
-
-    } catch {
-        return @()
-    }
-
-    return @($created)
-}
-
+            
+            $foldersToScan = @()
+            
+            # Inbox itself
+            $foldersToScan += $inbox
+            
+            # Subfolders under Inbox (rules often file mail here)
+            try {
+                foreach ($sub in @($inbox.Folders)) {
+                    if ($sub) { $foldersToScan += $sub }
+                }
+            } catch { }
+            
+            $count = 0
+            
+            foreach ($folder in $foldersToScan) {
+            
+                $unreadItems = @(Get-QOUnreadMailItemsFromFolder -Folder $folder -Max $MaxItemsPerMailbox)
+            
+                foreach ($m in $unreadItems) {
+                    if ($count -ge $MaxItemsPerMailbox) { break }
+                    $count++
+            
+                    try {
+                        if (-not $m.Subject) { continue }
+            
+                        $msgId = $null
+                        try { $msgId = [string]$m.EntryID } catch { }
+            
+                        $db = Get-QOTickets
+                        $existing = $false
+                        if ($msgId) {
+                            $existing = @($db.Tickets) | Where-Object {
+                                $_.PSObject.Properties.Name -contains "SourceMessageId" -and
+                                [string]$_.SourceMessageId -eq $msgId
+                            } | Select-Object -First 1
+                        }
+                        if ($existing) { continue }
+            
+                        $body = ""
+                        try { $body = [string]$m.Body } catch { }
+            
+                        $t = New-QOTicket -Title ([string]$m.Subject) -Description $body -Category "Email" -Priority "Normal"
+                        $t | Add-Member -NotePropertyName SourceMailbox   -NotePropertyValue ([string]$addr) -Force
+                        $t | Add-Member -NotePropertyName SourceMessageId -NotePropertyValue ([string]$msgId) -Force
+                        $t | Add-Member -NotePropertyName ReceivedAt      -NotePropertyValue ((Get-Date).ToString("o")) -Force
+                        try { $t | Add-Member -NotePropertyName SourceFolder -NotePropertyValue ([string]$folder.Name) -Force } catch { }
+            
+                        Add-QOTicket -Ticket $t | Out-Null
+                        $created += $t
+            
+                        try {
+                            $m.UnRead = $false
+                            $m.Save()
+                        } catch { }
+            
+                    } catch { }
+                }
+            
+                if ($count -ge $MaxItemsPerMailbox) { break }
+            }
 
 Export-ModuleMember -Function `
     Get-QOTickets, Save-QOTickets, `
