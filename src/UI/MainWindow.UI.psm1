@@ -180,18 +180,21 @@ function Start-QOTMainWindow {
 
     try {
         $window = Initialize-QOTMainWindow
-        if (-not $window) { throw "Initialize-QOTMainWindow returned null. Main window was not created." }
+        if (-not $window) {
+            throw "Initialize-QOTMainWindow returned null. Main window was not created."
+        }
 
-        # Ensure we have a real WPF Application object (fixes lots of ShowDialog weirdness)
+        # Ensure we have a real WPF Application object
         $app = [System.Windows.Application]::Current
         if (-not $app) {
             $app = New-Object System.Windows.Application
             $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
         }
-                # Ensure WPF assemblies are loaded
+
+        # Ensure WPF assemblies are loaded
         Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction SilentlyContinue
 
-        # Catch dispatcher exceptions and print the real cause
+        # Catch dispatcher exceptions and show real error
         try {
             $app.add_DispatcherUnhandledException({
                 param($sender, $e)
@@ -202,14 +205,14 @@ function Start-QOTMainWindow {
                 Write-Host "========================================================" -ForegroundColor Red
                 Write-Host ""
 
-                # Stop PowerShell from crashing so we can read the error
                 $e.Handled = $true
             })
         } catch { }
 
-        # Close splash AFTER main is rendered, with Ready + 2s + fade.
+        # Close splash AFTER main window is rendered
         if ($SplashWindow) {
             $window.Add_ContentRendered({
+
                 try {
                     $bar = $SplashWindow.FindName("SplashProgressBar")
                     $txt = $SplashWindow.FindName("SplashStatusText")
@@ -220,33 +223,42 @@ function Start-QOTMainWindow {
                     $timer = New-Object System.Windows.Threading.DispatcherTimer
                     $timer.Interval = [TimeSpan]::FromSeconds(2)
                     $timer.Add_Tick({
-                        $timer.Stop()
+                        param($senderTimer, $eTimer)
+
+                        try { if ($senderTimer) { $senderTimer.Stop() } } catch { }
 
                         try {
-                            $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
-                            $anim.From = 1
-                            $anim.To = 0
-                            $anim.Duration = [TimeSpan]::FromMilliseconds(300)
-                            $SplashWindow.BeginAnimation([System.Windows.Window]::OpacityProperty, $anim)
+                            if ($SplashWindow) {
+                                $anim = New-Object System.Windows.Media.Animation.DoubleAnimation
+                                $anim.From = 1
+                                $anim.To = 0
+                                $anim.Duration = [TimeSpan]::FromMilliseconds(300)
+                                $SplashWindow.BeginAnimation(
+                                    [System.Windows.Window]::OpacityProperty,
+                                    $anim
+                                )
+                            }
                         } catch { }
 
                         $t2 = New-Object System.Windows.Threading.DispatcherTimer
                         $t2.Interval = [TimeSpan]::FromMilliseconds(330)
                         $t2.Add_Tick({
-                            $t2.Stop()
-                            try { $SplashWindow.Close() } catch { }
+                            param($senderTimer2, $eTimer2)
+
+                            try { if ($senderTimer2) { $senderTimer2.Stop() } } catch { }
+                            try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
                         })
                         $t2.Start()
                     })
                     $timer.Start()
-                } catch { }
+                }
+                catch { }
             })
         }
 
         $Global:QOTMainWindow = $window
         $app.MainWindow = $window
 
-        # Run the message loop properly instead of ShowDialog()
         [void]$window.Show()
         [void]$app.Run()
     }
@@ -262,6 +274,7 @@ function Start-QOTMainWindow {
         throw
     }
 }
+
 
 function Select-QOTPreferredTab {
     param([string]$PreferredTab)
