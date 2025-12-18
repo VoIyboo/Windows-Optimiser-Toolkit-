@@ -80,21 +80,24 @@ function New-QOTSettingsView {
     function Set-QOControlText {
         param(
             [Parameter(Mandatory)] $Control,
-            [Parameter(Mandatory)] [string] $Value
+            [Parameter(Mandatory)]
+            [AllowEmptyString()]
+            [string] $Value
         )
-
+    
         if ($null -eq $Control) { return }
-
+    
         if ($Control.PSObject.Properties.Match("Text").Count -gt 0) {
             $Control.Text = $Value
             return
         }
-
+    
         if ($Control.PSObject.Properties.Match("Content").Count -gt 0) {
             $Control.Content = $Value
             return
         }
     }
+
 
     function Ensure-SettingsShape {
         $s = Get-QOSettings
