@@ -1,139 +1,93 @@
-# src\Core\Tickets.psm1 # Storage and basic model for Studio Voly Ticketing System (NO UI CODE)
+# src\Tickets\Tickets.UI.psm1
+# UI wiring for the Tickets tab (NO storage logic here)
+
 $ErrorActionPreference = "Stop"
 
-# Only import Settings here
-Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1")   -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "..\Core\Settings.psm1") -Force -ErrorAction Stop
 
-# =====================================================================
-# Script state
-# =====================================================================
-$script:TicketStorePath = $null
-$script:TicketBackupPath = $null
+$script:TicketsGrid = $null
 
-# =====================================================================
-# Helpers
-# =====================================================================
-function Ensure-QOSettingProperty {
+function Initialize-QOTicketsUI {
     param(
         [Parameter(Mandatory)]
-        [object]$Settings,
-        [Parameter(Mandatory)]
-        [string]$Name,
-        [Parameter(Mandatory)]
-        $DefaultValue
+        $Window
     )
 
-    if (-not $Settings) {
-        throw "Settings object is null."
-    }
+    if (-not $Window) { throw "Initialize-QOTicketsUI: Window is null." }
 
-    if ($Settings.PSObject.Properties.Name -notcontains $Name) {
-        $Settings | Add-Member -NotePropertyName $Name -NotePropertyValue $DefaultValue
-    }
+    $script:TicketsGrid = $Window.FindName("TicketsGrid")
+    $btnRefresh         = $Window.FindName("BtnTicketsRefresh")
+    $btnAdd             = $Window.FindName("BtnTicketsAdd")
+    $btnDelete          = $Window.FindName("BtnTicketsDelete")
 
-    return $Settings
-}
+    if (-not $script:TicketsGrid) { [System.Windows.MessageBox]::Show("TicketsGrid not found. Check XAML Name=""TicketsGrid""") | Out-Null; return }
+    if (-not $btnRefresh)         { [System.Windows.MessageBox]::Show("BtnTicketsRefresh not found. Check XAML Name=""BtnTicketsRefresh""") | Out-Null; return }
+    if (-not $btnAdd)             { [System.Windows.MessageBox]::Show("BtnTicketsAdd not found. Check XAML Name=""BtnTicketsAdd""") | Out-Null; return }
+    if (-not $btnDelete)          { [System.Windows.MessageBox]::Show("BtnTicketsDelete not found. Check XAML Name=""BtnTicketsDelete""") | Out-Null; return }
 
-function New-QODefaultTicketDatabase {
-    return [pscustomobject]@{ SchemaVersion = 1 Tickets = @() }
-}
-
-# =====================================================================
-# Storage initialisation
-# =====================================================================
-function Initialize-QOTicketStorage {
-    if ($script:TicketStorePath -and $script:TicketBackupPath) { return }
-
-    $settings = Get-QOSettings
-
-    $settings = Ensure-QOSettingProperty -Settings $settings -Name "TicketStorePath" -DefaultValue ""
-    $settings = Ensure-QOSettingProperty -Settings $settings -Name "LocalTicketBackupPath" -DefaultValue ""
-    $settings = Ensure-QOSettingProperty -Settings $settings -Name "TicketsColumnLayout" -DefaultValue @()
-
-    if ([string]::IsNullOrWhiteSpace([string]$settings.TicketStorePath)) {
-        $defaultTicketsDir = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets"
-        $defaultTicketsFile = Join-Path $defaultTicketsDir "Tickets.json"
-        $settings.TicketStorePath = $defaultTicketsFile
-    }
-
-    if ([string]::IsNullOrWhiteSpace([string]$settings.LocalTicketBackupPath)) {
-        $defaultBackupDir = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
-        $settings.LocalTicketBackupPath = $defaultBackupDir
-    }
-
-    Save-QOSettings -Settings $settings
-
-    $script:TicketStorePath = [string]$settings.TicketStorePath
-    $script:TicketBackupPath = [string]$settings.LocalTicketBackupPath
-
-    $storeDir = Split-Path -Parent $script:TicketStorePath
-    if (-not (Test-Path -LiteralPath $storeDir)) {
-        New-Item -ItemType Directory -Path $storeDir -Force | Out-Null
-    }
-    if (-not (Test-Path -LiteralPath $script:TicketBackupPath)) {
-        New-Item -ItemType Directory -Path $script:TicketBackupPath -Force | Out-Null
-    }
-
-    if (-not (Test-Path -LiteralPath $script:TicketStorePath)) {
-        $db = New-QODefaultTicketDatabase
-        $db | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
-    }
-}
-
-# =====================================================================
-# Database IO
-# =====================================================================
-function Get-QOTickets {
-    Initialize-QOTicketStorage
-
-    try {
-        $json = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop
-        if ([string]::IsNullOrWhiteSpace($json)) {
-            return New-QODefaultTicketDatabase
-        }
-
-        $db = $json | ConvertFrom-Json -ErrorAction Stop
-
-        if (-not $db.PSObject.Properties.Name.Contains("SchemaVersion")) {
-            $db | Add-Member -NotePropertyName "SchemaVersion" -NotePropertyValue 1
-        }
-        if (-not $db.PSObject.Properties.Name.Contains("Tickets")) {
-            $db | Add-Member -NotePropertyName "Tickets" -NotePropertyValue @()
-        }
-
-        if ($null -eq $db.Tickets) {
-            $db.Tickets = @()
-        } else {
-            $db.Tickets = @($db.Tickets)
-        }
-
-        return $db
-    }
-    catch {
+    $refresh = {
         try {
-            if (Test-Path -LiteralPath $script:TicketStorePath) {
-                $backupName = Join-Path $script:TicketBackupPath ("Tickets_corrupt_{0}.json" -f (Get-Date -Format "yyyyMMddHHmmss"))
-                Copy-Item -LiteralPath $script:TicketStorePath -Destination $backupName -ErrorAction SilentlyContinue
-            }
+            $db = Get-QOTickets
+            $script:TicketsGrid.ItemsSource = @($db.Tickets)
+            $script:TicketsGrid.Items.Refresh()
         }
-        catch { }
-
-        $db = New-QODefaultTicketDatabase
-        $db | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
-        return $db
+        catch {
+            [System.Windows.MessageBox]::Show("Failed to load tickets.`r`n$($_.Exception.Message)") | Out-Null
+        }
     }
+
+    $btnRefresh.Add_Click($refresh)
+
+    $btnAdd.Add_Click({
+        try {
+            Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
+            $title = [Microsoft.VisualBasic.Interaction]::InputBox("Ticket title:", "New Ticket", "")
+            if ([string]::IsNullOrWhiteSpace($title)) { return }
+
+            $t = New-QOTicket -Title $title
+            Add-QOTicket -Ticket $t
+
+            & $refresh
+        }
+        catch {
+            [System.Windows.MessageBox]::Show("Failed to create ticket.`r`n$($_.Exception.Message)") | Out-Null
+        }
+    })
+
+    $btnDelete.Add_Click({
+        try {
+            $selected = $script:TicketsGrid.SelectedItem
+            if (-not $selected) {
+                [System.Windows.MessageBox]::Show("Select a ticket first.") | Out-Null
+                return
+            }
+
+            $id = $null
+            if ($selected.PSObject.Properties.Name -contains "Id") { $id = [string]$selected.Id }
+            if ([string]::IsNullOrWhiteSpace($id)) {
+                [System.Windows.MessageBox]::Show("Selected ticket has no Id. Cannot delete.") | Out-Null
+                return
+            }
+
+            $confirm = [System.Windows.MessageBox]::Show(
+                "Delete this ticket?", "Confirm delete",
+                [System.Windows.MessageBoxButton]::YesNo,
+                [System.Windows.MessageBoxImage]::Warning
+            )
+
+            if ($confirm -ne [System.Windows.MessageBoxResult]::Yes) { return }
+
+            Remove-QOTicket -Id $id
+
+            & $refresh
+        }
+        catch {
+            [System.Windows.MessageBox]::Show("Failed to delete ticket.`r`n$($_.Exception.Message)") | Out-Null
+        }
+    })
+
+    & $refresh
 }
 
-# (All CRUD functions follow here — New-QOTicket, Add-QOTicket, etc, exactly as in the repo)
-
-Export-ModuleMember -Function `
-    Initialize-QOTicketStorage,
-    New-QODefaultTicketDatabase,
-    Get-QOTickets,
-    Save-QOTickets,
-    New-QOTicket,
-    Add-QOTicket,
-    Get-QOTicketById,
-    Remove-QOTicket,
-    Set-QOTicketStatus,
-    Set-QOTicketTitle
+Export-ModuleMember -Function Initialize-QOTicketsUI
