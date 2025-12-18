@@ -40,8 +40,43 @@ function Save-QOMonitoredAddresses {
     )
 
     $s = Ensure-QOEmailIntegrationSettings
-    $s.Tickets.EmailIntegration.MonitoredAddresses = @($Collection | Where-Object { $_ -and $_.Trim() } )
+    $s.Tickets.EmailIntegration.MonitoredAddresses = @(
+        $Collection | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ }
+    )
     Save-QOSettings -Settings $s
+}
+
+function Find-QOElementByNameAndType {
+    param(
+        [Parameter(Mandatory)] $Root,
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [Type] $Type
+    )
+
+    function Walk {
+        param($Parent)
+
+        if ($null -eq $Parent) { return $null }
+
+        try {
+            if ($Parent -is $Type -and $Parent.Name -eq $Name) { return $Parent }
+        }
+        catch { }
+
+        $count = 0
+        try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Parent) }
+        catch { return $null }
+
+        for ($i = 0; $i -lt $count; $i++) {
+            $child = [System.Windows.Media.VisualTreeHelper]::GetChild($Parent, $i)
+            $found = Walk $child
+            if ($found) { return $found }
+        }
+
+        return $null
+    }
+
+    return (Walk $Root)
 }
 
 function New-QOTSettingsView {
@@ -101,53 +136,33 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    function Find-QOElementByName {
-        param(
-            [Parameter(Mandatory)] $Root,
-            [Parameter(Mandatory)] [string] $Name
-        )
-    
-        # 1) Try FrameworkElement.FindName first (best for namescopes)
-        try {
-            if ($Root -is [System.Windows.FrameworkElement]) {
-                $r = $Root.FindName($Name)
-                if ($r) { return $r }
-            }
-        } catch { }
-    
-        # 2) Fallback: Visual tree walk
-        function Walk {
-            param($Parent)
-    
-            if ($null -eq $Parent) { return $null }
-    
-            try {
-                if ($Parent -is [System.Windows.FrameworkElement] -and $Parent.Name -eq $Name) {
-                    return $Parent
-                }
-            } catch { }
-    
-            $count = 0
-            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Parent) } catch { return $null }
-    
-            for ($i = 0; $i -lt $count; $i++) {
-                $child = [System.Windows.Media.VisualTreeHelper]::GetChild($Parent, $i)
-                $found = Walk $child
-                if ($found) { return $found }
-            }
-    
-            return $null
-        }
-    
-        return (Walk $Root)
+    # Find the REAL controls (by name and type)
+    $txtEmail = Find-QOElementByNameAndType -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
+    $btnAdd   = Find-QOElementByNameAndType -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
+    $btnRem   = Find-QOElementByNameAndType -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
+    $list     = Find-QOElementByNameAndType -Root $root -Name "LstEmails" -Type ([System.Windows.Controls.ListBox])
+
+    if (-not $txtEmail) { throw "TxtEmail not found (TextBox)" }
+    if (-not $btnAdd)   { throw "BtnAdd not found (Button)" }
+    if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
+    if (-not $list)     { throw "LstEmails not found (ListBox)" }
+
+    Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
+    Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
+
+    # Build collection from settings and bind
+    $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
+
+    $s = Ensure-QOEmailIntegrationSettings
+    foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
+        $v = ([string]$e).Trim()
+        if ($v) { $addresses.Add($v) }
     }
 
-
-    # Bind list to collection (this fixes the "Items.Add does nothing" problem)
     $list.ItemsSource = $addresses
-
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
+    # Add
     $btnAdd.Add_Click({
         try {
             $addr = ($txtEmail.Text + "").Trim()
@@ -155,29 +170,27 @@ function New-QOTSettingsView {
 
             if (-not $addr) { return }
 
-            # Case-insensitive duplicate check
-            $exists = $false
+            $lower = $addr.ToLower()
             foreach ($x in $addresses) {
-                if (($x + "").Trim().ToLower() -eq $addr.ToLower()) { $exists = $true; break }
+                if (([string]$x).Trim().ToLower() -eq $lower) {
+                    Write-QOSettingsUILog "Already existed"
+                    $txtEmail.Text = ""
+                    return
+                }
             }
 
-            if (-not $exists) {
-                $addresses.Add($addr)   # UI updates instantly
-                Write-QOSettingsUILog "Added to collection"
-            }
-            else {
-                Write-QOSettingsUILog "Already existed"
-            }
-
+            $addresses.Add($addr)
             $txtEmail.Text = ""
+
             Save-QOMonitoredAddresses -Collection $addresses
-            Write-QOSettingsUILog "Saved settings"
+            Write-QOSettingsUILog "Added + saved"
         }
         catch {
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.Message)
         }
     })
 
+    # Remove
     $btnRem.Add_Click({
         try {
             $sel = $list.SelectedItem
@@ -185,9 +198,9 @@ function New-QOTSettingsView {
 
             if (-not $sel) { return }
 
-            [void]$addresses.Remove([string]$sel)  # UI updates instantly
+            [void]$addresses.Remove([string]$sel)
             Save-QOMonitoredAddresses -Collection $addresses
-            Write-QOSettingsUILog "Removed and saved"
+            Write-QOSettingsUILog "Removed + saved"
         }
         catch {
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.Message)
