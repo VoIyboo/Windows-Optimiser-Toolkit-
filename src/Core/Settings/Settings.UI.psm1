@@ -101,29 +101,47 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    function Find-QONode {
-        param([Parameter(Mandatory)] $Root, [Parameter(Mandatory)] [string] $Name)
-        [System.Windows.LogicalTreeHelper]::FindLogicalNode($Root, $Name)
+    function Find-QOElementByName {
+        param(
+            [Parameter(Mandatory)] $Root,
+            [Parameter(Mandatory)] [string] $Name
+        )
+    
+        # 1) Try FrameworkElement.FindName first (best for namescopes)
+        try {
+            if ($Root -is [System.Windows.FrameworkElement]) {
+                $r = $Root.FindName($Name)
+                if ($r) { return $r }
+            }
+        } catch { }
+    
+        # 2) Fallback: Visual tree walk
+        function Walk {
+            param($Parent)
+    
+            if ($null -eq $Parent) { return $null }
+    
+            try {
+                if ($Parent -is [System.Windows.FrameworkElement] -and $Parent.Name -eq $Name) {
+                    return $Parent
+                }
+            } catch { }
+    
+            $count = 0
+            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Parent) } catch { return $null }
+    
+            for ($i = 0; $i -lt $count; $i++) {
+                $child = [System.Windows.Media.VisualTreeHelper]::GetChild($Parent, $i)
+                $found = Walk $child
+                if ($found) { return $found }
+            }
+    
+            return $null
+        }
+    
+        return (Walk $Root)
     }
 
-    $txtEmail = Find-QONode -Root $root -Name "TxtEmail"
-    $btnAdd   = Find-QONode -Root $root -Name "BtnAdd"
-    $btnRem   = Find-QONode -Root $root -Name "BtnRemove"
-    $list     = Find-QONode -Root $root -Name "LstEmails"
-
-    if (-not $txtEmail) { throw "TxtEmail not found" }
-    if (-not $btnAdd)   { throw "BtnAdd not found" }
-    if (-not $btnRem)   { throw "BtnRemove not found" }
-    if (-not $list)     { throw "LstEmails not found" }
-
-    # Build collection from settings and bind to UI
-    $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
-
-    $s = Ensure-QOEmailIntegrationSettings
-    foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
-        $v = ([string]$e).Trim()
-        if ($v) { $addresses.Add($v) }
-    }
 
     # Bind list to collection (this fixes the "Items.Add does nothing" problem)
     $list.ItemsSource = $addresses
