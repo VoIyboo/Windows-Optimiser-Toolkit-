@@ -48,7 +48,6 @@ function Invoke-QLog {
     try {
         & $script:QLogFunc $Message $Level
     } catch {
-        # If even logging fails, last resort output
         try { Write-Host "[LOGFAIL] $Message" } catch { }
     }
 }
@@ -57,6 +56,9 @@ $oldWarningPreference = $WarningPreference
 $WarningPreference    = "SilentlyContinue"
 
 try {
+    # -------------------------------------------------------------------
+    # WPF core
+    # -------------------------------------------------------------------
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
     # Ensure a WPF Application exists (prevents null Current in modules that expect it)
@@ -222,8 +224,27 @@ try {
         Complete-Intro -Reason "mw-null"
     }
 
+    # -------------------------------------------------------------------
     # Keep message pump alive so UI remains clickable
-    [System.Windows.Threading.Dispatcher]::Run()
+    # -------------------------------------------------------------------
+    try {
+        $app = [System.Windows.Application]::Current
+        if ($app) {
+            if ($mw) {
+                $null = $app.Run($mw)
+            }
+            else {
+                $null = $app.Run()
+            }
+        }
+        else {
+            [System.Windows.Threading.Dispatcher]::Run()
+        }
+    }
+    catch {
+        Invoke-QLog "Message pump failed: $($_.Exception.Message)" "ERROR"
+        throw
+    }
 }
 finally {
     $WarningPreference = $oldWarningPreference
