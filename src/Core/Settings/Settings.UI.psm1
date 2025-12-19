@@ -4,9 +4,6 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
-# Module-level state (WPF-safe)
-$script:QO_SettingsAddresses = $null
-
 function Write-QOSettingsUILog {
     param([string]$Message)
 
@@ -19,7 +16,7 @@ function Write-QOSettingsUILog {
     catch { }
 }
 
-Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED (HARD RELOAD OK) ==="
+Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
 
 function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
@@ -81,10 +78,12 @@ function Find-QOElementByNameAndType {
 
         try {
             if ($Parent -is $Type -and $Parent.Name -eq $Name) { return $Parent }
-        } catch { }
+        }
+        catch { }
 
         $count = 0
-        try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Parent) } catch { return $null }
+        try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Parent) }
+        catch { return $null }
 
         for ($i = 0; $i -lt $count; $i++) {
             $child = [System.Windows.Media.VisualTreeHelper]::GetChild($Parent, $i)
@@ -169,9 +168,8 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Collection + bind (module scope, WPF safe)
-    $script:QO_SettingsAddresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
-    $addresses = $script:QO_SettingsAddresses
+    # Build collection from settings and bind
+    $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
 
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -182,11 +180,23 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
+    # STEP 1: store addresses collection globally for click handlers (WPF-safe)
+    if ([System.Windows.Application]::Current) {
+        [System.Windows.Application]::Current.Properties["QO_SettingsAddresses"] = $addresses
+        Write-QOSettingsUILog "Stored collection in Application.Current.Properties"
+    }
+    else {
+        Write-QOSettingsUILog "WARNING: Application.Current is null"
+    }
+
     # Add
     $btnAdd.Add_Click({
         try {
-            $col = $script:QO_SettingsAddresses
-            if (-not $col) { throw "Addresses collection missing (module scope)" }
+            $col = $null
+            if ([System.Windows.Application]::Current) {
+                $col = [System.Windows.Application]::Current.Properties["QO_SettingsAddresses"]
+            }
+            if (-not $col) { throw "Addresses collection missing (Application.Current.Properties)" }
 
             $addr = ($txtEmail.Text + "").Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
@@ -215,8 +225,11 @@ function New-QOTSettingsView {
     # Remove
     $btnRem.Add_Click({
         try {
-            $col = $script:QO_SettingsAddresses
-            if (-not $col) { throw "Addresses collection missing (module scope)" }
+            $col = $null
+            if ([System.Windows.Application]::Current) {
+                $col = [System.Windows.Application]::Current.Properties["QO_SettingsAddresses"]
+            }
+            if (-not $col) { throw "Addresses collection missing (Application.Current.Properties)" }
 
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
