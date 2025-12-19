@@ -206,33 +206,54 @@ function New-QOTSettingsView {
     # Add
     $btnAdd.Add_Click({
         try {
+            Write-QOSettingsUILog "Add: start"
+    
             $inputBox = $script:QO_LastFocusedTextBox
-            if (-not $inputBox) { $inputBox = $txtEmail }  # fallback
-
+            if (-not $inputBox) { $inputBox = $txtEmail }
+            Write-QOSettingsUILog ("Add: inputBox null? " + ([string]($null -eq $inputBox)))
+    
             $addr = (($inputBox.Text + "").Trim())
-            Write-QOSettingsUILog ("Add clicked. Using TextBox Name='" + ($inputBox.Name + "") + "' Input='" + $addr + "'")
-
-            if (-not $addr) { return }
-
+            Write-QOSettingsUILog ("Add: addr='" + $addr + "'")
+    
+            if (-not $addr) {
+                Write-QOSettingsUILog "Add: empty addr, return"
+                return
+            }
+    
+            # Duplicate check
             $lower = $addr.ToLower()
             foreach ($x in $addresses) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
-                    Write-QOSettingsUILog "Already existed"
+                    Write-QOSettingsUILog "Add: duplicate"
                     $inputBox.Text = ""
                     return
                 }
             }
-
+    
+            Write-QOSettingsUILog "Add: before addresses.Add"
             $addresses.Add($addr)
+            Write-QOSettingsUILog ("Add: after addresses.Add, count=" + $addresses.Count)
+    
             $inputBox.Text = ""
-
-            Save-QOMonitoredAddresses -Collection $addresses
-            Write-QOSettingsUILog "Added + saved"
+            Write-QOSettingsUILog "Add: cleared textbox"
+    
+            # Save in its own try so UI add still works even if save explodes
+            try {
+                Write-QOSettingsUILog "Add: before Save-QOMonitoredAddresses"
+                Save-QOMonitoredAddresses -Collection $addresses
+                Write-QOSettingsUILog "Add: saved ok"
+            }
+            catch {
+                Write-QOSettingsUILog ("Add: SAVE FAILED: " + $_.Exception.ToString())
+                Write-QOSettingsUILog ("Add: SAVE STACK: " + $_.ScriptStackTrace)
+            }
         }
         catch {
-            Write-QOSettingsUILog ("Add failed: " + $_.Exception.Message)
+            Write-QOSettingsUILog ("Add: FAILED: " + $_.Exception.ToString())
+            Write-QOSettingsUILog ("Add: STACK: " + $_.ScriptStackTrace)
         }
     })
+
 
     # Remove
     $btnRem.Add_Click({
