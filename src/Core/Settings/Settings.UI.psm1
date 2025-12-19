@@ -22,25 +22,16 @@ function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
     if (-not $s) { $s = [pscustomobject]@{} }
 
-    if (-not ($s.PSObject.Properties.Name -contains "Tickets")) {
+    if (-not ($s.PSObject.Properties.Name -contains "Tickets") -or -not $s.Tickets) {
         $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
     }
-    elseif (-not $s.Tickets) {
-        $s.Tickets = [pscustomobject]@{}
-    }
 
-    if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration")) {
+    if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration") -or -not $s.Tickets.EmailIntegration) {
         $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
     }
-    elseif (-not $s.Tickets.EmailIntegration) {
-        $s.Tickets.EmailIntegration = [pscustomobject]@{}
-    }
 
-    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses")) {
+    if (-not ($s.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses") -or $null -eq $s.Tickets.EmailIntegration.MonitoredAddresses) {
         $s.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
-    }
-    elseif ($null -eq $s.Tickets.EmailIntegration.MonitoredAddresses) {
-        $s.Tickets.EmailIntegration.MonitoredAddresses = @()
     }
 
     return $s
@@ -154,7 +145,7 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    # Controls
+    # Controls (real ones, by name and type)
     $txtEmail = Find-QOElementByNameAndType -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
     $btnAdd   = Find-QOElementByNameAndType -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
     $btnRem   = Find-QOElementByNameAndType -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
@@ -168,7 +159,7 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Build collection from settings and bind
+    # Build collection from settings
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
 
     $s = Ensure-QOEmailIntegrationSettings
@@ -177,26 +168,20 @@ function New-QOTSettingsView {
         if ($v) { $addresses.Add($v) }
     }
 
+    # Bind list to collection
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # STEP 1: store addresses collection globally for click handlers (WPF-safe)
-    if ([System.Windows.Application]::Current) {
-        [System.Windows.Application]::Current.Properties["QO_SettingsAddresses"] = $addresses
-        Write-QOSettingsUILog "Stored collection in Application.Current.Properties"
-    }
-    else {
-        Write-QOSettingsUILog "WARNING: Application.Current is null"
-    }
+    # IMPORTANT: store the collection on the UI itself (avoids PowerShell scope issues)
+    $root.Tag = $addresses
+    Write-QOSettingsUILog "Stored addresses on root.Tag"
 
     # Add
     $btnAdd.Add_Click({
         try {
-            $col = $null
-            if ([System.Windows.Application]::Current) {
-                $col = [System.Windows.Application]::Current.Properties["QO_SettingsAddresses"]
-            }
-            if (-not $col) { throw "Addresses collection missing (Application.Current.Properties)" }
+            $col = $root.Tag
+            if (-not $col) { $col = $list.ItemsSource }
+            if (-not $col) { throw "Addresses collection missing (root.Tag and list.ItemsSource are null)" }
 
             $addr = ($txtEmail.Text + "").Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
@@ -206,12 +191,15 @@ function New-QOTSettingsView {
             foreach ($x in $col) {
                 if (([string]$x).Trim().ToLower() -eq $addr.ToLower()) {
                     $txtEmail.Text = ""
+                    Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
             }
 
             $col.Add($addr)
             $txtEmail.Text = ""
+
+            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
 
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Added + saved"
@@ -225,17 +213,17 @@ function New-QOTSettingsView {
     # Remove
     $btnRem.Add_Click({
         try {
-            $col = $null
-            if ([System.Windows.Application]::Current) {
-                $col = [System.Windows.Application]::Current.Properties["QO_SettingsAddresses"]
-            }
-            if (-not $col) { throw "Addresses collection missing (Application.Current.Properties)" }
+            $col = $root.Tag
+            if (-not $col) { $col = $list.ItemsSource }
+            if (-not $col) { throw "Addresses collection missing (root.Tag and list.ItemsSource are null)" }
 
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
             if (-not $sel) { return }
 
             [void]$col.Remove([string]$sel)
+
+            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
 
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Removed + saved"
