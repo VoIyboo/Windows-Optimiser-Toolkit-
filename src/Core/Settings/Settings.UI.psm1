@@ -103,7 +103,7 @@ function New-QOTSettingsView {
 
     Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
 
-    # Convert root <Window> to <Grid> so it can be hosted in MainWindow
+    # Convert root <Window> to <Grid> so it can be hosted
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $win = $doc.DocumentElement
     if (-not $win -or $win.LocalName -ne "Window") {
@@ -145,7 +145,7 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    # Controls (real ones, by name and type)
+    # Controls
     $txtEmail = Find-QOElementByNameAndType -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
     $btnAdd   = Find-QOElementByNameAndType -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
     $btnRem   = Find-QOElementByNameAndType -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
@@ -161,27 +161,52 @@ function New-QOTSettingsView {
 
     # Build collection from settings
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
-
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
     }
 
-    # Bind list to collection
+    # Bind and stash collection on controls (NO scope issues)
     $list.ItemsSource = $addresses
-    Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
+    $list.Tag = $addresses
+    $btnAdd.Tag = $addresses
+    $btnRem.Tag = $addresses
 
-    # IMPORTANT: store the collection on the UI itself (avoids PowerShell scope issues)
-    $root.Tag = $addresses
-    Write-QOSettingsUILog "Stored addresses on root.Tag"
+    Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
+    Write-QOSettingsUILog "Stored addresses on list.Tag / btnAdd.Tag / btnRem.Tag"
+
+    function Get-AddressesCollection {
+        param($Sender)
+
+        $col = $null
+
+        try { if ($Sender -and $Sender.Tag) { $col = $Sender.Tag } } catch { }
+        if (-not $col) {
+            try { if ($list -and $list.Tag) { $col = $list.Tag } } catch { }
+        }
+        if (-not $col) {
+            try { if ($list -and $list.ItemsSource) { $col = $list.ItemsSource } } catch { }
+        }
+
+        if (-not $col) {
+            throw "Addresses collection missing (Tag and ItemsSource are null)"
+        }
+
+        # Rebind if WPF cleared it
+        try {
+            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
+        } catch { }
+
+        return $col
+    }
 
     # Add
     $btnAdd.Add_Click({
+        param($sender, $e)
+
         try {
-            $col = $root.Tag
-            if (-not $col) { $col = $list.ItemsSource }
-            if (-not $col) { throw "Addresses collection missing (root.Tag and list.ItemsSource are null)" }
+            $col = Get-AddressesCollection -Sender $sender
 
             $addr = ($txtEmail.Text + "").Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
@@ -199,8 +224,6 @@ function New-QOTSettingsView {
             $col.Add($addr)
             $txtEmail.Text = ""
 
-            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
-
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Added + saved"
         }
@@ -212,18 +235,16 @@ function New-QOTSettingsView {
 
     # Remove
     $btnRem.Add_Click({
+        param($sender, $e)
+
         try {
-            $col = $root.Tag
-            if (-not $col) { $col = $list.ItemsSource }
-            if (-not $col) { throw "Addresses collection missing (root.Tag and list.ItemsSource are null)" }
+            $col = Get-AddressesCollection -Sender $sender
 
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
             if (-not $sel) { return }
 
             [void]$col.Remove([string]$sel)
-
-            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
 
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Removed + saved"
