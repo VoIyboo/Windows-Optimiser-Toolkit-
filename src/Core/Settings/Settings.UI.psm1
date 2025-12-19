@@ -183,15 +183,18 @@ function New-QOTSettingsView {
     $btnRem.Tag = $addresses
 
     # Add (uses sender.Tag, not module scope)
+    # Add (use sender.Tag, not $this.Tag)
     $btnAdd.Add_Click({
+        param($sender, $e)
+    
         try {
-            $col = $this.Tag
-            if (-not $col) { throw "Addresses collection is null (BtnAdd.Tag)" }
-
+            $col = $sender.Tag
+            if (-not $col) { throw "Addresses collection is null (sender.Tag)" }
+    
             $addr = (($txtEmail.Text + "").Trim())
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
             if (-not $addr) { return }
-
+    
             $lower = $addr.ToLower()
             foreach ($x in $col) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
@@ -200,39 +203,41 @@ function New-QOTSettingsView {
                     return
                 }
             }
-
+    
             $col.Add($addr)
             $txtEmail.Text = ""
+    
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Added + saved"
         }
         catch {
-            Write-QOSettingsUILog ("Add failed: " + $_.Exception.Message)
+            Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
     })
-
-    # Remove
+    
+    # Remove (use sender.Tag)
     $btnRem.Add_Click({
+        param($sender, $e)
+    
         try {
-            $col = $this.Tag
-            if (-not $col) { throw "Addresses collection is null (BtnRemove.Tag)" }
-
+            $col = $sender.Tag
+            if (-not $col) { throw "Addresses collection is null (sender.Tag)" }
+    
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
             if (-not $sel) { return }
-
+    
             [void]$col.Remove([string]$sel)
+    
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Removed + saved"
         }
         catch {
-            Write-QOSettingsUILog ("Remove failed: " + $_.Exception.Message)
+            Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
     })
 
-    return $root
-}
 
 Export-ModuleMember -Function New-QOTSettingsView
