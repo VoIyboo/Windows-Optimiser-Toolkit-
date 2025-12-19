@@ -159,7 +159,7 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Build collection from settings
+    # Collection
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -167,7 +167,7 @@ function New-QOTSettingsView {
         if ($v) { $addresses.Add($v) }
     }
 
-    # Bind and stash collection on controls (NO scope issues)
+    # Bind and stash on controls so handlers never lose it
     $list.ItemsSource = $addresses
     $list.Tag = $addresses
     $btnAdd.Tag = $addresses
@@ -176,37 +176,21 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
     Write-QOSettingsUILog "Stored addresses on list.Tag / btnAdd.Tag / btnRem.Tag"
 
-    function Get-AddressesCollection {
-        param($Sender)
-
-        $col = $null
-
-        try { if ($Sender -and $Sender.Tag) { $col = $Sender.Tag } } catch { }
-        if (-not $col) {
-            try { if ($list -and $list.Tag) { $col = $list.Tag } } catch { }
-        }
-        if (-not $col) {
-            try { if ($list -and $list.ItemsSource) { $col = $list.ItemsSource } } catch { }
-        }
-
-        if (-not $col) {
-            throw "Addresses collection missing (Tag and ItemsSource are null)"
-        }
-
-        # Rebind if WPF cleared it
-        try {
-            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
-        } catch { }
-
-        return $col
-    }
-
     # Add
     $btnAdd.Add_Click({
         param($sender, $e)
 
         try {
-            $col = Get-AddressesCollection -Sender $sender
+            $col = $null
+
+            if ($sender -and $sender.Tag) { $col = $sender.Tag }
+            if (-not $col -and $list.Tag) { $col = $list.Tag }
+            if (-not $col -and $list.ItemsSource) { $col = $list.ItemsSource }
+
+            if (-not $col) { throw "Addresses collection missing (Tag and ItemsSource are null)" }
+
+            # Ensure UI stays bound
+            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
 
             $addr = ($txtEmail.Text + "").Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
@@ -238,10 +222,19 @@ function New-QOTSettingsView {
         param($sender, $e)
 
         try {
-            $col = Get-AddressesCollection -Sender $sender
+            $col = $null
+
+            if ($sender -and $sender.Tag) { $col = $sender.Tag }
+            if (-not $col -and $list.Tag) { $col = $list.Tag }
+            if (-not $col -and $list.ItemsSource) { $col = $list.ItemsSource }
+
+            if (-not $col) { throw "Addresses collection missing (Tag and ItemsSource are null)" }
+
+            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
 
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
+
             if (-not $sel) { return }
 
             [void]$col.Remove([string]$sel)
