@@ -4,6 +4,9 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
+# Module-level state (WPF-safe)
+$script:QO_SettingsAddresses = $null
+
 function Write-QOSettingsUILog {
     param([string]$Message)
 
@@ -166,10 +169,11 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Collection + bind
-    $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
-    $s = Ensure-QOEmailIntegrationSettings
+    # Collection + bind (module scope, WPF safe)
+    $script:QO_SettingsAddresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
+    $addresses = $script:QO_SettingsAddresses
 
+    $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
@@ -178,26 +182,19 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # Store collection on buttons so event handlers always have it
-    $btnAdd.Tag = $addresses
-    $btnRem.Tag = $addresses
-
-    # Add (use sender.Tag)
+    # Add
     $btnAdd.Add_Click({
-        param($sender, $e)
-
         try {
-            $col = $sender.Tag
-            if (-not $col) { throw "Addresses collection is null (sender.Tag)" }
+            $col = $script:QO_SettingsAddresses
+            if (-not $col) { throw "Addresses collection missing (module scope)" }
 
-            $addr = (($txtEmail.Text + "").Trim())
+            $addr = ($txtEmail.Text + "").Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
+
             if (-not $addr) { return }
 
-            $lower = $addr.ToLower()
             foreach ($x in $col) {
-                if (([string]$x).Trim().ToLower() -eq $lower) {
-                    Write-QOSettingsUILog "Already existed"
+                if (([string]$x).Trim().ToLower() -eq $addr.ToLower()) {
                     $txtEmail.Text = ""
                     return
                 }
@@ -215,13 +212,11 @@ function New-QOTSettingsView {
         }
     })
 
-    # Remove (use sender.Tag)
+    # Remove
     $btnRem.Add_Click({
-        param($sender, $e)
-
         try {
-            $col = $sender.Tag
-            if (-not $col) { throw "Addresses collection is null (sender.Tag)" }
+            $col = $script:QO_SettingsAddresses
+            if (-not $col) { throw "Addresses collection missing (module scope)" }
 
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
