@@ -110,7 +110,7 @@ function New-QOTSettingsView {
 
     Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
 
-    # Convert root <Window> to <Grid> so it can be hosted
+    # Convert root <Window> to <Grid> so it can be hosted in MainWindow
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $win = $doc.DocumentElement
     if (-not $win -or $win.LocalName -ne "Window") {
@@ -178,23 +178,22 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # Put the collection onto the controls (so handlers can always retrieve it)
+    # Store collection on buttons so event handlers always have it
     $btnAdd.Tag = $addresses
     $btnRem.Tag = $addresses
 
-    # Add (uses sender.Tag, not module scope)
-    # Add (use sender.Tag, not $this.Tag)
+    # Add (use sender.Tag)
     $btnAdd.Add_Click({
         param($sender, $e)
-    
+
         try {
             $col = $sender.Tag
             if (-not $col) { throw "Addresses collection is null (sender.Tag)" }
-    
+
             $addr = (($txtEmail.Text + "").Trim())
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
             if (-not $addr) { return }
-    
+
             $lower = $addr.ToLower()
             foreach ($x in $col) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
@@ -203,10 +202,10 @@ function New-QOTSettingsView {
                     return
                 }
             }
-    
+
             $col.Add($addr)
             $txtEmail.Text = ""
-    
+
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Added + saved"
         }
@@ -215,21 +214,21 @@ function New-QOTSettingsView {
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
     })
-    
+
     # Remove (use sender.Tag)
     $btnRem.Add_Click({
         param($sender, $e)
-    
+
         try {
             $col = $sender.Tag
             if (-not $col) { throw "Addresses collection is null (sender.Tag)" }
-    
+
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
             if (-not $sel) { return }
-    
+
             [void]$col.Remove([string]$sel)
-    
+
             Save-QOMonitoredAddresses -Collection $col
             Write-QOSettingsUILog "Removed + saved"
         }
@@ -239,5 +238,7 @@ function New-QOTSettingsView {
         }
     })
 
+    return $root
+}
 
 Export-ModuleMember -Function New-QOTSettingsView
