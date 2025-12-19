@@ -1,6 +1,6 @@
 # src\Core\Settings\Settings.UI.psm1
 # Settings UI (hosted inside MainWindow)
-
+Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED (HARD RELOAD OK) ===" #temo line remove me
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
