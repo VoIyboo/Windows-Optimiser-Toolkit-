@@ -1,42 +1,3 @@
-# InstalledApps.psm1
-# Scanning and risk logic for installed applications
-
-param()
-
-# Make sure logging is available if module is loaded directly
-try {
-    if (-not (Get-Command Write-QLog -ErrorAction SilentlyContinue)) {
-        Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
-        Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
-
-    }
-} catch { }
-
-# Whitelist patterns for protected apps
-$Global:QOT_AppWhitelistPatterns = @(
-    "Genesys",
-    "GenesysCloud",
-    "FortiClient",
-    "Fortinet",
-    "ScreenConnect",
-    "ConnectWise",
-    "Sophos",
-    "Microsoft 365",
-    "Microsoft Office",
-    "Teams",
-    "Word",
-    "PowerPoint",
-    "Outlook"
-)
-
-function Get-QOTAppWhitelist {
-    <#
-        .SYNOPSIS
-            Returns the whitelist patterns used to protect critical apps.
-    #>
-    return $Global:QOT_AppWhitelistPatterns
-}
-
 function Get-QOTInstalledApps {
     <#
         .SYNOPSIS
@@ -55,7 +16,6 @@ function Get-QOTInstalledApps {
             if (-not $_.DisplayName) { return }
 
             $isSystem = $false
-
             if ($_.SystemComponent -eq 1) { $isSystem = $true }
             if ($_.ReleaseType -eq "Security Update" -or $_.ParentKeyName) { $isSystem = $true }
             if ($_.DisplayName -match "Driver|Runtime|Redistributable|Update|Hotfix") { $isSystem = $true }
@@ -68,13 +28,10 @@ function Get-QOTInstalledApps {
 
             $installDate = $null
             $rawInstallDate = ($_.InstallDate | ForEach-Object { "$_".Trim() })
-            
+
             if (-not [string]::IsNullOrWhiteSpace($rawInstallDate)) {
-            
                 $parsed = [datetime]::MinValue
-            
                 try {
-                    # Most common format in uninstall keys: yyyyMMdd
                     if ($rawInstallDate -match '^\d{8}$' -and
                         [datetime]::TryParseExact(
                             $rawInstallDate,
@@ -83,11 +40,8 @@ function Get-QOTInstalledApps {
                             [System.Globalization.DateTimeStyles]::None,
                             [ref]$parsed
                         )) {
-            
                         $installDate = $parsed
-                    }
-                    else {
-                        # Optional: quiet fallback for vendor weirdness
+                    } else {
                         if ([datetime]::TryParse(
                             $rawInstallDate,
                             [System.Globalization.CultureInfo]::InvariantCulture,
@@ -99,12 +53,9 @@ function Get-QOTInstalledApps {
                     }
                 }
                 catch {
-                    try {
-                        Write-QLog "Error parsing InstallDate '$rawInstallDate' for $($_.DisplayName): $($_.Exception.Message)" "WARN"
-                    } catch { }
+                    try { Write-QLog "Error parsing InstallDate '$rawInstallDate' for $($_.DisplayName): $($_.Exception.Message)" "WARN" } catch { }
                 }
             }
-
 
             $isWhitelisted = $false
             foreach ($pattern in $Global:QOT_AppWhitelistPatterns) {
@@ -114,6 +65,14 @@ function Get-QOTInstalledApps {
                 }
             }
 
+            # Uninstall string fallbacks (a lot of apps only have QuietUninstallString)
+            $uninstall = $null
+            if ($_.QuietUninstallString) {
+                $uninstall = $_.QuietUninstallString
+            } elseif ($_.UninstallString) {
+                $uninstall = $_.UninstallString
+            }
+
             [PSCustomObject]@{
                 Name            = $_.DisplayName
                 Publisher       = $_.Publisher
@@ -121,41 +80,11 @@ function Get-QOTInstalledApps {
                 InstallDate     = $installDate
                 IsSystem        = $isSystem
                 IsWhitelisted   = $isWhitelisted
-                UninstallString = $_.UninstallString
-                LastUsed        = $installDate   # placeholder for future usage tracking
+                UninstallString = $uninstall
+                LastUsed        = $installDate
             }
         }
     }
 
     $apps | Sort-Object Name -Unique
 }
-
-function Get-QOTAppRisk {
-    <#
-        .SYNOPSIS
-            Returns a simple risk label for an app: Protected / Red / Amber / Green.
-    #>
-    param(
-        [Parameter(Mandatory)]
-        $App
-    )
-
-    if ($App.IsWhitelisted) { return "Protected" }
-    if ($App.IsSystem -or -not $App.UninstallString) { return "Red" }
-
-    $days = $null
-    if ($App.InstallDate) {
-        $days = (New-TimeSpan -Start $App.InstallDate -End (Get-Date)).Days
-    }
-
-    if (($App.SizeMB -ge 500) -or ($days -ge 365)) { return "Amber" }
-
-    return "Green"
-}
-
-Export-ModuleMember -Function `
-    Get-QOTAppWhitelist, `
-    Get-QOTInstalledApps, `
-    Get-QOTAppRisk `
-    -Variable QOT_AppWhitelistPatterns
-
