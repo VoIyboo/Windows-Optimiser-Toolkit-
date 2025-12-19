@@ -22,14 +22,19 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # UI modules
     # ------------------------------------------------------------
-    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -ErrorAction Stop
+    # Settings UI (force hard reload by path)
+    $settingsUiPath = Join-Path $basePath "Core\Settings\Settings.UI.psm1"
     
-    # Hard reset Settings UI functions so old copies cannot linger
-    Remove-Item Function:\New-QOTSettingsView        -ErrorAction SilentlyContinue
-    Remove-Item Function:\Initialize-QOSettingsUI    -ErrorAction SilentlyContinue
-    Remove-Item Function:\Show-QOTSettingsWindow     -ErrorAction SilentlyContinue
+    # Unload module if already loaded (by path)
+    Get-Module | Where-Object { $_.Path -eq $settingsUiPath } | Remove-Module -Force -ErrorAction SilentlyContinue
     
-    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
+    # Also clear any lingering functions
+    Remove-Item Function:\New-QOTSettingsView     -ErrorAction SilentlyContinue
+    Remove-Item Function:\Initialize-QOSettingsUI -ErrorAction SilentlyContinue
+    Remove-Item Function:\Show-QOTSettingsWindow  -ErrorAction SilentlyContinue
+    
+    Import-Module $settingsUiPath -Force -ErrorAction Stop
+
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
