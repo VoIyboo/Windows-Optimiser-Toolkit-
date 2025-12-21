@@ -4,19 +4,6 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
-# ------------------------------------------------------------
-# Module state (handlers must rely on $script:)
-# ------------------------------------------------------------
-$script:QOSettingsState = @{
-    Root      = $null
-    TxtEmail  = $null
-    BtnAdd    = $null
-    BtnRemove = $null
-    List      = $null
-    Hint      = $null
-    Addresses = $null
-}
-
 function Write-QOSettingsUILog {
     param([string]$Message)
     try {
@@ -188,89 +175,91 @@ function New-QOTSettingsView {
 
     # Bind
     $list.ItemsSource = $addresses
-
-    # Store module state (handlers will read from here)
-    $script:QOSettingsState.Root      = $root
-    $script:QOSettingsState.TxtEmail  = $txtEmail
-    $script:QOSettingsState.BtnAdd    = $btnAdd
-    $script:QOSettingsState.BtnRemove = $btnRem
-    $script:QOSettingsState.List      = $list
-    $script:QOSettingsState.Hint      = $hint
-    $script:QOSettingsState.Addresses = $addresses
-
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # Wire handlers (no helper functions, no &, no scope weirdness)
-    $btnAdd.Add_Click({
-        try {
-            $state = $script:QOSettingsState
-            if (-not $state -or -not $state.Addresses) { throw "Addresses collection missing (module scope)" }
+    # State for this specific view instance (THIS is the magic)
+    $state = [pscustomobject]@{
+        TxtEmail  = $txtEmail
+        List      = $list
+        Hint      = $hint
+        Addresses = $addresses
+    }
 
-            $addr = ([string]$state.TxtEmail.Text).Trim()
+    # Store on the controls so handler always reaches the correct state even if module reloads
+    $btnAdd.Tag = $state
+    $btnRem.Tag = $state
+
+    Write-QOSettingsUILog "Stored state on BtnAdd.Tag / BtnRemove.Tag"
+
+    # Add handler
+    $btnAdd.Add_Click({
+        param($sender, $e)
+
+        try {
+            $st = $sender.Tag
+            if (-not $st -or -not $st.Addresses) { throw "State missing from sender.Tag" }
+
+            $addr = ([string]$st.TxtEmail.Text).Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
 
             if (-not $addr) {
-                if ($state.Hint) { $state.Hint.Text = "Enter an email address." }
+                if ($st.Hint) { $st.Hint.Text = "Enter an email address." }
                 return
             }
 
             $lower = $addr.ToLower()
-            foreach ($x in $state.Addresses) {
+            foreach ($x in $st.Addresses) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
-                    $state.TxtEmail.Text = ""
-                    if ($state.Hint) { $state.Hint.Text = "Already exists." }
+                    $st.TxtEmail.Text = ""
+                    if ($st.Hint) { $st.Hint.Text = "Already exists." }
                     Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
             }
 
-            $state.Addresses.Add($addr)
-            $state.TxtEmail.Text = ""
+            $st.Addresses.Add($addr)
+            $st.TxtEmail.Text = ""
 
-            Save-QOMonitoredAddresses -Collection $state.Addresses
-            if ($state.Hint) { $state.Hint.Text = "Added $addr" }
+            Save-QOMonitoredAddresses -Collection $st.Addresses
 
+            if ($st.Hint) { $st.Hint.Text = "Added $addr" }
             Write-QOSettingsUILog "Added + saved"
         }
         catch {
-            $state = $script:QOSettingsState
-            if ($state -and $state.Hint) { $state.Hint.Text = "Add failed. Check SettingsUI.log" }
-
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
     })
 
+    # Remove handler
     $btnRem.Add_Click({
-        try {
-            $state = $script:QOSettingsState
-            if (-not $state -or -not $state.Addresses) { throw "Addresses collection missing (module scope)" }
+        param($sender, $e)
 
-            $sel = $state.List.SelectedItem
+        try {
+            $st = $sender.Tag
+            if (-not $st -or -not $st.Addresses) { throw "State missing from sender.Tag" }
+
+            $sel = $st.List.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
 
             if (-not $sel) {
-                if ($state.Hint) { $state.Hint.Text = "Select an address to remove." }
+                if ($st.Hint) { $st.Hint.Text = "Select an address to remove." }
                 return
             }
 
-            [void]$state.Addresses.Remove([string]$sel)
+            [void]$st.Addresses.Remove([string]$sel)
+            Save-QOMonitoredAddresses -Collection $st.Addresses
 
-            Save-QOMonitoredAddresses -Collection $state.Addresses
-            if ($state.Hint) { $state.Hint.Text = "Removed $sel" }
-
+            if ($st.Hint) { $st.Hint.Text = "Removed $sel" }
             Write-QOSettingsUILog "Removed + saved"
         }
         catch {
-            $state = $script:QOSettingsState
-            if ($state -and $state.Hint) { $state.Hint.Text = "Remove failed. Check SettingsUI.log" }
-
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
     })
 
-    Write-QOSettingsUILog "Wired handlers (Add_Click)"
+    Write-QOSettingsUILog "Wired handlers using sender.Tag state"
     return $root
 }
 
