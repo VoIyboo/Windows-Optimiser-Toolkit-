@@ -20,10 +20,22 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "Core\Tickets.psm1")          -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
-    # UI modules
+    # UI modules (hard reload to avoid ghost handlers)
     # ------------------------------------------------------------
-    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")           -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")    -Force -ErrorAction Stop
+
+    # Remove old exported functions just in case they were left behind
+    Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
+    Remove-Item Function:\New-QOTSettingsView   -ErrorAction SilentlyContinue
+
+    # Unload by module name first (more reliable), then by path fallback
+    Get-Module -Name "Tickets.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
+
+    Get-Module -Name "Settings.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
+
+    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -59,7 +71,8 @@ function Start-QOTMainWindow {
     }
 
     try {
-        if (-not (Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue)) {
+        $cmd = Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue
+        if (-not $cmd) {
             throw "New-QOTSettingsView not found. Check Core\Settings\Settings.UI.psm1 exports it."
         }
 
@@ -69,9 +82,8 @@ function Start-QOTMainWindow {
         $settingsHost.Content = $settingsView
     }
     catch {
-        # Do not let Settings failures break the app
         $tb = New-Object System.Windows.Controls.TextBlock
-        $tb.Text = "Settings failed to load. Check SettingsUI.log."
+        $tb.Text = "Settings failed to load.`r`n$($_.Exception.Message)"
         $tb.Foreground = [System.Windows.Media.Brushes]::White
         $tb.Margin = "10"
         $settingsHost.Content = $tb
