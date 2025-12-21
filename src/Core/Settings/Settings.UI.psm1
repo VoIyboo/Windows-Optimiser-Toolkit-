@@ -4,16 +4,26 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
+# ------------------------------------------------------------
+# Module state (IMPORTANT: handlers read from $script:)
+# ------------------------------------------------------------
+$script:QOSettingsState = @{
+    Root      = $null
+    TxtEmail  = $null
+    BtnAdd    = $null
+    BtnRemove = $null
+    List      = $null
+    Addresses = $null
+}
+
 function Write-QOSettingsUILog {
     param([string]$Message)
-
     try {
         $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         $path = Join-Path $logDir "SettingsUI.log"
         Add-Content -LiteralPath $path -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding UTF8
-    }
-    catch { }
+    } catch { }
 }
 
 Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
@@ -69,8 +79,7 @@ function Find-QOElementByNameAndType {
 
         try {
             if ($Parent -is $Type -and $Parent.Name -eq $Name) { return $Parent }
-        }
-        catch { }
+        } catch { }
 
         $count = 0
         try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Parent) }
@@ -85,7 +94,7 @@ function Find-QOElementByNameAndType {
         return $null
     }
 
-    return (Walk $Root)
+    Walk $Root
 }
 
 function New-QOTSettingsView {
@@ -132,8 +141,7 @@ function New-QOTSettingsView {
                 $null = $newRes.AppendChild($rChild.Clone())
             }
             $null = $grid.AppendChild($newRes)
-        }
-        else {
+        } else {
             $null = $grid.AppendChild($child.Clone())
         }
     }
@@ -159,7 +167,7 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Collection
+    # Build addresses collection
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -167,86 +175,81 @@ function New-QOTSettingsView {
         if ($v) { $addresses.Add($v) }
     }
 
-    # Bind and stash on controls so handlers never lose it
+    # Bind once
     $list.ItemsSource = $addresses
-    $list.Tag = $addresses
-    $btnAdd.Tag = $addresses
-    $btnRem.Tag = $addresses
+
+    # Store in module scope so handlers always see it
+    $script:QOSettingsState.Root      = $root
+    $script:QOSettingsState.TxtEmail  = $txtEmail
+    $script:QOSettingsState.BtnAdd    = $btnAdd
+    $script:QOSettingsState.BtnRemove = $btnRem
+    $script:QOSettingsState.List      = $list
+    $script:QOSettingsState.Addresses = $addresses
 
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
-    Write-QOSettingsUILog "Stored addresses on list.Tag / btnAdd.Tag / btnRem.Tag"
+    Write-QOSettingsUILog "Stored state in module scope ($script:QOSettingsState)"
 
-    # Add
-    $btnAdd.Add_Click({
-        param($sender, $e)
+    # Remove old handlers if view is rebuilt (prevents double firing)
+    try { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } catch { }
+    try { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } catch { }
 
+    # Create handlers (module scope variables)
+    $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
         try {
-            $col = $null
+            $state = $script:QOSettingsState
+            if (-not $state -or -not $state.Addresses) { throw "Addresses collection missing (module scope)" }
 
-            if ($sender -and $sender.Tag) { $col = $sender.Tag }
-            if (-not $col -and $list.Tag) { $col = $list.Tag }
-            if (-not $col -and $list.ItemsSource) { $col = $list.ItemsSource }
-
-            if (-not $col) { throw "Addresses collection missing (Tag and ItemsSource are null)" }
-
-            # Ensure UI stays bound
-            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
-
-            $addr = ($txtEmail.Text + "").Trim()
+            $addr = ($state.TxtEmail.Text + "").Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
 
             if (-not $addr) { return }
 
-            foreach ($x in $col) {
+            foreach ($x in $state.Addresses) {
                 if (([string]$x).Trim().ToLower() -eq $addr.ToLower()) {
-                    $txtEmail.Text = ""
+                    $state.TxtEmail.Text = ""
                     Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
             }
 
-            $col.Add($addr)
-            $txtEmail.Text = ""
+            $state.Addresses.Add($addr)
+            $state.TxtEmail.Text = ""
 
-            Save-QOMonitoredAddresses -Collection $col
+            Save-QOMonitoredAddresses -Collection $state.Addresses
             Write-QOSettingsUILog "Added + saved"
         }
         catch {
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
-    })
+    }
 
-    # Remove
-    $btnRem.Add_Click({
-        param($sender, $e)
-
+    $script:QOSettings_RemHandler = [System.Windows.RoutedEventHandler]{
         try {
-            $col = $null
+            $state = $script:QOSettingsState
+            if (-not $state -or -not $state.Addresses) { throw "Addresses collection missing (module scope)" }
 
-            if ($sender -and $sender.Tag) { $col = $sender.Tag }
-            if (-not $col -and $list.Tag) { $col = $list.Tag }
-            if (-not $col -and $list.ItemsSource) { $col = $list.ItemsSource }
-
-            if (-not $col) { throw "Addresses collection missing (Tag and ItemsSource are null)" }
-
-            if ($list.ItemsSource -ne $col) { $list.ItemsSource = $col }
-
-            $sel = $list.SelectedItem
+            $sel = $state.List.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
 
             if (-not $sel) { return }
 
-            [void]$col.Remove([string]$sel)
+            [void]$state.Addresses.Remove([string]$sel)
 
-            Save-QOMonitoredAddresses -Collection $col
+            Save-QOMonitoredAddresses -Collection $state.Addresses
             Write-QOSettingsUILog "Removed + saved"
         }
         catch {
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
-    })
+    }
+
+    # Attach using AddHandler (more reliable than Add_Click in PS sometimes)
+    $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
+    $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
+
+    Write-QOSettingsUILog "Wired handlers via AddHandler (module scope state)"
 
     return $root
 }
