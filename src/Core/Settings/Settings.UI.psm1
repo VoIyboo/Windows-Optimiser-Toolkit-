@@ -4,18 +4,6 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
-# ------------------------------------------------------------
-# Module state (IMPORTANT: handlers read from $script:)
-# ------------------------------------------------------------
-$script:QOSettingsState = @{
-    Root      = $null
-    TxtEmail  = $null
-    BtnAdd    = $null
-    BtnRemove = $null
-    List      = $null
-    Addresses = $null
-}
-
 function Write-QOSettingsUILog {
     param([string]$Message)
     try {
@@ -94,7 +82,51 @@ function Find-QOElementByNameAndType {
         return $null
     }
 
-    Walk $Root
+    return (Walk $Root)
+}
+
+function Convert-SettingsWindowToHostableRoot {
+    param(
+        [Parameter(Mandatory)]
+        [xml]$Doc
+    )
+
+    $win = $Doc.DocumentElement
+    if (-not $win -or $win.LocalName -ne "Window") {
+        throw "SettingsWindow.xaml root must be <Window>."
+    }
+
+    $ns   = $win.NamespaceURI
+    $grid = $Doc.CreateElement("Grid", $ns)
+
+    $removeAttrs = @(
+        "Title","Height","Width","Topmost","WindowStartupLocation",
+        "ResizeMode","SizeToContent","ShowInTaskbar","WindowStyle","AllowsTransparency"
+    )
+
+    foreach ($a in @($win.Attributes)) {
+        if ($removeAttrs -contains $a.Name) { continue }
+        $null = $grid.Attributes.Append($a.Clone())
+    }
+
+    foreach ($child in @($win.ChildNodes)) {
+        if ($child.NodeType -ne "Element") { continue }
+
+        if ($child.LocalName -eq "Window.Resources") {
+            $newRes = $Doc.CreateElement("Grid.Resources", $ns)
+            foreach ($rChild in @($child.ChildNodes)) {
+                $null = $newRes.AppendChild($rChild.Clone())
+            }
+            $null = $grid.AppendChild($newRes)
+        } else {
+            $null = $grid.AppendChild($child.Clone())
+        }
+    }
+
+    $null = $Doc.RemoveChild($win)
+    $null = $Doc.AppendChild($grid)
+
+    return $Doc
 }
 
 function New-QOTSettingsView {
@@ -112,52 +144,19 @@ function New-QOTSettingsView {
 
     Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
 
-    # Convert root <Window> to <Grid> so it can be hosted
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
-    $win = $doc.DocumentElement
-    if (-not $win -or $win.LocalName -ne "Window") {
-        throw "SettingsWindow.xaml root must be <Window>."
-    }
-
-    $ns   = $win.NamespaceURI
-    $grid = $doc.CreateElement("Grid", $ns)
-
-    $removeAttrs = @(
-        "Title","Height","Width","Topmost","WindowStartupLocation",
-        "ResizeMode","SizeToContent","ShowInTaskbar","WindowStyle","AllowsTransparency"
-    )
-
-    foreach ($a in @($win.Attributes)) {
-        if ($removeAttrs -contains $a.Name) { continue }
-        $null = $grid.Attributes.Append($a.Clone())
-    }
-
-    foreach ($child in @($win.ChildNodes)) {
-        if ($child.NodeType -ne "Element") { continue }
-
-        if ($child.LocalName -eq "Window.Resources") {
-            $newRes = $doc.CreateElement("Grid.Resources", $ns)
-            foreach ($rChild in @($child.ChildNodes)) {
-                $null = $newRes.AppendChild($rChild.Clone())
-            }
-            $null = $grid.AppendChild($newRes)
-        } else {
-            $null = $grid.AppendChild($child.Clone())
-        }
-    }
-
-    $null = $doc.RemoveChild($win)
-    $null = $doc.AppendChild($grid)
+    $doc = Convert-SettingsWindowToHostableRoot -Doc $doc
 
     $reader = New-Object System.Xml.XmlNodeReader ($doc)
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    # Controls
+    # Grab controls (these are the REAL ones)
     $txtEmail = Find-QOElementByNameAndType -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
     $btnAdd   = Find-QOElementByNameAndType -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
     $btnRem   = Find-QOElementByNameAndType -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
     $list     = Find-QOElementByNameAndType -Root $root -Name "LstEmails" -Type ([System.Windows.Controls.ListBox])
+    $hint     = Find-QOElementByNameAndType -Root $root -Name "LblHint"   -Type ([System.Windows.Controls.TextBlock])
 
     if (-not $txtEmail) { throw "TxtEmail not found (TextBox)" }
     if (-not $btnAdd)   { throw "BtnAdd not found (Button)" }
@@ -167,89 +166,84 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Build addresses collection
+    # Build collection and bind (UI updates instantly when collection changes)
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
+
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
     }
 
-    # Bind once
     $list.ItemsSource = $addresses
-
-    # Store in module scope so handlers always see it
-    $script:QOSettingsState.Root      = $root
-    $script:QOSettingsState.TxtEmail  = $txtEmail
-    $script:QOSettingsState.BtnAdd    = $btnAdd
-    $script:QOSettingsState.BtnRemove = $btnRem
-    $script:QOSettingsState.List      = $list
-    $script:QOSettingsState.Addresses = $addresses
-
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
-    Write-QOSettingsUILog "Stored state in module scope ($script:QOSettingsState)"
 
-    # Remove old handlers if view is rebuilt (prevents double firing)
-    try { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } catch { }
-    try { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } catch { }
+    # Small helper for hint text (optional)
+    $setHint = {
+        param([string]$t)
+        if ($hint) { $hint.Text = $t }
+    }
 
-    # Create handlers (module scope variables)
-    $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
+    # IMPORTANT: handlers close over the real objects, no module scope reliance
+    $btnAdd.Add_Click({
         try {
-            $state = $script:QOSettingsState
-            if (-not $state -or -not $state.Addresses) { throw "Addresses collection missing (module scope)" }
-
-            $addr = ($state.TxtEmail.Text + "").Trim()
+            $addr = ([string]$txtEmail.Text).Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
 
-            if (-not $addr) { return }
+            if (-not $addr) {
+                & $setHint "Enter an email address."
+                return
+            }
 
-            foreach ($x in $state.Addresses) {
-                if (([string]$x).Trim().ToLower() -eq $addr.ToLower()) {
-                    $state.TxtEmail.Text = ""
+            # Duplicate check (case-insensitive)
+            $lower = $addr.ToLower()
+            foreach ($x in $addresses) {
+                if (([string]$x).Trim().ToLower() -eq $lower) {
+                    $txtEmail.Text = ""
+                    & $setHint "Already exists."
                     Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
             }
 
-            $state.Addresses.Add($addr)
-            $state.TxtEmail.Text = ""
+            $addresses.Add($addr)
+            $txtEmail.Text = ""
 
-            Save-QOMonitoredAddresses -Collection $state.Addresses
+            Save-QOMonitoredAddresses -Collection $addresses
+            & $setHint "Added $addr"
             Write-QOSettingsUILog "Added + saved"
         }
         catch {
+            & $setHint "Add failed. Check SettingsUI.log"
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
-    }
+    })
 
-    $script:QOSettings_RemHandler = [System.Windows.RoutedEventHandler]{
+    $btnRem.Add_Click({
         try {
-            $state = $script:QOSettingsState
-            if (-not $state -or -not $state.Addresses) { throw "Addresses collection missing (module scope)" }
-
-            $sel = $state.List.SelectedItem
+            $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
 
-            if (-not $sel) { return }
+            if (-not $sel) {
+                & $setHint "Select an address to remove."
+                return
+            }
 
-            [void]$state.Addresses.Remove([string]$sel)
+            [void]$addresses.Remove([string]$sel)
 
-            Save-QOMonitoredAddresses -Collection $state.Addresses
+            Save-QOMonitoredAddresses -Collection $addresses
+            & $setHint "Removed $sel"
             Write-QOSettingsUILog "Removed + saved"
         }
         catch {
+            & $setHint "Remove failed. Check SettingsUI.log"
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
-    }
+    })
 
-    # Attach using AddHandler (more reliable than Add_Click in PS sometimes)
-    $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
-    $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
-
-    Write-QOSettingsUILog "Wired handlers via AddHandler (module scope state)"
+    Write-QOSettingsUILog "Wired handlers via Add_Click (closure-based)"
 
     return $root
 }
