@@ -151,7 +151,6 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    # Grab controls (these are the REAL ones)
     $txtEmail = Find-QOElementByNameAndType -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
     $btnAdd   = Find-QOElementByNameAndType -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
     $btnRem   = Find-QOElementByNameAndType -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
@@ -163,12 +162,15 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
 
+    function Set-HintText {
+        param([string]$Text)
+        if ($hint) { $hint.Text = $Text }
+    }
+
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Build collection and bind (UI updates instantly when collection changes)
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
-
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
         $v = ([string]$e).Trim()
@@ -178,29 +180,21 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # Small helper for hint text (optional)
-    $setHint = {
-        param([string]$t)
-        if ($hint) { $hint.Text = $t }
-    }
-
-    # IMPORTANT: handlers close over the real objects, no module scope reliance
     $btnAdd.Add_Click({
         try {
             $addr = ([string]$txtEmail.Text).Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
 
             if (-not $addr) {
-                & $setHint "Enter an email address."
+                Set-HintText "Enter an email address."
                 return
             }
 
-            # Duplicate check (case-insensitive)
             $lower = $addr.ToLower()
             foreach ($x in $addresses) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
                     $txtEmail.Text = ""
-                    & $setHint "Already exists."
+                    Set-HintText "Already exists."
                     Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
@@ -210,11 +204,11 @@ function New-QOTSettingsView {
             $txtEmail.Text = ""
 
             Save-QOMonitoredAddresses -Collection $addresses
-            & $setHint "Added $addr"
+            Set-HintText "Added $addr"
             Write-QOSettingsUILog "Added + saved"
         }
         catch {
-            & $setHint "Add failed. Check SettingsUI.log"
+            Set-HintText "Add failed. Check SettingsUI.log"
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
@@ -226,24 +220,24 @@ function New-QOTSettingsView {
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
 
             if (-not $sel) {
-                & $setHint "Select an address to remove."
+                Set-HintText "Select an address to remove."
                 return
             }
 
             [void]$addresses.Remove([string]$sel)
 
             Save-QOMonitoredAddresses -Collection $addresses
-            & $setHint "Removed $sel"
+            Set-HintText "Removed $sel"
             Write-QOSettingsUILog "Removed + saved"
         }
         catch {
-            & $setHint "Remove failed. Check SettingsUI.log"
+            Set-HintText "Remove failed. Check SettingsUI.log"
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
             Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
     })
 
-    Write-QOSettingsUILog "Wired handlers via Add_Click (closure-based)"
+    Write-QOSettingsUILog "Wired handlers"
 
     return $root
 }
