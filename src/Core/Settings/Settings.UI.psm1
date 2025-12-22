@@ -23,10 +23,7 @@ function Write-QOSettingsUILog {
 }
 
 Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
-try {
-    Write-QOSettingsUILog ("Core Settings module source: " + (Get-Command Get-QOSettings).Source)
-    Write-QOSettingsUILog ("Settings path: " + (Get-QOSettingsPath))
-} catch { }
+try { Write-QOSettingsUILog ("Settings path = " + (Get-QOSettingsPath)) } catch { }
 
 # ------------------------------------------------------------
 # One time WPF assembly load
@@ -51,6 +48,7 @@ function Find-QOElementByNameAndType {
 
     function Walk {
         param($Parent)
+
         if ($null -eq $Parent) { return $null }
 
         try {
@@ -66,6 +64,7 @@ function Find-QOElementByNameAndType {
             $found = Walk $child
             if ($found) { return $found }
         }
+
         return $null
     }
 
@@ -131,7 +130,7 @@ function Convert-SettingsWindowToHostableRoot {
 }
 
 # ------------------------------------------------------------
-# Stored handlers
+# Stored handlers to avoid double wiring
 # ------------------------------------------------------------
 $script:QOSettings_AddHandler = $null
 $script:QOSettings_RemHandler = $null
@@ -139,12 +138,17 @@ $script:QOSettings_RemHandler = $null
 function New-QOTSettingsView {
     Initialize-QOSettingsUIAssemblies
 
+    # Capture commands NOW, so the WPF click handler can always call them later
+    $setMonitoredCmd = Get-Command Set-QOMonitoredAddresses -ErrorAction Stop
+    $getSettingsCmd  = Get-Command Get-QOSettings -ErrorAction Stop
+
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
         throw "SettingsWindow.xaml not found at $xamlPath"
     }
 
     Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
+
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $doc = Convert-SettingsWindowToHostableRoot -Doc $doc
 
@@ -163,9 +167,9 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
 
-    # Load from settings every time the view is created
+    # Load from settings
     $addresses = New-Object "System.Collections.ObjectModel.ObservableCollection[string]"
-    $s = Get-QOSettings
+    $s = & $getSettingsCmd
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
@@ -199,14 +203,12 @@ function New-QOTSettingsView {
             $addresses.Add($addr)
             $txtEmail.Text = ""
 
-            # Save via core Settings.psm1 (single source of truth)
             $saveList = @($addresses | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-            $null = Set-QOMonitoredAddresses -Addresses $saveList
+            $null = & $setMonitoredCmd -Addresses $saveList
 
-            # Read back immediately to confirm what actually landed in settings.json
-            $after = Get-QOSettings
+            $after = & $getSettingsCmd
             $count = @($after.Tickets.EmailIntegration.MonitoredAddresses).Count
-            Write-QOSettingsUILog ("Saved via Set-QOMonitoredAddresses. Stored count=" + $count)
+            Write-QOSettingsUILog ("Saved. Stored count=" + $count)
 
             if ($hint) { $hint.Text = "Added $addr" }
         }
@@ -229,11 +231,11 @@ function New-QOTSettingsView {
             [void]$addresses.Remove([string]$sel)
 
             $saveList = @($addresses | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-            $null = Set-QOMonitoredAddresses -Addresses $saveList
+            $null = & $setMonitoredCmd -Addresses $saveList
 
-            $after = Get-QOSettings
+            $after = & $getSettingsCmd
             $count = @($after.Tickets.EmailIntegration.MonitoredAddresses).Count
-            Write-QOSettingsUILog ("Removed via Set-QOMonitoredAddresses. Stored count=" + $count)
+            Write-QOSettingsUILog ("Removed. Stored count=" + $count)
 
             if ($hint) { $hint.Text = "Removed $sel" }
         }
