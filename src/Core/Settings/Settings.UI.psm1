@@ -321,4 +321,5 @@ function New-QOTSettingsView {
     return $root
 }
 
-Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog
+Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog, Save-QOMonitoredAddresses
+
