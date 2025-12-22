@@ -4,7 +4,10 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
-function Write-QOSettingsUILog {
+# ------------------------------------------------------------
+# Module-scoped logger (handlers call this, not a function name)
+# ------------------------------------------------------------
+$script:QOLog = {
     param([string]$Message)
     try {
         $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
@@ -14,7 +17,7 @@ function Write-QOSettingsUILog {
     } catch { }
 }
 
-Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
+& $script:QOLog "=== Settings.UI.psm1 LOADED ==="
 
 # ------------------------------------------------------------
 # One time WPF assembly load (prevents repeated Add-Type lag)
@@ -25,9 +28,9 @@ function Initialize-QOSettingsUIAssemblies {
     try {
         Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
         $script:QOSettings_AssembliesLoaded = $true
-        Write-QOSettingsUILog "WPF assemblies loaded once"
+        & $script:QOLog "WPF assemblies loaded once"
     } catch {
-        Write-QOSettingsUILog ("WPF assemblies load failed: " + $_.Exception.Message)
+        & $script:QOLog ("WPF assemblies load failed: " + $_.Exception.Message)
         throw
     }
 }
@@ -162,6 +165,12 @@ function Convert-SettingsWindowToHostableRoot {
     return $Doc
 }
 
+# ------------------------------------------------------------
+# Handlers are stored module-wide so we can RemoveHandler cleanly
+# ------------------------------------------------------------
+$script:QOSettings_AddHandler = $null
+$script:QOSettings_RemHandler = $null
+
 function New-QOTSettingsView {
     param(
         [Parameter(Mandatory = $false)]
@@ -175,7 +184,7 @@ function New-QOTSettingsView {
         throw "SettingsWindow.xaml not found at $xamlPath"
     }
 
-    Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
+    & $script:QOLog "Loading SettingsWindow.xaml (hosted)"
 
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $doc = Convert-SettingsWindowToHostableRoot -Doc $doc
@@ -195,9 +204,10 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
 
-    Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
-    Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
+    & $script:QOLog ("TxtEmail type=" + $txtEmail.GetType().FullName)
+    & $script:QOLog ("LstEmails type=" + $list.GetType().FullName)
 
+    # Build addresses collection
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -206,90 +216,87 @@ function New-QOTSettingsView {
     }
 
     $list.ItemsSource = $addresses
-    Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
+    & $script:QOLog ("Bound list to collection. Count=" + $addresses.Count)
 
-    $state = [pscustomobject]@{
-        TxtEmail  = $txtEmail
-        List      = $list
-        Hint      = $hint
-        Addresses = $addresses
-    }
+    # Remove old handlers to avoid double wiring (safe even if null)
+    try {
+        if ($script:QOSettings_AddHandler) {
+            $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
+        }
+    } catch { }
 
-    $btnAdd.Tag = $state
-    $btnRem.Tag = $state
-    Write-QOSettingsUILog "Stored state on BtnAdd.Tag / BtnRemove.Tag"
+    try {
+        if ($script:QOSettings_RemHandler) {
+            $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
+        }
+    } catch { }
 
-    $addHandler = {
+    # Handler: Add (closure captures controls + addresses)
+    $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
         try {
-            Write-QOSettingsUILog ("Add clicked. ThisType=" + ($this.GetType().FullName))
-
-            $st = $this.Tag
-            if (-not $st -or -not $st.Addresses) { throw "State missing from this.Tag" }
-
-            $addr = ([string]$st.TxtEmail.Text).Trim()
-            Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
+            $addr = ([string]$txtEmail.Text).Trim()
+            & $script:QOLog ("Add clicked. Input='" + $addr + "'")
 
             if (-not $addr) {
-                if ($st.Hint) { $st.Hint.Text = "Enter an email address." }
+                if ($hint) { $hint.Text = "Enter an email address." }
                 return
             }
 
             $lower = $addr.ToLower()
-            foreach ($x in $st.Addresses) {
+            foreach ($x in $addresses) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
-                    $st.TxtEmail.Text = ""
-                    if ($st.Hint) { $st.Hint.Text = "Already exists." }
-                    Write-QOSettingsUILog "Add ignored (duplicate)"
+                    $txtEmail.Text = ""
+                    if ($hint) { $hint.Text = "Already exists." }
+                    & $script:QOLog "Add ignored (duplicate)"
                     return
                 }
             }
 
-            $st.Addresses.Add($addr)
-            $st.TxtEmail.Text = ""
+            $addresses.Add($addr)
+            $txtEmail.Text = ""
 
-            Save-QOMonitoredAddresses -Collection $st.Addresses
+            Save-QOMonitoredAddresses -Collection $addresses
 
-            if ($st.Hint) { $st.Hint.Text = "Added $addr" }
-            Write-QOSettingsUILog "Added + saved"
+            if ($hint) { $hint.Text = "Added $addr" }
+            & $script:QOLog "Added + saved"
         }
         catch {
-            Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
-            Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
+            & $script:QOLog ("Add failed: " + $_.Exception.ToString())
+            & $script:QOLog ("Add stack: " + $_.ScriptStackTrace)
         }
     }.GetNewClosure()
 
-    $remHandler = {
+    # Handler: Remove (closure captures controls + addresses)
+    $script:QOSettings_RemHandler = [System.Windows.RoutedEventHandler]{
         try {
-            Write-QOSettingsUILog ("Remove clicked. ThisType=" + ($this.GetType().FullName))
-
-            $st = $this.Tag
-            if (-not $st -or -not $st.Addresses) { throw "State missing from this.Tag" }
-
-            $sel = $st.List.SelectedItem
-            Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
+            $sel = $list.SelectedItem
+            & $script:QOLog ("Remove clicked. Selected='" + ($sel + "") + "'")
 
             if (-not $sel) {
-                if ($st.Hint) { $st.Hint.Text = "Select an address to remove." }
+                if ($hint) { $hint.Text = "Select an address to remove." }
                 return
             }
 
-            [void]$st.Addresses.Remove([string]$sel)
-            Save-QOMonitoredAddresses -Collection $st.Addresses
+            [void]$addresses.Remove([string]$sel)
+            Save-QOMonitoredAddresses -Collection $addresses
 
-            if ($st.Hint) { $st.Hint.Text = "Removed $sel" }
-            Write-QOSettingsUILog "Removed + saved"
+            if ($hint) { $hint.Text = "Removed $sel" }
+            & $script:QOLog "Removed + saved"
         }
         catch {
-            Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
-            Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
+            & $script:QOLog ("Remove failed: " + $_.Exception.ToString())
+            & $script:QOLog ("Remove stack: " + $_.ScriptStackTrace)
         }
     }.GetNewClosure()
 
-    $btnAdd.Add_Click($addHandler)
-    $btnRem.Add_Click($remHandler)
-    Write-QOSettingsUILog "Wired handlers using `$this.Tag + GetNewClosure()"
+    # Wire using AddHandler (more reliable in PS than Add_Click)
+    $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
+    $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
+
+    & $script:QOLog "Wired handlers using AddHandler (closure-based, no this.Tag)"
 
     return $root
 }
 
-Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog
+# Export only the view creator. Logging stays internal to avoid name conflicts.
+Export-ModuleMember -Function New-QOTSettingsView
