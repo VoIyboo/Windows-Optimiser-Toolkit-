@@ -280,7 +280,7 @@ function New-QOTSettingsView {
             $addresses.Add($addr)
             $txtEmail.Text = ""
 
-            Save-QOMonitoredAddresses -Collection $addresses
+            & (Get-Command Save-QOMonitoredAddresses -ErrorAction Stop) -Collection $addresses
 
             if ($hint) { $hint.Text = "Added $addr" }
             Write-QOSettingsUILog "Added + saved"
