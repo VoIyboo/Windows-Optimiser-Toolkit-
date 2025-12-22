@@ -105,7 +105,7 @@ function Start-QOTMain {
 
     if (Test-Path -LiteralPath $settingsUIModule) {
         Import-Module $settingsUIModule -Force -Global -ErrorAction Stop
-        Write-QOSettingsUILog "Engine confirmed Settings UI logger is available
+        Write-QOSettingsUILog "Engine confirmed Settings UI logger is available"
     } else {
         try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Settings UI module missing: $settingsUIModule" "WARN" } } catch { }
     }
