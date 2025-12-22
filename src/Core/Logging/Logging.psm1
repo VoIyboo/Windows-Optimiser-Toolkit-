@@ -5,6 +5,18 @@
 $script:QLogRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
 $script:QLogFile = $null
 
+function Ensure-QLogRoot {
+    try {
+        if (-not $script:QLogRoot) {
+            $script:QLogRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
+        }
+
+        if (-not (Test-Path -LiteralPath $script:QLogRoot)) {
+            New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
+        }
+    } catch { }
+}
+
 function Set-QLogRoot {
     param(
         [string]$Root
@@ -14,7 +26,7 @@ function Set-QLogRoot {
         throw "Set-QLogRoot: Root path cannot be empty."
     }
 
-    if (-not (Test-Path $Root)) {
+    if (-not (Test-Path -LiteralPath $Root)) {
         New-Item -Path $Root -ItemType Directory -Force | Out-Null
     }
 
@@ -26,12 +38,7 @@ function Start-QLogSession {
         [string]$Prefix = "QuinnOptimiserToolkit"
     )
 
-    if (-not $script:QLogRoot) {
-        $script:QLogRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
-        if (-not (Test-Path $script:QLogRoot)) {
-            New-Item -Path $script:QLogRoot -ItemType Directory -Force | Out-Null
-        }
-    }
+    Ensure-QLogRoot
 
     $timestamp = (Get-Date).ToString("yyyyMMdd_HHmmss")
     $fileName  = "{0}_{1}.log" -f $Prefix, $timestamp
@@ -54,16 +61,39 @@ function Write-QLog {
     Write-Host $line
 
     if ($script:QLogFile) {
-        Add-Content -Path $script:QLogFile -Value $line
+        Add-Content -LiteralPath $script:QLogFile -Value $line -Encoding UTF8
     }
+}
+
+function Write-QOSettingsUILog {
+    param([string]$Message)
+
+    Ensure-QLogRoot
+
+    try {
+        $path = Join-Path $script:QLogRoot "SettingsUI.log"
+        Add-Content -LiteralPath $path -Value ("[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message) -Encoding UTF8
+    } catch { }
+
+    # Optional: also echo into main log stream for dev visibility
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "[SettingsUI] $Message" "INFO"
+        }
+    } catch { }
 }
 
 function Stop-QLogSession {
     if ($script:QLogFile) {
         $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-        Add-Content -Path $script:QLogFile -Value "[$ts] [INFO] Log session ended."
+        Add-Content -LiteralPath $script:QLogFile -Value "[$ts] [INFO] Log session ended." -Encoding UTF8
         $script:QLogFile = $null
     }
 }
 
-Export-ModuleMember -Function Set-QLogRoot, Start-QLogSession, Write-QLog, Stop-QLogSession
+Export-ModuleMember -Function `
+    Set-QLogRoot, `
+    Start-QLogSession, `
+    Write-QLog, `
+    Write-QOSettingsUILog, `
+    Stop-QLogSession
