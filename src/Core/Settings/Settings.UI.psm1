@@ -17,9 +17,6 @@ $script:QOLog = {
     } catch { }
 }
 
-# ------------------------------------------------------------
-# Public logger function (so other modules can call it safely)
-# ------------------------------------------------------------
 function Write-QOSettingsUILog {
     param([string]$Message)
     & $script:QOLog $Message
@@ -28,24 +25,19 @@ function Write-QOSettingsUILog {
 Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
 
 # ------------------------------------------------------------
-# One time WPF assembly load (prevents repeated Add-Type lag)
+# One time WPF assembly load
 # ------------------------------------------------------------
 $script:QOSettings_AssembliesLoaded = $false
 function Initialize-QOSettingsUIAssemblies {
     if ($script:QOSettings_AssembliesLoaded) { return }
-    try {
-        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
-        $script:QOSettings_AssembliesLoaded = $true
-        Write-QOSettingsUILog "WPF assemblies loaded once"
-    } catch {
-        Write-QOSettingsUILog ("WPF assemblies load failed: " + $_.Exception.Message)
-        throw
-    }
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
+    $script:QOSettings_AssembliesLoaded = $true
+    Write-QOSettingsUILog "WPF assemblies loaded once"
 }
 
 function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
-    if (-not $s) { $s = [pscustomobject]@{} }
+    if (-not $s) { $s = New-QODefaultSettings -NoSave }
 
     if (-not ($s.PSObject.Properties.Name -contains "Tickets") -or -not $s.Tickets) {
         $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
@@ -62,42 +54,24 @@ function Ensure-QOEmailIntegrationSettings {
     return $s
 }
 
-# ------------------------------------------------------------
-# Persist the monitored address list into Settings.json
-# ------------------------------------------------------------
 function Save-QOMonitoredAddresses {
     param(
         [Parameter(Mandatory)]
         [System.Collections.ObjectModel.ObservableCollection[string]] $Collection
     )
 
-    try {
-        $s = Get-QOSettings
-        if (-not $s) { $s = New-QODefaultSettings -NoSave }
+    $s = Ensure-QOEmailIntegrationSettings
 
-        if (-not ($s.PSObject.Properties.Name -contains "Tickets") -or -not $s.Tickets) {
-            $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
-        }
+    $clean = @(
+        $Collection |
+        ForEach-Object { ([string]$_).Trim() } |
+        Where-Object { $_ }
+    )
 
-        if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration") -or -not $s.Tickets.EmailIntegration) {
-            $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
-        }
+    $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
+    Save-QOSettings -Settings $s
 
-        $clean = @(
-            $Collection |
-            ForEach-Object { ([string]$_).Trim() } |
-            Where-Object { $_ }
-        )
-
-        $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
-        Save-QOSettings -Settings $s
-
-        Write-QOSettingsUILog ("Saved monitored addresses. Count=" + $clean.Count)
-    }
-    catch {
-        Write-QOSettingsUILog ("Save-QOMonitoredAddresses failed: " + $_.Exception.ToString())
-        throw
-    }
+    Write-QOSettingsUILog ("Saved monitored addresses. Count=" + $clean.Count)
 }
 
 function Find-QOElementByNameAndType {
@@ -193,18 +167,10 @@ function Convert-SettingsWindowToHostableRoot {
     return $Doc
 }
 
-# ------------------------------------------------------------
-# Handlers are stored module-wide so we can RemoveHandler cleanly
-# ------------------------------------------------------------
 $script:QOSettings_AddHandler = $null
 $script:QOSettings_RemHandler = $null
 
 function New-QOTSettingsView {
-    param(
-        [Parameter(Mandatory = $false)]
-        $Window
-    )
-
     Initialize-QOSettingsUIAssemblies
 
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
@@ -232,9 +198,6 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
 
-    Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
-    Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
-
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -245,17 +208,8 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    try {
-        if ($script:QOSettings_AddHandler) {
-            $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
-        }
-    } catch { }
-
-    try {
-        if ($script:QOSettings_RemHandler) {
-            $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
-        }
-    } catch { }
+    try { if ($script:QOSettings_AddHandler) { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } } catch { }
+    try { if ($script:QOSettings_RemHandler) { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } } catch { }
 
     $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
         try {
@@ -272,7 +226,6 @@ function New-QOTSettingsView {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
                     $txtEmail.Text = ""
                     if ($hint) { $hint.Text = "Already exists." }
-                    Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
             }
@@ -322,4 +275,3 @@ function New-QOTSettingsView {
 }
 
 Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog, Save-QOMonitoredAddresses
-
