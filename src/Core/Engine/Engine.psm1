@@ -17,13 +17,17 @@ Import-Module "$PSScriptRoot\..\..\Apps\InstalledApps.psm1"     -Force -ErrorAct
 Import-Module "$PSScriptRoot\..\..\Apps\InstallCommonApps.psm1" -Force -ErrorAction SilentlyContinue
 
 # Advanced
-Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"      -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1"  -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\..\Advanced\AdvancedCleaning\AdvancedCleaning.psm1"     -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\..\Advanced\NetworkAndServices\NetworkAndServices.psm1" -Force -ErrorAction SilentlyContinue
 
 function Set-QOTStatus {
     param([string]$Text)
 
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "STATUS: $Text" } } catch { }
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "STATUS: $Text"
+        }
+    } catch { }
 
     if (Get-Command Set-QOTSummary -ErrorAction SilentlyContinue) {
         Set-QOTSummary -Text $Text
@@ -32,11 +36,21 @@ function Set-QOTStatus {
 
 function Set-QOTProgress {
     param([int]$Percent)
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Progress: $Percent%" } } catch { }
+
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "Progress: $Percent%"
+        }
+    } catch { }
 }
 
 function Invoke-QOTRun {
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Starting full run" } } catch { }
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "Starting full run"
+        }
+    } catch { }
+
     Set-QOTStatus "Running..."
     Set-QOTProgress 0
 
@@ -47,29 +61,54 @@ function Invoke-QOTRun {
         if (Get-Command Start-QOTTweaks -ErrorAction SilentlyContinue) { Start-QOTTweaks }
         Set-QOTProgress 66
 
-        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Run completed" } } catch { }
+        try {
+            if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                Write-QLog "Run completed"
+            }
+        } catch { }
+
         Set-QOTProgress 100
         Set-QOTStatus "Completed"
     }
     catch {
-        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Error during run: $($_.Exception.Message)" "ERROR" } } catch { }
+        try {
+            if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                Write-QLog "Error during run: $($_.Exception.Message)" "ERROR"
+            }
+        } catch { }
+
         Set-QOTStatus "Error occurred"
     }
 }
 
 function Invoke-QOTAdvancedRun {
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Starting Advanced run" } } catch { }
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "Starting Advanced run"
+        }
+    } catch { }
+
     Set-QOTStatus "Running Advanced Tasks..."
 
     try {
         if (Get-Command Start-QOTAdvancedCleaning -ErrorAction SilentlyContinue) { Start-QOTAdvancedCleaning }
         if (Get-Command Start-QOTNetworkFix -ErrorAction SilentlyContinue) { Start-QOTNetworkFix }
 
-        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Advanced run completed" } } catch { }
+        try {
+            if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                Write-QLog "Advanced run completed"
+            }
+        } catch { }
+
         Set-QOTStatus "Advanced Completed"
     }
     catch {
-        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Error in advanced run: $($_.Exception.Message)" "ERROR" } } catch { }
+        try {
+            if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                Write-QLog "Error in advanced run: $($_.Exception.Message)" "ERROR"
+            }
+        } catch { }
+
         Set-QOTStatus "Advanced Error"
     }
 }
@@ -80,12 +119,20 @@ function Invoke-QOTStartupWarmup {
         [string]$RootPath
     )
 
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Startup warmup: begin" } } catch { }
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "Startup warmup: begin"
+        }
+    } catch { }
 
     try { if (Get-Command Test-QOTWingetAvailable -ErrorAction SilentlyContinue) { $null = Test-QOTWingetAvailable } } catch { }
     try { if (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) { $null = Get-QOTCommonAppsCatalogue } } catch { }
 
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Startup warmup: end" } } catch { }
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "Startup warmup: end"
+        }
+    } catch { }
 }
 
 function Start-QOTMain {
@@ -97,7 +144,11 @@ function Start-QOTMain {
         [System.Windows.Window]$SplashWindow
     )
 
-    try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Start-QOTMain called. Root = $RootPath" } } catch { }
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog "Start-QOTMain called. Root = $RootPath"
+        }
+    } catch { }
 
     # Ensure Settings UI logging + view builder are available globally before UI loads
     $settingsUIModule = Join-Path $PSScriptRoot "..\Settings\Settings.UI.psm1"
@@ -107,7 +158,11 @@ function Start-QOTMain {
         Import-Module $settingsUIModule -Force -Global -ErrorAction Stop
         Write-QOSettingsUILog "Engine confirmed Settings UI logger is available"
     } else {
-        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Settings UI module missing: $settingsUIModule" "WARN" } } catch { }
+        try {
+            if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                Write-QLog "Settings UI module missing: $settingsUIModule" "WARN"
+            }
+        } catch { }
     }
 
     if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
