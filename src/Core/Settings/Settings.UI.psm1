@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
 # ------------------------------------------------------------
-# Module-scoped logger implementation
+# Logger
 # ------------------------------------------------------------
 $script:QOLog = {
     param([string]$Message)
@@ -23,40 +23,20 @@ function Write-QOSettingsUILog {
 }
 
 Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
+try {
+    Write-QOSettingsUILog ("Core Settings module source: " + (Get-Command Get-QOSettings).Source)
+    Write-QOSettingsUILog ("Settings path: " + (Get-QOSettingsPath))
+} catch { }
 
 # ------------------------------------------------------------
-# One time WPF assembly load (prevents repeated Add-Type lag)
+# One time WPF assembly load
 # ------------------------------------------------------------
 $script:QOSettings_AssembliesLoaded = $false
 function Initialize-QOSettingsUIAssemblies {
     if ($script:QOSettings_AssembliesLoaded) { return }
-    try {
-        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
-        $script:QOSettings_AssembliesLoaded = $true
-        Write-QOSettingsUILog "WPF assemblies loaded once"
-    } catch {
-        Write-QOSettingsUILog ("WPF assemblies load failed: " + $_.Exception.ToString())
-        throw
-    }
-}
-
-# ------------------------------------------------------------
-# Settings read helper
-# ------------------------------------------------------------
-function Get-QOMonitoredAddressesFromSettings {
-    try {
-        $s = Get-QOSettings
-        if (-not $s) { return @() }
-
-        if ($s.Tickets -and $s.Tickets.EmailIntegration -and $null -ne $s.Tickets.EmailIntegration.MonitoredAddresses) {
-            return @($s.Tickets.EmailIntegration.MonitoredAddresses)
-        }
-
-        return @()
-    } catch {
-        Write-QOSettingsUILog ("Get-QOMonitoredAddressesFromSettings failed: " + $_.Exception.ToString())
-        return @()
-    }
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
+    $script:QOSettings_AssembliesLoaded = $true
+    Write-QOSettingsUILog "WPF assemblies loaded once"
 }
 
 # ------------------------------------------------------------
@@ -71,7 +51,6 @@ function Find-QOElementByNameAndType {
 
     function Walk {
         param($Parent)
-
         if ($null -eq $Parent) { return $null }
 
         try {
@@ -87,7 +66,6 @@ function Find-QOElementByNameAndType {
             $found = Walk $child
             if ($found) { return $found }
         }
-
         return $null
     }
 
@@ -112,10 +90,7 @@ function Get-QOControl {
 }
 
 function Convert-SettingsWindowToHostableRoot {
-    param(
-        [Parameter(Mandatory)]
-        [xml]$Doc
-    )
+    param([Parameter(Mandatory)][xml]$Doc)
 
     $win = $Doc.DocumentElement
     if (-not $win -or $win.LocalName -ne "Window") {
@@ -156,7 +131,7 @@ function Convert-SettingsWindowToHostableRoot {
 }
 
 # ------------------------------------------------------------
-# Stored handlers to prevent double wiring
+# Stored handlers
 # ------------------------------------------------------------
 $script:QOSettings_AddHandler = $null
 $script:QOSettings_RemHandler = $null
@@ -170,7 +145,6 @@ function New-QOTSettingsView {
     }
 
     Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
-
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $doc = Convert-SettingsWindowToHostableRoot -Doc $doc
 
@@ -189,21 +163,20 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
 
-    # Load from settings each time view is created
+    # Load from settings every time the view is created
     $addresses = New-Object "System.Collections.ObjectModel.ObservableCollection[string]"
-    foreach ($e in (Get-QOMonitoredAddressesFromSettings)) {
+    $s = Get-QOSettings
+    foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
     }
 
     $list.ItemsSource = $addresses
-    Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
+    Write-QOSettingsUILog ("Bound list. Count=" + $addresses.Count)
 
-    # Remove old handlers to avoid double wiring
     try { if ($script:QOSettings_AddHandler) { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } } catch { }
     try { if ($script:QOSettings_RemHandler) { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } } catch { }
 
-    # Add handler
     $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
         try {
             $addr = ([string]$txtEmail.Text).Trim()
@@ -226,17 +199,16 @@ function New-QOTSettingsView {
             $addresses.Add($addr)
             $txtEmail.Text = ""
 
-            $clean = @(
-                $addresses |
-                ForEach-Object { ([string]$_).Trim() } |
-                Where-Object { $_ } |
-                Select-Object -Unique
-            )
+            # Save via core Settings.psm1 (single source of truth)
+            $saveList = @($addresses | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+            $null = Set-QOMonitoredAddresses -Addresses $saveList
 
-            Set-QOMonitoredAddresses -Addresses $clean | Out-Null
+            # Read back immediately to confirm what actually landed in settings.json
+            $after = Get-QOSettings
+            $count = @($after.Tickets.EmailIntegration.MonitoredAddresses).Count
+            Write-QOSettingsUILog ("Saved via Set-QOMonitoredAddresses. Stored count=" + $count)
 
             if ($hint) { $hint.Text = "Added $addr" }
-            Write-QOSettingsUILog ("Added + saved. Count=" + $clean.Count)
         }
         catch {
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
@@ -244,7 +216,6 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Remove handler
     $script:QOSettings_RemHandler = [System.Windows.RoutedEventHandler]{
         try {
             $sel = $list.SelectedItem
@@ -257,17 +228,14 @@ function New-QOTSettingsView {
 
             [void]$addresses.Remove([string]$sel)
 
-            $clean = @(
-                $addresses |
-                ForEach-Object { ([string]$_).Trim() } |
-                Where-Object { $_ } |
-                Select-Object -Unique
-            )
+            $saveList = @($addresses | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+            $null = Set-QOMonitoredAddresses -Addresses $saveList
 
-            Set-QOMonitoredAddresses -Addresses $clean | Out-Null
+            $after = Get-QOSettings
+            $count = @($after.Tickets.EmailIntegration.MonitoredAddresses).Count
+            Write-QOSettingsUILog ("Removed via Set-QOMonitoredAddresses. Stored count=" + $count)
 
             if ($hint) { $hint.Text = "Removed $sel" }
-            Write-QOSettingsUILog ("Removed + saved. Count=" + $clean.Count)
         }
         catch {
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
@@ -275,10 +243,10 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Wire
     $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
     $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
-    Write-QOSettingsUILog "Wired handlers using AddHandler (closure-based)"
+
+    Write-QOSettingsUILog "Wired handlers using AddHandler"
 
     return $root
 }
