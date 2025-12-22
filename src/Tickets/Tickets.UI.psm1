@@ -268,4 +268,8 @@ function Initialize-QOTicketsUI {
     Refresh-QOTicketsGrid -Grid $script:TicketsGrid
 }
 
-Export-ModuleMember -Function Initialize-QOTicketsUI
+Export-ModuleMember -Function `
+    Get-QOTickets, `
+    Add-QOTicket, `
+    Remove-QOTicket, `
+    Add-QOTicketFromEmail
