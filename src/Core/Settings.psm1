@@ -50,14 +50,22 @@ function Save-QOSettings {
         $Settings
     )
 
-    $path = Get-QOSettingsPath
+    $path = $script:SettingsPath
 
     $dir = Split-Path -Parent $path
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
-    $Settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $path -Encoding UTF8
+    $json = $Settings | ConvertTo-Json -Depth 20
+
+    # Force overwrite
+    Set-Content -LiteralPath $path -Value $json -Encoding UTF8 -Force
+
+    # Debug proof
+    if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+        Write-QLog "Save-QOSettings wrote to: $path"
+    }
 }
 
 function Get-QOSettings {
