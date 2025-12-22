@@ -5,7 +5,7 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
 # ------------------------------------------------------------
-# Module-scoped logger (handlers call this, not a function name)
+# Module-scoped logger implementation
 # ------------------------------------------------------------
 $script:QOLog = {
     param([string]$Message)
@@ -17,7 +17,15 @@ $script:QOLog = {
     } catch { }
 }
 
-& $script:QOLog "=== Settings.UI.psm1 LOADED ==="
+# ------------------------------------------------------------
+# Public logger function (so other modules can call it safely)
+# ------------------------------------------------------------
+function Write-QOSettingsUILog {
+    param([string]$Message)
+    & $script:QOLog $Message
+}
+
+Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
 
 # ------------------------------------------------------------
 # One time WPF assembly load (prevents repeated Add-Type lag)
@@ -28,9 +36,9 @@ function Initialize-QOSettingsUIAssemblies {
     try {
         Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
         $script:QOSettings_AssembliesLoaded = $true
-        & $script:QOLog "WPF assemblies loaded once"
+        Write-QOSettingsUILog "WPF assemblies loaded once"
     } catch {
-        & $script:QOLog ("WPF assemblies load failed: " + $_.Exception.Message)
+        Write-QOSettingsUILog ("WPF assemblies load failed: " + $_.Exception.Message)
         throw
     }
 }
@@ -184,7 +192,7 @@ function New-QOTSettingsView {
         throw "SettingsWindow.xaml not found at $xamlPath"
     }
 
-    & $script:QOLog "Loading SettingsWindow.xaml (hosted)"
+    Write-QOSettingsUILog "Loading SettingsWindow.xaml (hosted)"
 
     [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
     $doc = Convert-SettingsWindowToHostableRoot -Doc $doc
@@ -204,10 +212,9 @@ function New-QOTSettingsView {
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
 
-    & $script:QOLog ("TxtEmail type=" + $txtEmail.GetType().FullName)
-    & $script:QOLog ("LstEmails type=" + $list.GetType().FullName)
+    Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
+    Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Build addresses collection
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -216,7 +223,7 @@ function New-QOTSettingsView {
     }
 
     $list.ItemsSource = $addresses
-    & $script:QOLog ("Bound list to collection. Count=" + $addresses.Count)
+    Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
     # Remove old handlers to avoid double wiring (safe even if null)
     try {
@@ -231,11 +238,10 @@ function New-QOTSettingsView {
         }
     } catch { }
 
-    # Handler: Add (closure captures controls + addresses)
     $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
         try {
             $addr = ([string]$txtEmail.Text).Trim()
-            & $script:QOLog ("Add clicked. Input='" + $addr + "'")
+            Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
 
             if (-not $addr) {
                 if ($hint) { $hint.Text = "Enter an email address." }
@@ -247,7 +253,7 @@ function New-QOTSettingsView {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
                     $txtEmail.Text = ""
                     if ($hint) { $hint.Text = "Already exists." }
-                    & $script:QOLog "Add ignored (duplicate)"
+                    Write-QOSettingsUILog "Add ignored (duplicate)"
                     return
                 }
             }
@@ -258,19 +264,18 @@ function New-QOTSettingsView {
             Save-QOMonitoredAddresses -Collection $addresses
 
             if ($hint) { $hint.Text = "Added $addr" }
-            & $script:QOLog "Added + saved"
+            Write-QOSettingsUILog "Added + saved"
         }
         catch {
-            & $script:QOLog ("Add failed: " + $_.Exception.ToString())
-            & $script:QOLog ("Add stack: " + $_.ScriptStackTrace)
+            Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
+            Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
     }.GetNewClosure()
 
-    # Handler: Remove (closure captures controls + addresses)
     $script:QOSettings_RemHandler = [System.Windows.RoutedEventHandler]{
         try {
             $sel = $list.SelectedItem
-            & $script:QOLog ("Remove clicked. Selected='" + ($sel + "") + "'")
+            Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
 
             if (-not $sel) {
                 if ($hint) { $hint.Text = "Select an address to remove." }
@@ -281,22 +286,20 @@ function New-QOTSettingsView {
             Save-QOMonitoredAddresses -Collection $addresses
 
             if ($hint) { $hint.Text = "Removed $sel" }
-            & $script:QOLog "Removed + saved"
+            Write-QOSettingsUILog "Removed + saved"
         }
         catch {
-            & $script:QOLog ("Remove failed: " + $_.Exception.ToString())
-            & $script:QOLog ("Remove stack: " + $_.ScriptStackTrace)
+            Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
+            Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
     }.GetNewClosure()
 
-    # Wire using AddHandler (more reliable in PS than Add_Click)
     $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
     $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
 
-    & $script:QOLog "Wired handlers using AddHandler (closure-based, no this.Tag)"
+    Write-QOSettingsUILog "Wired handlers using AddHandler (closure-based)"
 
     return $root
 }
 
-# Export only the view creator. Logging stays internal to avoid name conflicts.
-Export-ModuleMember -Function New-QOTSettingsView
+Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog
