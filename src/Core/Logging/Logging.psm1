@@ -97,3 +97,4 @@ Export-ModuleMember -Function `
     Write-QLog, `
     Write-QOSettingsUILog, `
     Stop-QLogSession
+
