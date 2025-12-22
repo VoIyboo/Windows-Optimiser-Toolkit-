@@ -5,6 +5,62 @@ $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1") -Force -ErrorAction Stop
 
+# ------------------------------------------------------------
+# PowerShell 5.1 safe helpers (NO ?? operator)
+# ------------------------------------------------------------
+function Get-QOSafeString {
+    param([object]$Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    return ([string]$Value)
+}
+
+# ------------------------------------------------------------
+# Create ticket from email object
+# ------------------------------------------------------------
+function Add-QOTicketFromEmail {
+    param(
+        [Parameter(Mandatory)]
+        $Email
+    )
+
+    $subject = (Get-QOSafeString $Email.Subject).Trim()
+    $from    = (Get-QOSafeString $Email.From).Trim()
+
+    $body = ""
+    if ($Email.PSObject.Properties.Name -contains "Body") {
+        $body = (Get-QOSafeString $Email.Body).Trim()
+    }
+    elseif ($Email.PSObject.Properties.Name -contains "Snippet") {
+        $body = (Get-QOSafeString $Email.Snippet).Trim()
+    }
+
+    if ([string]::IsNullOrWhiteSpace($subject)) {
+        $subject = "Email ticket"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($from)) {
+        $from = "Unknown sender"
+    }
+
+    $ticket = New-QOTicket -Title $subject
+
+    # Optional metadata (safe if fields exist)
+    try {
+        if ($ticket.PSObject.Properties.Name -contains "Source") { $ticket.Source = "Email" }
+        if ($ticket.PSObject.Properties.Name -contains "From")   { $ticket.From = $from }
+        if ($ticket.PSObject.Properties.Name -contains "Body")   { $ticket.Body = $body }
+    } catch { }
+
+    Add-QOTicket -Ticket $ticket | Out-Null
+    return $ticket
+}
+
+
+
 # -------------------------
 # State
 # -------------------------
