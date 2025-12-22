@@ -4,6 +4,21 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
+# ------------------------------------------------------------
+# One time WPF assembly load (prevents repeated Add-Type lag)
+# ------------------------------------------------------------
+$script:QOSettings_AssembliesLoaded = $false
+function Initialize-QOSettingsUIAssemblies {
+    if ($script:QOSettings_AssembliesLoaded) { return }
+    try {
+        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
+        $script:QOSettings_AssembliesLoaded = $true
+        Write-QOSettingsUILog "WPF assemblies loaded once"
+    } catch {
+        throw
+    }
+}
+
 function Write-QOSettingsUILog {
     param([string]$Message)
     try {
@@ -85,6 +100,25 @@ function Find-QOElementByNameAndType {
     return (Walk $Root)
 }
 
+function Get-QOControl {
+    param(
+        [Parameter(Mandatory)] $Root,
+        [Parameter(Mandatory)] [string] $Name,
+        [Parameter(Mandatory)] [Type] $Type
+    )
+
+    # Fast path: FindName
+    try {
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            $c = $Root.FindName($Name)
+            if ($c -and ($c -is $Type)) { return $c }
+        }
+    } catch { }
+
+    # Fallback: Visual tree walk
+    return Find-QOElementByNameAndType -Root $Root -Name $Name -Type $Type
+}
+
 function Convert-SettingsWindowToHostableRoot {
     param(
         [Parameter(Mandatory)]
@@ -135,7 +169,7 @@ function New-QOTSettingsView {
         $Window
     )
 
-    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+    Initialize-QOSettingsUIAssemblies
 
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
@@ -151,11 +185,11 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    $txtEmail = Find-QOElementByNameAndType -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
-    $btnAdd   = Find-QOElementByNameAndType -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
-    $btnRem   = Find-QOElementByNameAndType -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
-    $list     = Find-QOElementByNameAndType -Root $root -Name "LstEmails" -Type ([System.Windows.Controls.ListBox])
-    $hint     = Find-QOElementByNameAndType -Root $root -Name "LblHint"   -Type ([System.Windows.Controls.TextBlock])
+    $txtEmail = Get-QOControl -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
+    $btnAdd   = Get-QOControl -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
+    $btnRem   = Get-QOControl -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
+    $list     = Get-QOControl -Root $root -Name "LstEmails" -Type ([System.Windows.Controls.ListBox])
+    $hint     = Get-QOControl -Root $root -Name "LblHint"   -Type ([System.Windows.Controls.TextBlock])
 
     if (-not $txtEmail) { throw "TxtEmail not found (TextBox)" }
     if (-not $btnAdd)   { throw "BtnAdd not found (Button)" }
