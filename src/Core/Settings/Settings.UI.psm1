@@ -4,21 +4,6 @@
 $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 
-# ------------------------------------------------------------
-# One time WPF assembly load (prevents repeated Add-Type lag)
-# ------------------------------------------------------------
-$script:QOSettings_AssembliesLoaded = $false
-function Initialize-QOSettingsUIAssemblies {
-    if ($script:QOSettings_AssembliesLoaded) { return }
-    try {
-        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
-        $script:QOSettings_AssembliesLoaded = $true
-        Write-QOSettingsUILog "WPF assemblies loaded once"
-    } catch {
-        throw
-    }
-}
-
 function Write-QOSettingsUILog {
     param([string]$Message)
     try {
@@ -30,6 +15,22 @@ function Write-QOSettingsUILog {
 }
 
 Write-QOSettingsUILog "=== Settings.UI.psm1 LOADED ==="
+
+# ------------------------------------------------------------
+# One time WPF assembly load (prevents repeated Add-Type lag)
+# ------------------------------------------------------------
+$script:QOSettings_AssembliesLoaded = $false
+function Initialize-QOSettingsUIAssemblies {
+    if ($script:QOSettings_AssembliesLoaded) { return }
+    try {
+        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase -ErrorAction Stop
+        $script:QOSettings_AssembliesLoaded = $true
+        Write-QOSettingsUILog "WPF assemblies loaded once"
+    } catch {
+        Write-QOSettingsUILog ("WPF assemblies load failed: " + $_.Exception.Message)
+        throw
+    }
+}
 
 function Ensure-QOEmailIntegrationSettings {
     $s = Get-QOSettings
@@ -107,7 +108,6 @@ function Get-QOControl {
         [Parameter(Mandatory)] [Type] $Type
     )
 
-    # Fast path: FindName
     try {
         if ($Root -is [System.Windows.FrameworkElement]) {
             $c = $Root.FindName($Name)
@@ -115,7 +115,6 @@ function Get-QOControl {
         }
     } catch { }
 
-    # Fallback: Visual tree walk
     return Find-QOElementByNameAndType -Root $Root -Name $Name -Type $Type
 }
 
@@ -199,7 +198,6 @@ function New-QOTSettingsView {
     Write-QOSettingsUILog ("TxtEmail type=" + $txtEmail.GetType().FullName)
     Write-QOSettingsUILog ("LstEmails type=" + $list.GetType().FullName)
 
-    # Build addresses collection
     $addresses = New-Object 'System.Collections.ObjectModel.ObservableCollection[string]'
     $s = Ensure-QOEmailIntegrationSettings
     foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
@@ -207,11 +205,9 @@ function New-QOTSettingsView {
         if ($v) { $addresses.Add($v) }
     }
 
-    # Bind
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # State for this view instance
     $state = [pscustomobject]@{
         TxtEmail  = $txtEmail
         List      = $list
@@ -219,12 +215,10 @@ function New-QOTSettingsView {
         Addresses = $addresses
     }
 
-    # Put state on buttons
     $btnAdd.Tag = $state
     $btnRem.Tag = $state
     Write-QOSettingsUILog "Stored state on BtnAdd.Tag / BtnRemove.Tag"
 
-    # Add handler
     $addHandler = {
         try {
             Write-QOSettingsUILog ("Add clicked. ThisType=" + ($this.GetType().FullName))
@@ -264,7 +258,6 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Remove handler
     $remHandler = {
         try {
             Write-QOSettingsUILog ("Remove clicked. ThisType=" + ($this.GetType().FullName))
@@ -292,7 +285,6 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Wire
     $btnAdd.Add_Click($addHandler)
     $btnRem.Add_Click($remHandler)
     Write-QOSettingsUILog "Wired handlers using `$this.Tag + GetNewClosure()"
@@ -300,4 +292,4 @@ function New-QOTSettingsView {
     return $root
 }
 
-Export-ModuleMember -Function New-QOTSettingsView
+Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog
