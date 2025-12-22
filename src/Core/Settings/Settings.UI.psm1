@@ -302,7 +302,7 @@ function New-QOTSettingsView {
             }
 
             [void]$addresses.Remove([string]$sel)
-            Save-QOMonitoredAddresses -Collection $addresses
+            & (Get-Command Save-QOMonitoredAddresses -ErrorAction Stop) -Collection $addresses
 
             if ($hint) { $hint.Text = "Removed $sel" }
             Write-QOSettingsUILog "Removed + saved"
