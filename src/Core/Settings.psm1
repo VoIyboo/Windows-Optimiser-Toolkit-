@@ -157,11 +157,57 @@ function Set-QOMonitoredAddresses {
     return $settings
 }
 
+function Get-QOMonitoredMailboxAddresses {
+    $s = Get-QOSettings
+    if (-not $s) { return @() }
+
+    try {
+        $list = @($s.Tickets.EmailIntegration.MonitoredAddresses)
+        return @(
+            $list |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { $_ } |
+            Sort-Object -Unique
+        )
+    } catch {
+        return @()
+    }
+}
+
+function Set-QOMonitoredMailboxAddresses {
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Addresses
+    )
+
+    $s = Get-QOSettings
+    if (-not $s) { $s = New-QODefaultSettings -NoSave }
+
+    if (-not $s.Tickets) {
+        $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    if (-not $s.Tickets.EmailIntegration) {
+        $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+
+    $clean = @(
+        $Addresses |
+        ForEach-Object { ([string]$_).Trim() } |
+        Where-Object { $_ } |
+        Sort-Object -Unique
+    )
+
+    $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
+    Save-QOSettings -Settings $s
+}
+
+
 Export-ModuleMember -Function `
     Get-QOSettings, `
     Save-QOSettings, `
     Set-QOSetting, `
     Get-QOSettingsPath, `
     New-QODefaultSettings, `
-    Set-QOMonitoredAddresses
+    Get-QOMonitoredMailboxAddresses, `
+    Set-QOMonitoredMailboxAddresses
 
