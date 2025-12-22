@@ -99,6 +99,16 @@ function Start-QOTMain {
 
     try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Start-QOTMain called. Root = $RootPath" } } catch { }
 
+    # Ensure Settings UI logging + view builder are available globally before UI loads
+    $settingsUIModule = Join-Path $PSScriptRoot "..\Settings\Settings.UI.psm1"
+    $settingsUIModule = [System.IO.Path]::GetFullPath($settingsUIModule)
+
+    if (Test-Path -LiteralPath $settingsUIModule) {
+        Import-Module $settingsUIModule -Force -Global -ErrorAction Stop
+    } else {
+        try { if (Get-Command Write-QLog -ErrorAction SilentlyContinue) { Write-QLog "Settings UI module missing: $settingsUIModule" "WARN" } } catch { }
+    }
+
     if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
         $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
         $uiModule = [System.IO.Path]::GetFullPath($uiModule)
