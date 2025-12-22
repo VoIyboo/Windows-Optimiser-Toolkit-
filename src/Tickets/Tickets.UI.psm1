@@ -1,65 +1,10 @@
 # src\Tickets\Tickets.UI.psm1
-# UI wiring for Tickets tab
+# UI wiring for Tickets tab (NO core logic in here)
 
 $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1") -Force -ErrorAction Stop
-
-# ------------------------------------------------------------
-# PowerShell 5.1 safe helpers (NO ?? operator)
-# ------------------------------------------------------------
-function Get-QOSafeString {
-    param([object]$Value)
-
-    if ($null -eq $Value) {
-        return ""
-    }
-
-    return ([string]$Value)
-}
-
-# ------------------------------------------------------------
-# Create ticket from email object
-# ------------------------------------------------------------
-function Add-QOTicketFromEmail {
-    param(
-        [Parameter(Mandatory)]
-        $Email
-    )
-
-    $subject = (Get-QOSafeString $Email.Subject).Trim()
-    $from    = (Get-QOSafeString $Email.From).Trim()
-
-    $body = ""
-    if ($Email.PSObject.Properties.Name -contains "Body") {
-        $body = (Get-QOSafeString $Email.Body).Trim()
-    }
-    elseif ($Email.PSObject.Properties.Name -contains "Snippet") {
-        $body = (Get-QOSafeString $Email.Snippet).Trim()
-    }
-
-    if ([string]::IsNullOrWhiteSpace($subject)) {
-        $subject = "Email ticket"
-    }
-
-    if ([string]::IsNullOrWhiteSpace($from)) {
-        $from = "Unknown sender"
-    }
-
-    $ticket = New-QOTicket -Title $subject
-
-    # Optional metadata (safe if fields exist)
-    try {
-        if ($ticket.PSObject.Properties.Name -contains "Source") { $ticket.Source = "Email" }
-        if ($ticket.PSObject.Properties.Name -contains "From")   { $ticket.From = $from }
-        if ($ticket.PSObject.Properties.Name -contains "Body")   { $ticket.Body = $body }
-    } catch { }
-
-    Add-QOTicket -Ticket $ticket | Out-Null
-    return $ticket
-}
-
-
+Import-Module (Join-Path $PSScriptRoot "..\Core\Logging\Logging.psm1") -Force -ErrorAction SilentlyContinue
 
 # -------------------------
 # State
@@ -68,7 +13,7 @@ $script:TicketsGrid = $null
 $script:TicketsEmailSyncRan = $false
 
 # -------------------------
-# Helpers
+# Logging helper
 # -------------------------
 function Write-QOTicketsUILog {
     param(
@@ -85,15 +30,21 @@ function Write-QOTicketsUILog {
     } catch { }
 }
 
+# -------------------------
+# Data helpers
+# -------------------------
 function Get-QOTicketsForGrid {
-    # Supports either:
-    # - Get-QOTickets -> { Tickets = @(...) }
-    # - Get-QOTickets -> @(...) directly
     try {
-        $db = Get-QOTickets
+        if (-not (Get-Command Get-QOTickets -ErrorAction SilentlyContinue)) {
+            return @()
+        }
 
+        $db = Get-QOTickets
         if ($null -eq $db) { return @() }
 
+        # Supports either:
+        # - Get-QOTickets -> { Tickets = @(...) }
+        # - Get-QOTickets -> @(...) directly
         if ($db -is [System.Collections.IEnumerable] -and -not ($db.PSObject.Properties.Name -contains "Tickets")) {
             return @($db)
         }
@@ -127,6 +78,9 @@ function Refresh-QOTicketsGrid {
     }
 }
 
+# -------------------------
+# Email sync + refresh
+# -------------------------
 function Invoke-QOTicketsEmailSyncAndRefresh {
     param(
         [Parameter(Mandatory)]
@@ -136,7 +90,6 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
     Write-QOTicketsUILog "Tickets: Email sync started"
 
     try {
-        # This will be created in Step 5 (email fetch + ticket creation)
         if (Get-Command Sync-QOTicketsFromEmail -ErrorAction SilentlyContinue) {
             Sync-QOTicketsFromEmail
             Write-QOTicketsUILog "Tickets: Email sync finished"
@@ -148,7 +101,6 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
         Write-QOTicketsUILog ("Tickets: Email sync failed: " + $_.Exception.Message) "ERROR"
     }
 
-    # Always refresh afterwards, even if sync was skipped
     Refresh-QOTicketsGrid -Grid $Grid
 }
 
@@ -185,7 +137,7 @@ function Initialize-QOTicketsUI {
         return
     }
 
-    # Run one time sync when the grid first loads (first time you open Tickets tab)
+    # One-time sync when the grid first loads
     $script:TicketsGrid.AddHandler(
         [System.Windows.FrameworkElement]::LoadedEvent,
         [System.Windows.RoutedEventHandler]{
@@ -200,7 +152,7 @@ function Initialize-QOTicketsUI {
         }
     )
 
-    # Manual refresh button: also runs sync (so you can pull new emails on demand)
+    # Refresh button runs sync
     $btnRefresh.Add_Click({
         Invoke-QOTicketsEmailSyncAndRefresh -Grid $script:TicketsGrid
     })
@@ -208,6 +160,13 @@ function Initialize-QOTicketsUI {
     # New ticket (inline edit)
     $btnNew.Add_Click({
         try {
+            if (-not (Get-Command New-QOTicket -ErrorAction SilentlyContinue)) {
+                throw "New-QOTicket not found"
+            }
+            if (-not (Get-Command Add-QOTicket -ErrorAction SilentlyContinue)) {
+                throw "Add-QOTicket not found"
+            }
+
             $ticket = New-QOTicket -Title "New ticket"
             Add-QOTicket -Ticket $ticket | Out-Null
 
@@ -264,12 +223,8 @@ function Initialize-QOTicketsUI {
         }
     })
 
-    # Initial load (fast, no email sync here, LoadedEvent will handle the first sync)
+    # Initial load
     Refresh-QOTicketsGrid -Grid $script:TicketsGrid
 }
 
-Export-ModuleMember -Function `
-    Get-QOTickets, `
-    Add-QOTicket, `
-    Remove-QOTicket, `
-    Add-QOTicketFromEmail
+Export-ModuleMember -Function Initialize-QOTicketsUI
