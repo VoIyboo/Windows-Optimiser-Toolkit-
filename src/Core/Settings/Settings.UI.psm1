@@ -177,7 +177,7 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # State for this specific view instance (THIS is the magic)
+    # State for this view instance
     $state = [pscustomobject]@{
         TxtEmail  = $txtEmail
         List      = $list
@@ -185,27 +185,27 @@ function New-QOTSettingsView {
         Addresses = $addresses
     }
 
-    # Store state on the actual buttons
+    # Put state on buttons
     $btnAdd.Tag = $state
     $btnRem.Tag = $state
     Write-QOSettingsUILog "Stored state on BtnAdd.Tag / BtnRemove.Tag"
-    
-    # Add handler (use $this, not $sender)
+
+    # Add handler
     $addHandler = {
         try {
             Write-QOSettingsUILog ("Add clicked. ThisType=" + ($this.GetType().FullName))
-    
+
             $st = $this.Tag
             if (-not $st -or -not $st.Addresses) { throw "State missing from this.Tag" }
-    
+
             $addr = ([string]$st.TxtEmail.Text).Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
-    
+
             if (-not $addr) {
                 if ($st.Hint) { $st.Hint.Text = "Enter an email address." }
                 return
             }
-    
+
             $lower = $addr.ToLower()
             foreach ($x in $st.Addresses) {
                 if (([string]$x).Trim().ToLower() -eq $lower) {
@@ -215,12 +215,12 @@ function New-QOTSettingsView {
                     return
                 }
             }
-    
+
             $st.Addresses.Add($addr)
             $st.TxtEmail.Text = ""
-    
+
             Save-QOMonitoredAddresses -Collection $st.Addresses
-    
+
             if ($st.Hint) { $st.Hint.Text = "Added $addr" }
             Write-QOSettingsUILog "Added + saved"
         }
@@ -229,26 +229,26 @@ function New-QOTSettingsView {
             Write-QOSettingsUILog ("Add stack: " + $_.ScriptStackTrace)
         }
     }.GetNewClosure()
-    
-    # Remove handler (use $this, not $sender)
+
+    # Remove handler
     $remHandler = {
         try {
             Write-QOSettingsUILog ("Remove clicked. ThisType=" + ($this.GetType().FullName))
-    
+
             $st = $this.Tag
             if (-not $st -or -not $st.Addresses) { throw "State missing from this.Tag" }
-    
+
             $sel = $st.List.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
-    
+
             if (-not $sel) {
                 if ($st.Hint) { $st.Hint.Text = "Select an address to remove." }
                 return
             }
-    
+
             [void]$st.Addresses.Remove([string]$sel)
             Save-QOMonitoredAddresses -Collection $st.Addresses
-    
+
             if ($st.Hint) { $st.Hint.Text = "Removed $sel" }
             Write-QOSettingsUILog "Removed + saved"
         }
@@ -257,12 +257,13 @@ function New-QOTSettingsView {
             Write-QOSettingsUILog ("Remove stack: " + $_.ScriptStackTrace)
         }
     }.GetNewClosure()
-    
-    # Wire handlers
+
+    # Wire
     $btnAdd.Add_Click($addHandler)
     $btnRem.Add_Click($remHandler)
+    Write-QOSettingsUILog "Wired handlers using `$this.Tag + GetNewClosure()"
 
-Write-QOSettingsUILog "Wired handlers using `$this.Tag + GetNewClosure()"
-
+    return $root
+}
 
 Export-ModuleMember -Function New-QOTSettingsView
