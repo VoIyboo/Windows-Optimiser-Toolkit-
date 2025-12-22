@@ -62,22 +62,42 @@ function Ensure-QOEmailIntegrationSettings {
     return $s
 }
 
+# ------------------------------------------------------------
+# Persist the monitored address list into Settings.json
+# ------------------------------------------------------------
 function Save-QOMonitoredAddresses {
     param(
         [Parameter(Mandatory)]
         [System.Collections.ObjectModel.ObservableCollection[string]] $Collection
     )
 
-    $s = Ensure-QOEmailIntegrationSettings
+    try {
+        $s = Get-QOSettings
+        if (-not $s) { $s = New-QODefaultSettings -NoSave }
 
-    $clean = @(
-        $Collection |
-        ForEach-Object { ([string]$_).Trim() } |
-        Where-Object { $_ }
-    )
+        if (-not ($s.PSObject.Properties.Name -contains "Tickets") -or -not $s.Tickets) {
+            $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
 
-    $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
-    Save-QOSettings -Settings $s
+        if (-not ($s.Tickets.PSObject.Properties.Name -contains "EmailIntegration") -or -not $s.Tickets.EmailIntegration) {
+            $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+
+        $clean = @(
+            $Collection |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { $_ }
+        )
+
+        $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
+        Save-QOSettings -Settings $s
+
+        Write-QOSettingsUILog ("Saved monitored addresses. Count=" + $clean.Count)
+    }
+    catch {
+        Write-QOSettingsUILog ("Save-QOMonitoredAddresses failed: " + $_.Exception.ToString())
+        throw
+    }
 }
 
 function Find-QOElementByNameAndType {
@@ -225,7 +245,6 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list to collection. Count=" + $addresses.Count)
 
-    # Remove old handlers to avoid double wiring (safe even if null)
     try {
         if ($script:QOSettings_AddHandler) {
             $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
@@ -301,48 +320,5 @@ function New-QOTSettingsView {
 
     return $root
 }
-
-    function Save-QOMonitoredAddresses {
-    param(
-        [Parameter(Mandatory)]
-        [System.Collections.ObjectModel.ObservableCollection[string]] $Collection
-    )
-
-    try {
-        # Load settings (or default if missing)
-        $s = Get-QOSettings
-        if (-not $s) { $s = New-QODefaultSettings -NoSave }
-
-        # Ensure nested structure exists
-        if (-not $s.PSObject.Properties.Name.Contains("Tickets") -or -not $s.Tickets) {
-            $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
-        }
-
-        if (-not $s.Tickets.PSObject.Properties.Name.Contains("EmailIntegration") -or -not $s.Tickets.EmailIntegration) {
-            $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
-        }
-
-        # Clean the list
-        $clean = @(
-            $Collection |
-            ForEach-Object { ([string]$_).Trim() } |
-            Where-Object { $_ }
-        )
-
-        $s.Tickets.EmailIntegration.MonitoredAddresses = $clean
-
-        # Persist using core settings saver (Depth 20 in your fixed Settings.psm1)
-        Save-QOSettings -Settings $s
-
-        Write-QOSettingsUILog ("Saved monitored addresses. Count=" + $clean.Count)
-    }
-    catch {
-        Write-QOSettingsUILog ("Save-QOMonitoredAddresses failed: " + $_.Exception.ToString())
-        throw
-    }
-}
-
-
-
 
 Export-ModuleMember -Function New-QOTSettingsView, Write-QOSettingsUILog
