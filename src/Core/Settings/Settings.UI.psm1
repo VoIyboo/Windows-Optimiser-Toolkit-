@@ -131,7 +131,7 @@ function Convert-SettingsWindowToHostableRoot {
 
 function New-QOTSettingsView {
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $false)]
         $Window
     )
 
