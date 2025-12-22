@@ -22,13 +22,30 @@ function Get-QOSettings {
 
         $settings = $json | ConvertFrom-Json -ErrorAction Stop
 
-        # In case we add new properties in future versions
+        # In case we add new properties in future versions (top-level)
         $defaults = New-QODefaultSettings -NoSave
         foreach ($prop in $defaults.PSObject.Properties.Name) {
             if (-not $settings.PSObject.Properties.Name.Contains($prop)) {
-                $settings | Add-Member -NotePropertyName $prop -NotePropertyValue $defaults.$prop
+                $settings | Add-Member -NotePropertyName $prop -NotePropertyValue $defaults.$prop -Force
             }
         }
+
+        # Ensure nested Tickets.EmailIntegration.MonitoredAddresses always exists and is an array
+        try {
+            if (-not $settings.PSObject.Properties.Name.Contains("Tickets") -or -not $settings.Tickets) {
+                $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+            }
+
+            if (-not $settings.Tickets.PSObject.Properties.Name.Contains("EmailIntegration") -or -not $settings.Tickets.EmailIntegration) {
+                $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+            }
+
+            if (-not $settings.Tickets.EmailIntegration.PSObject.Properties.Name.Contains("MonitoredAddresses")) {
+                $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
+            }
+
+            $settings.Tickets.EmailIntegration.MonitoredAddresses = @($settings.Tickets.EmailIntegration.MonitoredAddresses)
+        } catch { }
 
         return $settings
     }
@@ -55,8 +72,15 @@ function New-QODefaultSettings {
         PreferredStartTab      = 'Cleaning'   # Cleaning | Apps | Advanced | Tickets
         InternalProtectionKey  = $null        # Will be generated and stored later
 
-        # NEW: per-user layout for the Tickets grid
+        # Per-user layout for the Tickets grid
         TicketsColumnLayout    = @()          # [{ Header='Title'; DisplayIndex=0; Width=200 }, ...]
+
+        # Tickets settings container
+        Tickets = [pscustomobject]@{
+            EmailIntegration = [pscustomobject]@{
+                MonitoredAddresses = @()
+            }
+        }
     }
 
     $dir = Split-Path -Parent $script:SettingsPath
@@ -65,7 +89,8 @@ function New-QODefaultSettings {
     }
 
     if (-not $NoSave) {
-        $settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
+        $settings | ConvertTo-Json -Depth 20 |
+            Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
     }
 
     return $settings
@@ -76,7 +101,7 @@ function Save-QOSettings {
         Persists the provided settings object to disk.
     #>
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         $Settings
     )
 
@@ -85,7 +110,8 @@ function Save-QOSettings {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
-    $Settings | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
+    $Settings | ConvertTo-Json -Depth 20 |
+        Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
 }
 
 function Set-QOSetting {
@@ -107,7 +133,7 @@ function Set-QOSetting {
 
     if ($settings.PSObject.Properties.Name -notcontains $Name) {
         # If the property does not exist yet, add it
-        $settings | Add-Member -NotePropertyName $Name -NotePropertyValue $Value
+        $settings | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
     }
     else {
         $settings.$Name = $Value
@@ -117,5 +143,4 @@ function Set-QOSetting {
     return $settings
 }
 
-Export-ModuleMember -Function Get-QOSettings, Save-QOSettings, Set-QOSetting
-
+Export-ModuleMember -Function Get-QOSettings, Save-QOSettings, Set-QOSetting, New-QODefaultSettings
