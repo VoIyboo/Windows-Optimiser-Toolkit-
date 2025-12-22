@@ -1,10 +1,10 @@
-# src\Core\Settings\Settings.psm1
+# src\Core\Settings.psm1
 # Quinn Optimiser Toolkit - Settings module
 # Handles global JSON settings for the app
 
 $ErrorActionPreference = "Stop"
 
-# Path to the settings JSON file in AppData
+# Always save to THIS path
 $script:SettingsPath = Join-Path $env:LOCALAPPDATA 'StudioVoly\QuinnToolkit\settings.json'
 
 function Get-QOSettingsPath {
@@ -18,13 +18,14 @@ function New-QODefaultSettings {
 
     $settings = [pscustomobject]@{
         SchemaVersion          = 1
-        TicketStorePath        = ""
-        LocalTicketBackupPath  = ""
-        PreferredStartTab      = "Cleaning"
+        TicketStorePath        = ''
+        LocalTicketBackupPath  = ''
+        PreferredStartTab      = 'Cleaning'
         InternalProtectionKey  = $null
 
         TicketsColumnLayout    = @()
 
+        # This is the important bit for your email list
         Tickets = [pscustomobject]@{
             EmailIntegration = [pscustomobject]@{
                 MonitoredAddresses = @()
@@ -32,40 +33,11 @@ function New-QODefaultSettings {
         }
     }
 
-    $dir = Split-Path -Parent $script:SettingsPath
-    if (-not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-
     if (-not $NoSave) {
-        $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $script:SettingsPath -Encoding UTF8
+        Save-QOSettings -Settings $settings
     }
 
     return $settings
-}
-
-function Save-QOSettings {
-    param(
-        [Parameter(Mandatory)]
-        $Settings
-    )
-
-    $path = $script:SettingsPath
-
-    $dir = Split-Path -Parent $path
-    if (-not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-
-    $json = $Settings | ConvertTo-Json -Depth 20
-
-    # Force overwrite
-    Set-Content -LiteralPath $path -Value $json -Encoding UTF8 -Force
-
-    # Debug proof
-    if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
-        Write-QLog "Save-QOSettings wrote to: $path"
-    }
 }
 
 function Get-QOSettings {
@@ -81,29 +53,32 @@ function Get-QOSettings {
 
         $settings = $json | ConvertFrom-Json -ErrorAction Stop
 
-        # Merge defaults (adds any missing props)
+        # Merge defaults so missing keys get added
         $defaults = New-QODefaultSettings -NoSave
+
         foreach ($prop in $defaults.PSObject.Properties.Name) {
             if (-not $settings.PSObject.Properties.Name.Contains($prop)) {
                 $settings | Add-Member -NotePropertyName $prop -NotePropertyValue $defaults.$prop -Force
             }
         }
 
-        # Ensure Tickets.EmailIntegration.MonitoredAddresses exists
-        if (-not ($settings.PSObject.Properties.Name -contains "Tickets") -or -not $settings.Tickets) {
-            $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+        # Ensure nested structure exists (Tickets.EmailIntegration.MonitoredAddresses)
+        if (-not $settings.Tickets) {
+            $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue $defaults.Tickets -Force
         }
-        if (-not ($settings.Tickets.PSObject.Properties.Name -contains "EmailIntegration") -or -not $settings.Tickets.EmailIntegration) {
-            $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+
+        if (-not $settings.Tickets.EmailIntegration) {
+            $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue $defaults.Tickets.EmailIntegration -Force
         }
-        if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "MonitoredAddresses") -or $null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
+
+        if ($null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
             $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
         }
 
         return $settings
     }
     catch {
-        # Settings file is corrupted, back it up and recreate
+        # Backup corrupted file then recreate
         try {
             $backupName = '{0}.bak_{1}' -f $script:SettingsPath, (Get-Date -Format 'yyyyMMddHHmmss')
             Copy-Item -LiteralPath $script:SettingsPath -Destination $backupName -ErrorAction SilentlyContinue
@@ -111,6 +86,25 @@ function Get-QOSettings {
 
         return New-QODefaultSettings
     }
+}
+
+function Save-QOSettings {
+    param(
+        [Parameter(Mandatory)]
+        $Settings
+    )
+
+    $path = Get-QOSettingsPath
+
+    $dir = Split-Path -Parent $path
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    # Depth must be high enough for Tickets.EmailIntegration.MonitoredAddresses
+    $json = $Settings | ConvertTo-Json -Depth 20
+
+    Set-Content -LiteralPath $path -Value $json -Encoding UTF8
 }
 
 function Set-QOSetting {
@@ -134,4 +128,4 @@ function Set-QOSetting {
     return $settings
 }
 
-Export-ModuleMember -Function Get-QOSettingsPath, Get-QOSettings, New-QODefaultSettings, Save-QOSettings, Set-QOSetting
+Export-ModuleMember -Function Get-QOSettings, Save-QOSettings, Set-QOSetting, Get-QOSettingsPath, New-QODefaultSettings
