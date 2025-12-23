@@ -26,6 +26,7 @@ function Start-QOTMainWindow {
     # Remove old exported functions just in case they were left behind
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
     Remove-Item Function:\New-QOTSettingsView   -ErrorAction SilentlyContinue
+    Remove-Item Function:\Initialize-QOTAppsUI  -ErrorAction SilentlyContinue
 
     # Unload by module name first (more reliable), then by path fallback
     Get-Module -Name "Tickets.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
@@ -34,8 +35,17 @@ function Start-QOTMainWindow {
     Get-Module -Name "Settings.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
 
+    Get-Module -Name "Apps.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
+
+    # Import UI modules
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
+
+    # Apps modules (UI + logic)
+    Import-Module (Join-Path $basePath "Apps\InstalledApps.psm1")         -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Apps\InstallCommonApps.psm1")     -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")               -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -87,6 +97,49 @@ function Start-QOTMainWindow {
         $tb.Foreground = [System.Windows.Media.Brushes]::White
         $tb.Margin = "10"
         $settingsHost.Content = $tb
+    }
+
+    # ------------------------------------------------------------
+    # Initialise Apps UI
+    # ------------------------------------------------------------
+    try {
+        $cmdApps = Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue
+        if (-not $cmdApps) {
+            throw "Initialize-QOTAppsUI not found. Check Apps\Apps.UI.psm1 exports it."
+        }
+
+        # These names must match your MainWindow.xaml x:Name values
+        $btnScanApps         = $window.FindName("BtnScanApps")
+        $btnUninstallSelected = $window.FindName("BtnUninstallSelected")
+
+        # Try a couple of common grid names, because your XAML might use different ones
+        $appsGrid = $window.FindName("AppsGrid")
+        if (-not $appsGrid) { $appsGrid = $window.FindName("InstalledAppsGrid") }
+
+        $installGrid = $window.FindName("InstallGrid")
+        if (-not $installGrid) { $installGrid = $window.FindName("CommonAppsGrid") }
+
+        $runButton = $window.FindName("RunSelectedActionsButton")
+        if (-not $runButton) { $runButton = $window.FindName("BtnRunSelectedActions") }
+        if (-not $runButton) { $runButton = $window.FindName("BtnRun") }
+
+        if (-not $appsGrid)    { throw "Apps grid not found. Expected x:Name 'AppsGrid' or 'InstalledAppsGrid'." }
+        if (-not $installGrid) { throw "Install grid not found. Expected x:Name 'InstallGrid' or 'CommonAppsGrid'." }
+
+        try {
+            Write-QLog ("Apps UI wiring: BtnScanApps null={0}, BtnUninstallSelected null={1}, RunButton null={2}" -f `
+                ($null -eq $btnScanApps), ($null -eq $btnUninstallSelected), ($null -eq $runButton)) "DEBUG"
+        } catch { }
+
+        Initialize-QOTAppsUI `
+            -BtnScanApps $btnScanApps `
+            -BtnUninstallSelected $btnUninstallSelected `
+            -AppsGrid $appsGrid `
+            -InstallGrid $installGrid `
+            -RunButton $runButton
+    }
+    catch {
+        try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
     }
 
     # ------------------------------------------------------------
