@@ -38,7 +38,7 @@ function Initialize-QOTAppsUI {
 
     Initialize-QOTAppsGridsColumns -AppsGrid $AppsGrid -InstallGrid $InstallGrid
 
-    # Stable single click checkboxes (including untick)
+    # Single click checkboxes (tick and untick)
     Enable-QOTSingleClickCheckboxes -Grid $AppsGrid
     Enable-QOTSingleClickCheckboxes -Grid $InstallGrid
 
@@ -84,6 +84,11 @@ function Set-QOTGridDefaults {
     $Grid.SelectionUnit = 'FullRow'
     $Grid.SelectionMode = 'Single'
     $Grid.IsSynchronizedWithCurrentItem = $false
+
+    # Help DataGrid accept edit immediately
+    $Grid.BeginningEdit.Add({
+        $_.Cancel = $false
+    })
 }
 
 function Commit-QOTGridEdits {
@@ -104,7 +109,7 @@ function Enable-QOTSingleClickCheckboxes {
         [System.Windows.Controls.DataGrid]$Grid
     )
 
-    # When clicking a checkbox, begin edit, then commit AFTER WPF toggles it
+    # On checkbox click, begin edit, then commit AFTER WPF toggles it
     $Grid.AddHandler(
         [System.Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
         [System.Windows.Input.MouseButtonEventHandler]{
@@ -148,6 +153,8 @@ function New-QOTCheckBoxColumn {
     $col.Header  = ""
     $col.Width   = $Width
     $col.Binding = $bind
+    $col.IsThreeState = $false
+
     return $col
 }
 
