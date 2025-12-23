@@ -38,6 +38,9 @@ function Initialize-QOTAppsUI {
     # Bind sources
     $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
     $InstallGrid.ItemsSource = $Global:QOT_CommonAppsCollection
+    Enable-QOTImmediateCheckboxCommit -Grid $AppsGrid
+    Enable-QOTImmediateCheckboxCommit -Grid $InstallGrid
+
 
     # Build stable columns (no AutoGenerate)
     Initialize-QOTAppsGridsColumns -AppsGrid $AppsGrid -InstallGrid $InstallGrid
@@ -117,6 +120,23 @@ function Initialize-QOTAppsGridsColumns {
         Width      = 220
         IsReadOnly = $true
     }))
+    function Enable-QOTImmediateCheckboxCommit {
+        param(
+            [Parameter(Mandatory)]
+            [System.Windows.Controls.DataGrid]$Grid
+        )
+    
+        # This forces checkbox clicks to commit immediately
+        $Grid.Add_CurrentCellChanged({
+            try {
+                $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
+                $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
+            } catch { }
+        })
+    }
+
+
+
 
     # Common Apps grid (static catalogue)
     $InstallGrid.AutoGenerateColumns = $false
