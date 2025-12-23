@@ -20,7 +20,7 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "Core\Tickets.psm1")          -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
-    # Apps modules (data + UI)
+    # Apps modules (data + engine)
     # ------------------------------------------------------------
     Import-Module (Join-Path $basePath "Apps\InstalledApps.psm1")      -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Apps\InstallCommonApps.psm1")  -Force -ErrorAction Stop
@@ -36,7 +36,6 @@ function Start-QOTMainWindow {
     Get-Module -Name "Settings.UI"  -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "Apps.UI"      -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
 
-    # Path based fallback unloads
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" }            | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" }     | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" }                  | Remove-Module -Force -ErrorAction SilentlyContinue
@@ -71,31 +70,31 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
-    # Initialise Apps UI
+    # Initialise Apps UI (wire to CURRENT XAML names)
     # ------------------------------------------------------------
     try {
-        $appsGrid    = $window.FindName("AppsGrid")
-        $installGrid = $window.FindName("InstallGrid")
-        $runButton   = $window.FindName("BtnRunSelectedActions")
+        # These names MUST match your existing XAML.
+        # Based on your screenshots and earlier code, these are the most likely names.
+        $appsGrid        = $window.FindName("AppsGrid")
+        $installGrid     = $window.FindName("InstallGrid")
+        $btnScanApps     = $window.FindName("BtnScanApps")
+        $btnUninstallSel = $window.FindName("BtnUninstallSelected")
+        $btnRun          = $window.FindName("BtnRunSelectedActions")
 
-        if (-not $appsGrid)    { throw "AppsGrid not found. Check MainWindow.xaml has x:Name='AppsGrid' on the installed apps DataGrid." }
-        if (-not $installGrid) { throw "InstallGrid not found. Check MainWindow.xaml has x:Name='InstallGrid' on the common apps DataGrid." }
-        if (-not $runButton)   { throw "BtnRunSelectedActions not found. Check MainWindow.xaml has x:Name='BtnRunSelectedActions' on the Run button." }
+        if (-not $appsGrid)        { throw "AppsGrid not found. Set x:Name='AppsGrid' on the installed apps DataGrid." }
+        if (-not $installGrid)     { throw "InstallGrid not found. Set x:Name='InstallGrid' on the common apps DataGrid." }
+        if (-not $btnRun)          { throw "BtnRunSelectedActions not found. Set x:Name='BtnRunSelectedActions' on the Run button." }
 
-        $btnScanApps = $window.FindName("BtnScanApps")
-        $btnUninstall = $window.FindName("BtnUninstallSelected")
-
-        $cmd = Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue
-        if (-not $cmd) {
-            throw "Initialize-QOTAppsUI not found. Check Apps\Apps.UI.psm1 exports it."
+        if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
+            throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
         Initialize-QOTAppsUI `
             -BtnScanApps $btnScanApps `
-            -BtnUninstallSelected $btnUninstall `
+            -BtnUninstallSelected $btnUninstallSel `
             -AppsGrid $appsGrid `
             -InstallGrid $installGrid `
-            -RunButton $runButton
+            -RunButton $btnRun
     }
     catch {
         try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
