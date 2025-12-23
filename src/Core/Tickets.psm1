@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-# Import Settings (same folder)
+# Import Settings
 Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
 
 # =====================================================================
@@ -13,14 +13,8 @@ $script:TicketStorePath  = $null
 $script:TicketBackupPath = $null
 
 # =====================================================================
-# Small helpers (PowerShell 5.1 safe)
+# Helpers
 # =====================================================================
-function Get-QOSafeString {
-    param([object]$Value)
-    if ($null -eq $Value) { return "" }
-    return ([string]$Value)
-}
-
 function Ensure-QOSettingProperty {
     param(
         [Parameter(Mandatory)][object]$Settings,
@@ -44,29 +38,18 @@ function New-QODefaultTicketDatabase {
     }
 }
 
-# =====================================================================
-# Read monitored mailboxes from Settings
-# =====================================================================
-function Get-QOTMonitoredMailboxAddresses {
-    <#
-        Returns the monitored mailbox addresses from Settings.json.
-        Always returns an array (can be empty).
-    #>
+function Get-QOTicketsStorePath {
+    Initialize-QOTicketStorage
+    return $script:TicketStorePath
+}
 
-    # Prefer dedicated Settings function if it exists
-    if (Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction SilentlyContinue) {
-        $a = @(Get-QOMonitoredMailboxAddresses)
-        return @($a | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+function Ensure-QOTicketsStoreDirectory {
+    Initialize-QOTicketStorage
+    $dir = Split-Path -Parent $script:TicketStorePath
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
-
-    # Fallback: read direct from settings object
-    $s = Get-QOSettings
-    if (-not $s) { return @() }
-
-    $list = @()
-    try { $list = @($s.Tickets.EmailIntegration.MonitoredAddresses) } catch { $list = @() }
-
-    return @($list | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+    return $dir
 }
 
 # =====================================================================
@@ -91,10 +74,10 @@ function Initialize-QOTicketStorage {
 
     Save-QOSettings -Settings $settings
 
-    $script:TicketStorePath  = $settings.TicketStorePath
-    $script:TicketBackupPath = $settings.LocalTicketBackupPath
+    $script:TicketStorePath  = [string]$settings.TicketStorePath
+    $script:TicketBackupPath = [string]$settings.LocalTicketBackupPath
 
-    New-Item -ItemType Directory -Path (Split-Path $script:TicketStorePath) -Force | Out-Null
+    New-Item -ItemType Directory -Path (Split-Path -Parent $script:TicketStorePath) -Force | Out-Null
     New-Item -ItemType Directory -Path $script:TicketBackupPath -Force | Out-Null
 
     if (-not (Test-Path -LiteralPath $script:TicketStorePath)) {
@@ -110,14 +93,16 @@ function Get-QOTickets {
     Initialize-QOTicketStorage
 
     try {
-        $db = Get-Content -LiteralPath $script:TicketStorePath -Raw | ConvertFrom-Json -ErrorAction Stop
+        $db = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
         if (-not $db) { return (New-QODefaultTicketDatabase) }
 
-        if (-not ($db.PSObject.Properties.Name -contains "Tickets") -or $null -eq $db.Tickets) {
+        if (-not ($db.PSObject.Properties.Name -contains "Tickets")) {
             $db | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
         }
 
+        if ($null -eq $db.Tickets) { $db.Tickets = @() }
         $db.Tickets = @($db.Tickets)
+
         return $db
     }
     catch {
@@ -130,7 +115,9 @@ function Save-QOTickets {
 
     Initialize-QOTicketStorage
 
-    if (-not $Database) { throw "Save-QOTickets: Database is null." }
+    if (-not ($Database.PSObject.Properties.Name -contains "Tickets")) {
+        $Database | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
+    }
 
     $Database | ConvertTo-Json -Depth 25 |
         Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
@@ -153,14 +140,6 @@ function New-QOTicket {
         CreatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
         Status    = "Open"
         Priority  = $Priority
-
-        # Optional metadata fields (safe defaults)
-        Source         = ""
-        EmailFrom      = ""
-        EmailTo        = ""
-        EmailReceived  = ""
-        EmailMessageId = ""
-        EmailBody      = ""
     }
 }
 
@@ -168,8 +147,9 @@ function Add-QOTicket {
     param([Parameter(Mandatory)]$Ticket)
 
     $db = Get-QOTickets
-    $db.Tickets += $Ticket
+    $db.Tickets = @($db.Tickets) + @($Ticket)
     Save-QOTickets -Database $db
+    return $Ticket
 }
 
 function Remove-QOTicket {
@@ -181,87 +161,125 @@ function Remove-QOTicket {
 }
 
 # =====================================================================
-# Email -> Ticket
+# Settings bridge for monitored addresses
+# =====================================================================
+function Get-QOTMonitoredMailboxAddresses {
+    # Prefer dedicated Settings function if available
+    if (Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction SilentlyContinue) {
+        $a = @(Get-QOMonitoredMailboxAddresses)
+        return @(
+            $a |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { $_ } |
+            Sort-Object -Unique
+        )
+    }
+
+    # Fallback (should not really happen now)
+    $s = Get-QOSettings
+    if (-not $s) { return @() }
+
+    try {
+        $list = @($s.Tickets.EmailIntegration.MonitoredAddresses)
+        return @(
+            $list |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { $_ } |
+            Sort-Object -Unique
+        )
+    } catch {
+        return @()
+    }
+}
+
+# =====================================================================
+# Email ticket creation (PowerShell 5.1 safe)
 # =====================================================================
 function Add-QOTicketFromEmail {
-    <#
-        Creates a ticket from an email payload and persists it to Tickets.json.
-
-        Expected input shape (minimal):
-          - Subject (string)
-          - From (string)
-          - To (string or string[])
-          - Received (datetime or string)
-          - Body (string) OR Snippet (string)
-          - MessageId (string)  # used to prevent duplicates
-    #>
     param(
         [Parameter(Mandatory)]
         [pscustomobject]$Email
     )
 
-    $subject   = (Get-QOSafeString $Email.Subject).Trim()
-    $from      = (Get-QOSafeString $Email.From).Trim()
-
-    $toObj = $null
-    if ($Email.PSObject.Properties.Name -contains "To") { $toObj = $Email.To }
-    if ($toObj -is [System.Array]) { $toObj = ($toObj -join "; ") }
-    $to = (Get-QOSafeString $toObj).Trim()
-
-    $messageId = ""
-    if ($Email.PSObject.Properties.Name -contains "MessageId") {
-        $messageId = (Get-QOSafeString $Email.MessageId).Trim()
-    }
-
+    $subject = ""
+    $from    = ""
+    $to      = ""
+    $body    = ""
+    $msgId   = ""
     $received = $null
-    if ($Email.PSObject.Properties.Name -contains "Received") { $received = $Email.Received }
+
+    try { if ($Email.PSObject.Properties.Name -contains "Subject")   { $subject  = [string]$Email.Subject } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "From")      { $from     = [string]$Email.From } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "To")        { $to       = $Email.To } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "Body")      { $body     = [string]$Email.Body } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "Snippet")   { if (-not $body) { $body = [string]$Email.Snippet } } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "MessageId") { $msgId    = [string]$Email.MessageId } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "Received")  { $received = $Email.Received } } catch { }
+
+    $subject = ($subject + "").Trim()
+    $from    = ($from + "").Trim()
+    $msgId   = ($msgId + "").Trim()
+
+    if ($to -is [System.Array]) { $to = ($to -join "; ") }
+    $to = ([string]($to + "")).Trim()
+
     if (-not $received) { $received = Get-Date }
-
-    $body = ""
-    if ($Email.PSObject.Properties.Name -contains "Body") {
-        $body = (Get-QOSafeString $Email.Body)
-    } elseif ($Email.PSObject.Properties.Name -contains "Snippet") {
-        $body = (Get-QOSafeString $Email.Snippet)
-    }
-
     if ([string]::IsNullOrWhiteSpace($subject)) { $subject = "(No subject)" }
-    if ([string]::IsNullOrWhiteSpace($from))    { $from    = "Unknown sender" }
+    if ([string]::IsNullOrWhiteSpace($from))    { $from = "Unknown sender" }
 
     $db = Get-QOTickets
 
     # Dedup by MessageId
-    if ($messageId) {
+    if ($msgId) {
         foreach ($t in @($db.Tickets)) {
             try {
-                if (($t.Source -eq "Email") -and ($t.EmailMessageId -eq $messageId)) {
+                if (($t.Source -eq "Email") -and ($t.EmailMessageId -eq $msgId)) {
                     return $t
                 }
             } catch { }
         }
     }
 
-    $ticket = New-QOTicket -Title $subject -Priority "Normal"
+    $ticket = [pscustomobject]@{
+        Id             = ([guid]::NewGuid().ToString())
+        Title          = $subject
+        Status         = "New"
+        CreatedAt      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        Priority       = "Normal"
+        Source         = "Email"
 
-    # Fill email metadata (these properties exist on our ticket template)
-    $ticket.Source         = "Email"
-    $ticket.EmailFrom      = $from
-    $ticket.EmailTo        = $to
-    $ticket.EmailReceived  = (Get-QOSafeString $received)
-    $ticket.EmailMessageId = $messageId
-    $ticket.EmailBody      = $body
+        EmailFrom      = $from
+        EmailTo        = $to
+        EmailReceived  = $received
+        EmailMessageId = $msgId
+        EmailBody      = $body
+    }
 
-    $db.Tickets += $ticket
+    $db.Tickets = @($db.Tickets) + @($ticket)
     Save-QOTickets -Database $db
 
     return $ticket
 }
 
+# =====================================================================
+# Sync stub (so UI can call it without exploding)
+# Later we will implement actual email reading here.
+# =====================================================================
+function Sync-QOTicketsFromEmail {
+    # Do nothing for now, this is just a safe hook.
+    # Next step will be to connect to Outlook/Graph and create tickets.
+    return $null
+}
+
 Export-ModuleMember -Function `
     Initialize-QOTicketStorage, `
+    Get-QOTicketsStorePath, `
+    Ensure-QOTicketsStoreDirectory, `
     Get-QOTickets, `
     Save-QOTickets, `
     New-QOTicket, `
     Add-QOTicket, `
     Remove-QOTicket, `
     Get-QOTMonitoredMailboxAddresses, `
-    Add-QOTicketFromEmail
+    Add-QOTicketFromEmail, `
+    Sync-QOTicketsFromEmail
