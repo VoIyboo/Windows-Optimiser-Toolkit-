@@ -5,13 +5,11 @@ function Get-QOTInstalledApps {
             for the UI and engine.
 
         .NOTES
-            Changes in this version:
             - Adds IsSelected for checkbox UI
             - Adds Version (DisplayVersion)
             - Captures RegistryKeyPath for troubleshooting
-            - Improves system app filtering slightly but keeps your intent
             - Safer handling for null properties
-            - Dedupes cleanly by Name + Publisher + Version (not just Name)
+            - Dedupes by Name + Publisher + Version
     #>
 
     $paths = @(
@@ -84,7 +82,8 @@ function Get-QOTInstalledApps {
                     }
                 }
                 catch {
-                    try { Write-QLog "Error parsing InstallDate '$rawInstallDate' for $name: $($_.Exception.Message)" "WARN" } catch { }
+                    # Important: avoid "$name:" in strings, it parses like a drive reference
+                    try { Write-QLog ("Error parsing InstallDate '{0}' for '{1}': {2}" -f $rawInstallDate, $name, $_.Exception.Message) "WARN" } catch { }
                 }
             }
 
@@ -113,7 +112,7 @@ function Get-QOTInstalledApps {
                 $uninstall = $item.UninstallString
             }
 
-            # Record the registry key path for debugging and later improvements
+            # Registry key path for debugging
             $regKeyPath = $null
             try { $regKeyPath = $item.PSPath } catch { $regKeyPath = $null }
 
@@ -133,7 +132,6 @@ function Get-QOTInstalledApps {
         }
     }
 
-    # Deduplicate more safely than just Name
     $results |
         Sort-Object Name, Publisher, Version -Unique |
         Sort-Object Name
