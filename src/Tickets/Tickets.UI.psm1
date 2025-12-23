@@ -23,9 +23,7 @@ $script:TicketsDeleteHandler  = $null
 # -------------------------
 function Write-QOTicketsUILog {
     param(
-        [Parameter(Mandatory)]
-        [string]$Message,
-
+        [Parameter(Mandatory)][string]$Message,
         [string]$Level = "INFO"
     )
 
@@ -48,15 +46,12 @@ function Get-QOTicketsForGrid {
         $db = Get-QOTickets
         if ($null -eq $db) { return @() }
 
-        # Supports either:
-        # - Get-QOTickets -> { Tickets = @(...) }
-        # - Get-QOTickets -> @(...) directly
-        if ($db -is [System.Collections.IEnumerable] -and -not ($db.PSObject.Properties.Name -contains "Tickets")) {
-            return @($db)
-        }
-
         if ($db.PSObject.Properties.Name -contains "Tickets") {
             return @($db.Tickets)
+        }
+
+        if ($db -is [System.Collections.IEnumerable]) {
+            return @($db)
         }
 
         return @()
@@ -78,9 +73,7 @@ function Refresh-QOTicketsGrid {
         $Grid.Items.Refresh()
     }
     catch {
-        [System.Windows.MessageBox]::Show(
-            "Load tickets failed.`r`n$($_.Exception.Message)"
-        ) | Out-Null
+        [System.Windows.MessageBox]::Show("Load tickets failed.`r`n$($_.Exception.Message)") | Out-Null
     }
 }
 
@@ -97,7 +90,7 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
 
     try {
         if (Get-Command Sync-QOTicketsFromEmail -ErrorAction SilentlyContinue) {
-            Sync-QOTicketsFromEmail
+            Sync-QOTicketsFromEmail | Out-Null
             Write-QOTicketsUILog "Tickets: Email sync finished"
         } else {
             Write-QOTicketsUILog "Tickets: Sync-QOTicketsFromEmail not found (skipping)" "WARN"
@@ -126,32 +119,17 @@ function Initialize-QOTicketsUI {
     $btnNew             = $Window.FindName("BtnNewTicket")
     $btnDelete          = $Window.FindName("BtnDeleteTicket")
 
-    if (-not $script:TicketsGrid) {
-        [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null
-        return
-    }
-    if (-not $btnRefresh) {
-        [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null
-        return
-    }
-    if (-not $btnNew) {
-        [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null
-        return
-    }
-    if (-not $btnDelete) {
-        [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null
-        return
-    }
+    if (-not $script:TicketsGrid) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
+    if (-not $btnRefresh)         { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
+    if (-not $btnNew)             { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
+    if (-not $btnDelete)          { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
 
     # ----------------------------------------
     # Remove previous handlers (prevents lag)
     # ----------------------------------------
     try {
         if ($script:TicketsLoadedHandler) {
-            $script:TicketsGrid.RemoveHandler(
-                [System.Windows.FrameworkElement]::LoadedEvent,
-                $script:TicketsLoadedHandler
-            )
+            $script:TicketsGrid.RemoveHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
         }
     } catch { }
 
@@ -173,10 +151,7 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
 
-    $script:TicketsGrid.AddHandler(
-        [System.Windows.FrameworkElement]::LoadedEvent,
-        $script:TicketsLoadedHandler
-    )
+    $script:TicketsGrid.AddHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
 
     # ----------------------------------------
     # Refresh button runs sync
@@ -184,7 +159,6 @@ function Initialize-QOTicketsUI {
     $script:TicketsRefreshHandler = {
         Invoke-QOTicketsEmailSyncAndRefresh -Grid $script:TicketsGrid
     }.GetNewClosure()
-
     $btnRefresh.Add_Click($script:TicketsRefreshHandler)
 
     # ----------------------------------------
@@ -212,12 +186,9 @@ function Initialize-QOTicketsUI {
             }
         }
         catch {
-            [System.Windows.MessageBox]::Show(
-                "Create ticket failed.`r`n$($_.Exception.Message)"
-            ) | Out-Null
+            [System.Windows.MessageBox]::Show("Create ticket failed.`r`n$($_.Exception.Message)") | Out-Null
         }
     }.GetNewClosure()
-
     $btnNew.Add_Click($script:TicketsNewHandler)
 
     # ----------------------------------------
@@ -228,35 +199,23 @@ function Initialize-QOTicketsUI {
             if (-not (Get-Command Remove-QOTicket -ErrorAction SilentlyContinue)) { throw "Remove-QOTicket not found" }
 
             $selected = $script:TicketsGrid.SelectedItem
-            if (-not $selected) {
-                [System.Windows.MessageBox]::Show("Select a ticket first.") | Out-Null
-                return
-            }
+            if (-not $selected) { [System.Windows.MessageBox]::Show("Select a ticket first.") | Out-Null; return }
 
             if (-not ($selected.PSObject.Properties.Name -contains "Id")) {
                 [System.Windows.MessageBox]::Show("Selected ticket has no Id.") | Out-Null
                 return
             }
 
-            $confirm = [System.Windows.MessageBox]::Show(
-                "Delete this ticket?",
-                "Confirm",
-                "YesNo",
-                "Warning"
-            )
-
+            $confirm = [System.Windows.MessageBox]::Show("Delete this ticket?", "Confirm", "YesNo", "Warning")
             if ($confirm -ne "Yes") { return }
 
             Remove-QOTicket -Id $selected.Id | Out-Null
             Refresh-QOTicketsGrid -Grid $script:TicketsGrid
         }
         catch {
-            [System.Windows.MessageBox]::Show(
-                "Delete ticket failed.`r`n$($_.Exception.Message)"
-            ) | Out-Null
+            [System.Windows.MessageBox]::Show("Delete ticket failed.`r`n$($_.Exception.Message)") | Out-Null
         }
     }.GetNewClosure()
-
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
 
     # ----------------------------------------
@@ -265,4 +224,4 @@ function Initialize-QOTicketsUI {
     Refresh-QOTicketsGrid -Grid $script:TicketsGrid
 }
 
-Export-ModuleMember -Function Initialize-QOTicketsUI
+Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
