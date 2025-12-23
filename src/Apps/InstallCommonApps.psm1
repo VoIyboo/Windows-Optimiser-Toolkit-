@@ -1,13 +1,18 @@
-# InstallCommonApps.psm1
-# Handles the catalogue + winget install logic for common apps
+# src\Apps\InstallCommonApps.psm1
+# Common apps catalogue + winget install logic
+# Goals
+# - Keep the Apps tab fast (do NOT run winget list during UI init)
+# - Provide a static catalogue for the grid (checkbox, name, version)
+# - Only check winget installed state when explicitly requested (optional)
+# - Only run installs when Run selected actions is clicked
 
 param()
 
-Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force
-Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force
+Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force -ErrorAction SilentlyContinue
 
 # -------------------------------------------------------------------
-# Winget installed cache (speed)
+# Winget installed cache (optional, on demand)
 # -------------------------------------------------------------------
 $script:QOT_WingetInstalledCache     = $null
 $script:QOT_WingetInstalledCacheTime = [datetime]::MinValue
@@ -24,9 +29,18 @@ function Test-QOTWingetAvailable {
 }
 
 function Get-QOTWingetInstalledIdSet {
-    # Refresh cache every 5 minutes
-    if ($script:QOT_WingetInstalledCache -and ((Get-Date) - $script:QOT_WingetInstalledCacheTime).TotalMinutes -lt 5) {
-        return $script:QOT_WingetInstalledCache
+    param(
+        # Refresh cache every 5 minutes by default
+        [int]$CacheMinutes = 5,
+
+        # If set, force a refresh now
+        [switch]$ForceRefresh
+    )
+
+    if (-not $ForceRefresh) {
+        if ($script:QOT_WingetInstalledCache -and ((Get-Date) - $script:QOT_WingetInstalledCacheTime).TotalMinutes -lt $CacheMinutes) {
+            return $script:QOT_WingetInstalledCache
+        }
     }
 
     $set = New-Object "System.Collections.Generic.HashSet[string]" ([System.StringComparer]::OrdinalIgnoreCase)
@@ -38,11 +52,13 @@ function Get-QOTWingetInstalledIdSet {
     }
 
     try {
-        $result = winget list --source winget 2>$null
+        # winget list output is not a stable table, so we do "best effort" parsing.
+        # This is intentionally called only when needed (not at UI load).
+        $lines = @(winget list --source winget 2>$null)
 
-        foreach ($line in $result) {
-            # Best effort: capture IDs like Vendor.App or Vendor.App.Sub
-            if ($line -match "([A-Za-z0-9]+\.[A-Za-z0-9\.\-_]+)") {
+        foreach ($line in $lines) {
+            # Capture IDs like Vendor.App or Vendor.App.Sub
+            if ($line -match "([A-Za-z0-9]+\.[A-Za-z0-9][A-Za-z0-9\.\-_]+)") {
                 [void]$set.Add($matches[1])
             }
         }
@@ -67,58 +83,88 @@ function Test-QOTWingetAppInstalled {
 }
 
 # -------------------------------------------------------------------
-# Catalogue
+# Catalogue (fast, static)
 # -------------------------------------------------------------------
 function Get-QOTCommonAppsCatalogue {
+    <#
+        .SYNOPSIS
+            Returns a static catalogue for the Common app installs grid.
+
+        .NOTES
+            - This function does NOT call winget.
+            - Keeps the UI fast.
+            - Version is displayed as "Latest" by design (winget resolves actual versions during install).
+    #>
+
     $apps = @(
         # Browsers
-        [pscustomobject]@{ Name="Google Chrome";        WingetId="Google.Chrome";               Category="Browser" }
-        [pscustomobject]@{ Name="Mozilla Firefox";      WingetId="Mozilla.Firefox";             Category="Browser" }
-        [pscustomobject]@{ Name="Microsoft Edge";       WingetId="Microsoft.Edge";              Category="Browser" }
-        [pscustomobject]@{ Name="Brave Browser";        WingetId="Brave.Brave";                 Category="Browser" }
+        [pscustomobject]@{ IsSelected=$false; Name="Google Chrome";        Version="Latest"; WingetId="Google.Chrome";               Category="Browser" }
+        [pscustomobject]@{ IsSelected=$false; Name="Mozilla Firefox";      Version="Latest"; WingetId="Mozilla.Firefox";             Category="Browser" }
+        [pscustomobject]@{ IsSelected=$false; Name="Microsoft Edge";       Version="Latest"; WingetId="Microsoft.Edge";              Category="Browser" }
+        [pscustomobject]@{ IsSelected=$false; Name="Brave Browser";        Version="Latest"; WingetId="Brave.Brave";                 Category="Browser" }
 
         # Utilities
-        [pscustomobject]@{ Name="7-Zip";                WingetId="7zip.7zip";                   Category="Utility" }
-        [pscustomobject]@{ Name="WinRAR";               WingetId="RARLab.WinRAR";               Category="Utility" }
-        [pscustomobject]@{ Name="Notepad++";            WingetId="Notepad++.Notepad++";         Category="Utility" }
-        [pscustomobject]@{ Name="Everything Search";    WingetId="voidtools.Everything";        Category="Utility" }
-        [pscustomobject]@{ Name="PowerToys";            WingetId="Microsoft.PowerToys";         Category="Utility" }
-        [pscustomobject]@{ Name="Greenshot";            WingetId="Greenshot.Greenshot";         Category="Utility" }
-        [pscustomobject]@{ Name="ShareX";               WingetId="ShareX.ShareX";               Category="Utility" }
-        [pscustomobject]@{ Name="Adobe Acrobat Reader"; WingetId="Adobe.Acrobat.Reader.64-bit"; Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="7-Zip";                Version="Latest"; WingetId="7zip.7zip";                   Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="WinRAR";               Version="Latest"; WingetId="RARLab.WinRAR";               Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="Notepad++";            Version="Latest"; WingetId="Notepad++.Notepad++";         Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="Everything Search";    Version="Latest"; WingetId="voidtools.Everything";        Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="PowerToys";            Version="Latest"; WingetId="Microsoft.PowerToys";         Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="Greenshot";            Version="Latest"; WingetId="Greenshot.Greenshot";         Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="ShareX";               Version="Latest"; WingetId="ShareX.ShareX";               Category="Utility" }
+        [pscustomobject]@{ IsSelected=$false; Name="Adobe Acrobat Reader"; Version="Latest"; WingetId="Adobe.Acrobat.Reader.64-bit"; Category="Utility" }
 
         # Media
-        [pscustomobject]@{ Name="VLC Media Player";     WingetId="VideoLAN.VLC";                Category="Media" }
-        [pscustomobject]@{ Name="Spotify";              WingetId="Spotify.Spotify";             Category="Media" }
-        [pscustomobject]@{ Name="OBS Studio";           WingetId="OBSProject.OBSStudio";        Category="Media" }
-        [pscustomobject]@{ Name="Audacity";             WingetId="Audacity.Audacity";           Category="Media" }
+        [pscustomobject]@{ IsSelected=$false; Name="VLC Media Player";     Version="Latest"; WingetId="VideoLAN.VLC";                Category="Media" }
+        [pscustomobject]@{ IsSelected=$false; Name="Spotify";              Version="Latest"; WingetId="Spotify.Spotify";             Category="Media" }
+        [pscustomobject]@{ IsSelected=$false; Name="OBS Studio";           Version="Latest"; WingetId="OBSProject.OBSStudio";        Category="Media" }
+        [pscustomobject]@{ IsSelected=$false; Name="Audacity";             Version="Latest"; WingetId="Audacity.Audacity";           Category="Media" }
 
         # Communication
-        [pscustomobject]@{ Name="Microsoft Teams";      WingetId="Microsoft.Teams";             Category="Communication" }
-        [pscustomobject]@{ Name="Zoom";                 WingetId="Zoom.Zoom";                   Category="Communication" }
-        [pscustomobject]@{ Name="Discord";              WingetId="Discord.Discord";             Category="Communication" }
-        [pscustomobject]@{ Name="Slack";                WingetId="SlackTechnologies.Slack";     Category="Communication" }
+        [pscustomobject]@{ IsSelected=$false; Name="Microsoft Teams";      Version="Latest"; WingetId="Microsoft.Teams";             Category="Communication" }
+        [pscustomobject]@{ IsSelected=$false; Name="Zoom";                 Version="Latest"; WingetId="Zoom.Zoom";                   Category="Communication" }
+        [pscustomobject]@{ IsSelected=$false; Name="Discord";              Version="Latest"; WingetId="Discord.Discord";             Category="Communication" }
+        [pscustomobject]@{ IsSelected=$false; Name="Slack";                Version="Latest"; WingetId="SlackTechnologies.Slack";     Category="Communication" }
 
         # Dev / IT
-        [pscustomobject]@{ Name="Visual Studio Code";   WingetId="Microsoft.VisualStudioCode";  Category="Dev" }
-        [pscustomobject]@{ Name="Git";                  WingetId="Git.Git";                     Category="Dev" }
-        [pscustomobject]@{ Name="GitHub Desktop";       WingetId="GitHub.GitHubDesktop";        Category="Dev" }
-        [pscustomobject]@{ Name="Python 3";             WingetId="Python.Python.3";             Category="Dev" }
-        [pscustomobject]@{ Name="Node.js LTS";          WingetId="OpenJS.NodeJS.LTS";           Category="Dev" }
-        [pscustomobject]@{ Name="PuTTY";                WingetId="PuTTY.PuTTY";                 Category="Dev" }
-        [pscustomobject]@{ Name="WinSCP";               WingetId="WinSCP.WinSCP";               Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="Visual Studio Code";   Version="Latest"; WingetId="Microsoft.VisualStudioCode";  Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="Git";                  Version="Latest"; WingetId="Git.Git";                     Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="GitHub Desktop";       Version="Latest"; WingetId="GitHub.GitHubDesktop";        Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="Python 3";             Version="Latest"; WingetId="Python.Python.3";             Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="Node.js LTS";          Version="Latest"; WingetId="OpenJS.NodeJS.LTS";           Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="PuTTY";                Version="Latest"; WingetId="PuTTY.PuTTY";                 Category="Dev" }
+        [pscustomobject]@{ IsSelected=$false; Name="WinSCP";               Version="Latest"; WingetId="WinSCP.WinSCP";               Category="Dev" }
 
         # Cloud
-        [pscustomobject]@{ Name="OneDrive";             WingetId="Microsoft.OneDrive";          Category="Cloud" }
-        [pscustomobject]@{ Name="Google Drive";         WingetId="Google.Drive";                Category="Cloud" }
-        [pscustomobject]@{ Name="Dropbox";              WingetId="Dropbox.Dropbox";             Category="Cloud" }
+        [pscustomobject]@{ IsSelected=$false; Name="OneDrive";             Version="Latest"; WingetId="Microsoft.OneDrive";          Category="Cloud" }
+        [pscustomobject]@{ IsSelected=$false; Name="Google Drive";         Version="Latest"; WingetId="Google.Drive";                Category="Cloud" }
+        [pscustomobject]@{ IsSelected=$false; Name="Dropbox";              Version="Latest"; WingetId="Dropbox.Dropbox";             Category="Cloud" }
     )
 
     return $apps
 }
 
 function Get-QOTCommonApps {
+    <#
+        .SYNOPSIS
+            Returns common apps for the UI, optionally adding Installed/Available status.
+
+        .PARAMETER IncludeStatus
+            If set, will call winget list (cached) to mark items Installed/Available.
+            Leave this OFF for fastest UI loads.
+    #>
+    param(
+        [switch]$IncludeStatus
+    )
+
     $catalogue = @(Get-QOTCommonAppsCatalogue)
+
+    if (-not $IncludeStatus) {
+        foreach ($app in $catalogue) {
+            if ($null -eq $app.PSObject.Properties["Status"])        { $app | Add-Member -NotePropertyName Status        -NotePropertyValue "" -Force }
+            if ($null -eq $app.PSObject.Properties["IsInstallable"]) { $app | Add-Member -NotePropertyName IsInstallable -NotePropertyValue $true -Force }
+        }
+        return $catalogue
+    }
 
     $wingetOk = Test-QOTWingetAvailable
     $set = $null
@@ -135,12 +181,14 @@ function Get-QOTCommonApps {
 
         $app | Add-Member -NotePropertyName Status        -NotePropertyValue $status -Force
         $app | Add-Member -NotePropertyName IsInstallable -NotePropertyValue (-not $installed) -Force
-        $app | Add-Member -NotePropertyName IsSelected    -NotePropertyValue $false -Force
     }
 
     return $catalogue
 }
 
+# -------------------------------------------------------------------
+# Install
+# -------------------------------------------------------------------
 function Install-QOTCommonApp {
     param(
         [Parameter(Mandatory)]
@@ -152,16 +200,25 @@ function Install-QOTCommonApp {
 
     if (-not (Test-QOTWingetAvailable)) {
         $msg = "winget is not available; cannot install $Name [$WingetId]."
-        Write-QLog $msg "ERROR"
+        try { Write-QLog $msg "ERROR" } catch { }
         throw $msg
     }
 
-    $cmd = "winget install --id `"$WingetId`" -h --accept-source-agreements --accept-package-agreements"
-    Write-QLog ("Starting install: {0} [{1}]" -f $Name, $WingetId)
+    try { Write-QLog ("Starting install: {0} [{1}]" -f $Name, $WingetId) } catch { }
+
+    # Use Start-Process with explicit args, avoids quoting bugs
+    $args = @(
+        "install",
+        "--id", $WingetId,
+        "-e",
+        "--silent",
+        "--accept-source-agreements",
+        "--accept-package-agreements"
+    )
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName               = "cmd.exe"
-    $psi.Arguments              = "/c $cmd"
+    $psi.FileName               = "winget"
+    $psi.Arguments              = ($args -join " ")
     $psi.CreateNoWindow         = $true
     $psi.UseShellExecute        = $false
     $psi.RedirectStandardOutput = $true
@@ -175,18 +232,23 @@ function Install-QOTCommonApp {
     $stderr = $proc.StandardError.ReadToEnd()
     $proc.WaitForExit()
 
+    if ($stdout) { try { Write-QLog ("winget output: {0}" -f $stdout.Trim()) "DEBUG" } catch { } }
+
     if ($proc.ExitCode -ne 0) {
-        if ($stderr) { Write-QLog ("winget error: {0}" -f $stderr.Trim()) "ERROR" }
+        if ($stderr) { try { Write-QLog ("winget error: {0}" -f $stderr.Trim()) "ERROR" } catch { } }
         throw ("winget returned exit code {0} while installing {1} [{2}]." -f $proc.ExitCode, $Name, $WingetId)
     }
 
-    if ($stdout) { Write-QLog ("winget output: {0}" -f $stdout.Trim()) "DEBUG" }
-    Write-QLog ("Install succeeded: {0} [{1}]" -f $Name, $WingetId)
+    try { Write-QLog ("Install succeeded: {0} [{1}]" -f $Name, $WingetId) } catch { }
+
+    # Optional: refresh cache so subsequent checks are accurate
+    try { $null = Get-QOTWingetInstalledIdSet -ForceRefresh } catch { }
 }
 
 Export-ModuleMember -Function `
     Get-QOTCommonAppsCatalogue, `
     Get-QOTCommonApps, `
     Test-QOTWingetAvailable, `
+    Get-QOTWingetInstalledIdSet, `
     Test-QOTWingetAppInstalled, `
     Install-QOTCommonApp
