@@ -73,17 +73,17 @@ function Start-QOTMainWindow {
     # Initialise Apps UI (wire to CURRENT XAML names)
     # ------------------------------------------------------------
     try {
-        # These names MUST match your existing XAML.
-        # Based on your screenshots and earlier code, these are the most likely names.
         $appsGrid        = $window.FindName("AppsGrid")
         $installGrid     = $window.FindName("InstallGrid")
         $btnScanApps     = $window.FindName("BtnScanApps")
         $btnUninstallSel = $window.FindName("BtnUninstallSelected")
-        $btnRun          = $window.FindName("BtnRunSelectedActions")
 
-        if (-not $appsGrid)        { throw "AppsGrid not found. Set x:Name='AppsGrid' on the installed apps DataGrid." }
-        if (-not $installGrid)     { throw "InstallGrid not found. Set x:Name='InstallGrid' on the common apps DataGrid." }
-        if (-not $btnRun)          { throw "BtnRunSelectedActions not found. Set x:Name='BtnRunSelectedActions' on the Run button." }
+        # FIX: Your XAML run button is x:Name="RunButton"
+        $btnRun          = $window.FindName("RunButton")
+
+        if (-not $appsGrid)    { throw "AppsGrid not found. Set x:Name='AppsGrid' on the installed apps DataGrid." }
+        if (-not $installGrid) { throw "InstallGrid not found. Set x:Name='InstallGrid' on the common apps DataGrid." }
+        if (-not $btnRun)      { throw "RunButton not found. Set x:Name='RunButton' on the Run selected actions button." }
 
         if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
             throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
