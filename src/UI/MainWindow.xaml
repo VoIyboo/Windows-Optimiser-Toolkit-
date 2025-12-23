@@ -332,7 +332,7 @@
                                           Margin="0,4,0,0"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
-                                          IsReadOnly="True"
+                                          IsReadOnly="False"
                                           GridLinesVisibility="Horizontal"
                                           BorderBrush="{StaticResource BorderBrush}">
 
@@ -340,7 +340,9 @@
                                         <DataGridTemplateColumn Header="" Width="40">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    <CheckBox Focusable="False"
+                                                              IsHitTestVisible="True"
+                                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                               HorizontalAlignment="Center"
                                                               VerticalAlignment="Center"/>
                                                 </DataTemplate>
@@ -364,7 +366,7 @@
                                 <DataGrid x:Name="InstallGrid"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
-                                          IsReadOnly="True"
+                                          IsReadOnly="False"
                                           GridLinesVisibility="Horizontal"
                                           BorderBrush="{StaticResource BorderBrush}">
 
@@ -396,7 +398,9 @@
                                         <DataGridTemplateColumn Header="" Width="34">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    <CheckBox Focusable="False"
+                                                              IsHitTestVisible="True"
+                                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                               IsEnabled="{Binding IsInstallable}"
                                                               HorizontalAlignment="Center"
                                                               VerticalAlignment="Center" />
@@ -601,7 +605,6 @@
                 <StackPanel Grid.Column="1"
                             Orientation="Vertical"
                             VerticalAlignment="Center">
-                    <!-- Run button is named RunButton -->
                     <Button x:Name="RunButton"
                             Content="Run selected actions"
                             Width="190"
