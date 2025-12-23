@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 # Keep worker alive so async scan reliably completes
 $script:QOT_InstalledAppsWorker = $null
+$script:QOT_InstalledAppsScanStarted = $false
 
 function Initialize-QOTAppsUI {
     param(
@@ -24,39 +25,41 @@ function Initialize-QOTAppsUI {
         [System.Windows.Controls.Button]$RunButton
     )
 
-    try { Write-QLog "Apps UI: Initialize-QOTAppsUI CALLED" "INFO" } catch { }
-
-    # Hide legacy buttons (leave them in XAML if you want)
+    # Hide legacy buttons (keep XAML as-is for now)
     if ($BtnScanApps) { $BtnScanApps.Visibility = 'Collapsed' }
     if ($BtnUninstallSelected) { $BtnUninstallSelected.Visibility = 'Collapsed' }
 
     Initialize-QOTAppsCollections
 
+    # Bind sources
     $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
     $InstallGrid.ItemsSource = $Global:QOT_CommonAppsCollection
 
-    Set-QOTGridDefaults -Grid $AppsGrid
-    Set-QOTGridDefaults -Grid $InstallGrid
+    # IMPORTANT:
+    # Your XAML sets IsReadOnly="True" on AppsGrid and InstallGrid.
+    # That makes checkboxes painful and can prevent clean commits.
+    # We only want the text columns read-only, not the whole grid.
+    try { $AppsGrid.IsReadOnly    = $false } catch { }
+    try { $InstallGrid.IsReadOnly = $false } catch { }
 
-    Initialize-QOTAppsGridsColumns -AppsGrid $AppsGrid -InstallGrid $InstallGrid
+    # Build the common apps list instantly (no slow scanning)
+    Refresh-QOTCommonAppsGrid -Grid $InstallGrid
 
-    # Load common catalogue instantly (no winget list here)
-    Initialize-QOTCommonAppsCatalogue
-
-    # Auto scan installed apps (async so UI stays responsive)
-    Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid
-
+    # Wire Run button (uninstall + installs use this)
     if ($RunButton) {
         $RunButton.Add_Click({
-            Commit-QOTGridEdits -Grid $AppsGrid
-            Commit-QOTGridEdits -Grid $InstallGrid
+            try { Commit-QOTGridEdits -Grid $AppsGrid } catch { }
+            try { Commit-QOTGridEdits -Grid $InstallGrid } catch { }
 
             try { Invoke-QOTUninstallSelectedApps -Grid $AppsGrid } catch { try { Write-QLog ("Uninstall failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
             try { Invoke-QOTInstallSelectedCommonApps -Grid $InstallGrid } catch { try { Write-QLog ("Install failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
         })
     }
 
-    try { Write-QLog "Apps tab UI initialised." "INFO" } catch { }
+    # Auto scan installed apps AFTER UI paints (prevents “empty grid forever” issues)
+    Start-QOTInstalledAppsScanAfterRender -AppsGrid $AppsGrid
+
+    try { Write-QLog "Apps tab UI initialised." } catch { }
 }
 
 function Initialize-QOTAppsCollections {
@@ -68,20 +71,6 @@ function Initialize-QOTAppsCollections {
     }
 }
 
-function Set-QOTGridDefaults {
-    param(
-        [Parameter(Mandatory)]
-        [System.Windows.Controls.DataGrid]$Grid
-    )
-
-    $Grid.AutoGenerateColumns = $false
-    $Grid.CanUserAddRows      = $false
-    $Grid.IsReadOnly          = $false
-    $Grid.SelectionUnit       = 'FullRow'
-    $Grid.SelectionMode       = 'Single'
-    $Grid.IsSynchronizedWithCurrentItem = $false
-}
-
 function Commit-QOTGridEdits {
     param(
         [Parameter(Mandatory)]
@@ -89,78 +78,31 @@ function Commit-QOTGridEdits {
     )
 
     try {
-        $null = $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true)
-        $null = $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true)
+        $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
+        $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
     } catch { }
 }
 
-function New-QOTCheckBoxColumn {
+function Start-QOTInstalledAppsScanAfterRender {
     param(
         [Parameter(Mandatory)]
-        [string]$BindingPath,
-        [int]$Width = 40
+        [System.Windows.Controls.DataGrid]$AppsGrid
     )
 
-    $bind = New-Object System.Windows.Data.Binding($BindingPath)
-    $bind.Mode = [System.Windows.Data.BindingMode]::TwoWay
-    $bind.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
+    if ($script:QOT_InstalledAppsScanStarted) { return }
+    $script:QOT_InstalledAppsScanStarted = $true
 
-    $col = New-Object System.Windows.Controls.DataGridCheckBoxColumn
-    $col.Header  = ""
-    $col.Width   = $Width
-    $col.Binding = $bind
-    $col.IsThreeState = $false
-    return $col
-}
+    try {
+        $dispatcher = $AppsGrid.Dispatcher
 
-function Initialize-QOTAppsGridsColumns {
-    param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid,
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$InstallGrid
-    )
-
-    # -------------------------
-    # Installed Apps grid
-    # -------------------------
-    $AppsGrid.Columns.Clear()
-
-    $AppsGrid.Columns.Add((New-QOTCheckBoxColumn -BindingPath "IsSelected" -Width 40))
-
-    $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Name"
-        Binding    = (New-Object System.Windows.Data.Binding "Name")
-        Width      = "*"
-        IsReadOnly = $true
-    }))
-
-    $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Publisher"
-        Binding    = (New-Object System.Windows.Data.Binding "Publisher")
-        Width      = 220
-        IsReadOnly = $true
-    }))
-
-    # -------------------------
-    # Common Apps grid
-    # Checkbox + App + Status
-    # -------------------------
-    $InstallGrid.Columns.Clear()
-
-    $InstallGrid.Columns.Add((New-QOTCheckBoxColumn -BindingPath "IsSelected" -Width 40))
-
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "App"
-        Binding    = (New-Object System.Windows.Data.Binding "Name")
-        Width      = "*"
-        IsReadOnly = $true
-    }))
-
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Status"
-        Binding    = (New-Object System.Windows.Data.Binding "Status")
-        Width      = 140
-        IsReadOnly = $true
-    }))
+        # Queue scan on UI thread once the control is rendered and ready
+        $dispatcher.BeginInvoke([action]{
+            Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid
+        }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
+    }
+    catch {
+        try { Write-QLog ("Start-QOTInstalledAppsScanAfterRender failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
 }
 
 function Start-QOTInstalledAppsScanAsync {
@@ -170,12 +112,12 @@ function Start-QOTInstalledAppsScanAsync {
     )
 
     try {
-        $dispatcher = $AppsGrid.Dispatcher
-
         if (-not (Get-Command Get-QOTInstalledApps -ErrorAction SilentlyContinue)) {
-            try { Write-QLog "Get-QOTInstalledApps not found. Check Apps\InstalledApps.psm1 is imported." "ERROR" } catch { }
+            try { Write-QLog "Get-QOTInstalledApps not found. Check Apps\InstalledApps.psm1 imported successfully." "ERROR" } catch { }
             return
         }
+
+        $dispatcher = $AppsGrid.Dispatcher
 
         $script:QOT_InstalledAppsWorker = New-Object System.ComponentModel.BackgroundWorker
         $script:QOT_InstalledAppsWorker.WorkerReportsProgress = $false
@@ -183,39 +125,43 @@ function Start-QOTInstalledAppsScanAsync {
 
         $script:QOT_InstalledAppsWorker.DoWork += {
             param($sender, $e)
+            try { Write-QLog "Installed apps scan started." "DEBUG" } catch { }
             $e.Result = @(Get-QOTInstalledApps)
         }
 
         $script:QOT_InstalledAppsWorker.RunWorkerCompleted += {
             param($sender, $e)
 
-            try {
-                if ($e.Error) {
-                    try { Write-QLog ("Installed apps scan failed: {0}" -f $e.Error.Message) "ERROR" } catch { }
-                    return
-                }
+            if ($e.Error) {
+                try { Write-QLog ("Installed apps scan failed: {0}" -f $e.Error.Message) "ERROR" } catch { }
+                return
+            }
 
-                $results = @($e.Result)
+            $results = @($e.Result)
 
-                $dispatcher.Invoke([action]{
+            $dispatcher.Invoke([action]{
+                try {
                     $Global:QOT_InstalledAppsCollection.Clear()
 
                     foreach ($app in $results) {
                         Ensure-QOTInstalledAppForGrid -App $app
                         $Global:QOT_InstalledAppsCollection.Add($app)
                     }
-                })
 
-                try { Write-QLog ("Installed apps scan complete. Loaded {0} items." -f $results.Count) "INFO" } catch { }
-            }
-            catch {
-                try { Write-QLog ("Installed apps completion handler failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
-            }
+                    # Force a refresh in case WPF didn’t repaint from collection changes
+                    $AppsGrid.ItemsSource = $null
+                    $AppsGrid.ItemsSource = $Global:QOT_InstalledAppsCollection
+                    $AppsGrid.Items.Refresh()
+                }
+                catch {
+                    try { Write-QLog ("Failed to populate installed apps grid: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+                }
+            })
+
+            try { Write-QLog ("Installed apps loaded: {0}" -f $results.Count) "INFO" } catch { }
         }
 
-        if (-not $script:QOT_InstalledAppsWorker.IsBusy) {
-            $script:QOT_InstalledAppsWorker.RunWorkerAsync() | Out-Null
-        }
+        $script:QOT_InstalledAppsWorker.RunWorkerAsync() | Out-Null
     }
     catch {
         try { Write-QLog ("Start-QOTInstalledAppsScanAsync error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
@@ -224,68 +170,68 @@ function Start-QOTInstalledAppsScanAsync {
 
 function Ensure-QOTInstalledAppForGrid {
     param(
-        [Parameter(Mandatory)][object]$App
+        [Parameter(Mandatory)]
+        [object]$App
     )
 
     if ($null -eq $App.PSObject.Properties["IsSelected"]) {
         $App | Add-Member -NotePropertyName IsSelected -NotePropertyValue $false -Force
     }
+    if ($null -eq $App.PSObject.Properties["Name"]) {
+        $App | Add-Member -NotePropertyName Name -NotePropertyValue "" -Force
+    }
     if ($null -eq $App.PSObject.Properties["Publisher"]) {
         $App | Add-Member -NotePropertyName Publisher -NotePropertyValue "" -Force
     }
+    if ($null -eq $App.PSObject.Properties["UninstallString"]) {
+        $App | Add-Member -NotePropertyName UninstallString -NotePropertyValue "" -Force
+    }
 }
 
-function Initialize-QOTCommonAppsCatalogue {
+function Refresh-QOTCommonAppsGrid {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
+    )
 
-    $catalogue = @()
+    try {
+        $Global:QOT_CommonAppsCollection.Clear()
 
-    if (Get-Command Get-QOTCommonApps -ErrorAction SilentlyContinue) {
-        $catalogue = @(Get-QOTCommonApps)
-    }
-    elseif (Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue) {
-        $catalogue = @(Get-QOTCommonAppsCatalogue)
-        foreach ($a in $catalogue) {
-            if ($null -eq $a.PSObject.Properties["Status"]) {
-                $a | Add-Member -NotePropertyName Status -NotePropertyValue "Available" -Force
-            }
-            if ($null -eq $a.PSObject.Properties["IsSelected"]) {
-                $a | Add-Member -NotePropertyName IsSelected -NotePropertyValue $false -Force
-            }
+        # Use InstallCommonApps.psm1 if available
+        if (Get-Command Get-QOTCommonApps -ErrorAction SilentlyContinue) {
+            $items = @(Get-QOTCommonApps)
         }
-    }
-    else {
-        $catalogue = @(
-            [pscustomobject]@{ IsSelected=$false; Name="Google Chrome";        WingetId="Google.Chrome";               Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="Microsoft Edge";       WingetId="Microsoft.Edge";              Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="7-Zip";                WingetId="7zip.7zip";                   Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="Notepad++";            WingetId="Notepad++.Notepad++";         Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="VLC Media Player";     WingetId="VideoLAN.VLC";                Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="Git";                  WingetId="Git.Git";                     Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="Visual Studio Code";   WingetId="Microsoft.VisualStudioCode";  Status="Available" }
-            [pscustomobject]@{ IsSelected=$false; Name="Adobe Acrobat Reader"; WingetId="Adobe.Acrobat.Reader.64-bit"; Status="Available" }
-        )
-    }
-
-    $Global:QOT_CommonAppsCollection.Clear()
-    foreach ($item in $catalogue) {
-        if ($null -eq $item.PSObject.Properties["IsSelected"]) {
-            $item | Add-Member -NotePropertyName IsSelected -NotePropertyValue $false -Force
+        else {
+            $items = @(
+                [pscustomobject]@{ IsSelected=$false; Name="Google Chrome";      WingetId="Google.Chrome";              Status="Available"; IsInstallable=$true }
+                [pscustomobject]@{ IsSelected=$false; Name="Microsoft Edge";     WingetId="Microsoft.Edge";             Status="Available"; IsInstallable=$true }
+                [pscustomobject]@{ IsSelected=$false; Name="7-Zip";              WingetId="7zip.7zip";                  Status="Available"; IsInstallable=$true }
+                [pscustomobject]@{ IsSelected=$false; Name="Notepad++";          WingetId="Notepad++.Notepad++";        Status="Available"; IsInstallable=$true }
+            )
         }
-        if ($null -eq $item.PSObject.Properties["Status"]) {
-            $item | Add-Member -NotePropertyName Status -NotePropertyValue "Available" -Force
-        }
-        $Global:QOT_CommonAppsCollection.Add($item)
-    }
 
-    try { Write-QLog ("Common apps loaded ({0} items)." -f $Global:QOT_CommonAppsCollection.Count) "INFO" } catch { }
+        foreach ($i in $items) {
+            if ($null -eq $i.PSObject.Properties["IsSelected"])    { $i | Add-Member -NotePropertyName IsSelected    -NotePropertyValue $false -Force }
+            if ($null -eq $i.PSObject.Properties["IsInstallable"]) { $i | Add-Member -NotePropertyName IsInstallable -NotePropertyValue $true  -Force }
+            if ($null -eq $i.PSObject.Properties["Status"])        { $i | Add-Member -NotePropertyName Status        -NotePropertyValue "Available" -Force }
+            $Global:QOT_CommonAppsCollection.Add($i)
+        }
+
+        $Grid.Items.Refresh()
+        try { Write-QLog ("Common apps loaded: {0}" -f $Global:QOT_CommonAppsCollection.Count) "INFO" } catch { }
+    }
+    catch {
+        try { Write-QLog ("Refresh-QOTCommonAppsGrid failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
 }
 
 function Invoke-QOTInstallSelectedCommonApps {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
     )
 
-    Commit-QOTGridEdits -Grid $Grid
+    try { Commit-QOTGridEdits -Grid $Grid } catch { }
 
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($_.WingetId) })
@@ -298,7 +244,7 @@ function Invoke-QOTInstallSelectedCommonApps {
     foreach ($app in $selected) {
         try {
             if (-not (Get-Command Install-QOTCommonApp -ErrorAction SilentlyContinue)) {
-                throw "Install-QOTCommonApp not found. Check Apps\InstallCommonApps.psm1 is imported."
+                throw "Install-QOTCommonApp not found. Check Apps\InstallCommonApps.psm1 imported."
             }
 
             Install-QOTCommonApp -Name $app.Name -WingetId $app.WingetId
@@ -312,10 +258,11 @@ function Invoke-QOTInstallSelectedCommonApps {
 
 function Invoke-QOTUninstallSelectedApps {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
     )
 
-    Commit-QOTGridEdits -Grid $Grid
+    try { Commit-QOTGridEdits -Grid $Grid } catch { }
 
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true })
@@ -347,7 +294,8 @@ function Invoke-QOTUninstallSelectedApps {
 
 function Start-QOTProcessFromCommand {
     param(
-        [Parameter(Mandatory)][string]$Command,
+        [Parameter(Mandatory)]
+        [string]$Command,
         [switch]$Wait
     )
 
@@ -355,10 +303,10 @@ function Start-QOTProcessFromCommand {
 
     if ($Wait) {
         Start-Process -FilePath "cmd.exe" -ArgumentList $cmdArgs -Wait -WindowStyle Hidden
-    } else {
+    }
+    else {
         Start-Process -FilePath "cmd.exe" -ArgumentList $cmdArgs -WindowStyle Hidden
     }
 }
 
-Export-ModuleMember -Function `
-    Initialize-QOTAppsUI
+Export-ModuleMember -Function Initialize-QOTAppsUI
