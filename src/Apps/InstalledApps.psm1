@@ -1,3 +1,8 @@
+# src\Apps\InstalledApps.psm1
+# Installed apps scanner for Apps tab
+
+$ErrorActionPreference = "Stop"
+
 function Get-QOTInstalledApps {
     <#
         .SYNOPSIS
@@ -82,7 +87,7 @@ function Get-QOTInstalledApps {
                     }
                 }
                 catch {
-                    # Important: avoid "$name:" in strings, it parses like a drive reference
+                    # Avoid "$name:" in strings, it parses like a drive reference
                     try { Write-QLog ("Error parsing InstallDate '{0}' for '{1}': {2}" -f $rawInstallDate, $name, $_.Exception.Message) "WARN" } catch { }
                 }
             }
@@ -136,3 +141,5 @@ function Get-QOTInstalledApps {
         Sort-Object Name, Publisher, Version -Unique |
         Sort-Object Name
 }
+
+Export-ModuleMember -Function Get-QOTInstalledApps
