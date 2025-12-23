@@ -169,11 +169,13 @@ function New-QOTSettingsView {
 
     # Load from settings
     $addresses = New-Object "System.Collections.ObjectModel.ObservableCollection[string]"
-    $s = & $getSettingsCmd
-    foreach ($e in @($s.Tickets.EmailIntegration.MonitoredAddresses)) {
+    $getMonitoredCmd = Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction Stop
+    
+    foreach ($e in @(& $getMonitoredCmd)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
     }
+
 
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound list. Count=" + $addresses.Count)
