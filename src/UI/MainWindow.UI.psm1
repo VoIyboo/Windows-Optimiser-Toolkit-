@@ -36,9 +36,9 @@ function Start-QOTMainWindow {
     Get-Module -Name "Settings.UI"  -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "Apps.UI"      -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
 
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" }            | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" }     | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" }                  | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" }         | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" }  | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" }               | Remove-Module -Force -ErrorAction SilentlyContinue
 
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
@@ -54,13 +54,55 @@ function Start-QOTMainWindow {
         throw "MainWindow.xaml not found at $xamlPath"
     }
 
-    $xaml   = Get-Content -LiteralPath $xamlPath -Raw
+    try { Write-QLog ("[XAML] Loading MainWindow.xaml from: {0}" -f $xamlPath) "INFO" } catch { }
+
+    $xaml = Get-Content -LiteralPath $xamlPath -Raw
+
+    try {
+        $head = ($xaml.Substring(0, [Math]::Min(200, $xaml.Length))).Replace("`r","").Replace("`n"," ")
+        Write-QLog ("[XAML] First 200 chars: {0}" -f $head) "DEBUG"
+    } catch { }
+
     $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
     $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
     if (-not $window) {
         throw "Failed to load MainWindow from XAML"
     }
+
+    function Get-QOTNamedElements {
+        param([Parameter(Mandatory)]$Root)
+
+        $names = New-Object System.Collections.Generic.List[string]
+
+        $walk = {
+            param($d)
+            if ($null -eq $d) { return }
+
+            try {
+                if ($d -is [System.Windows.FrameworkElement] -and -not [string]::IsNullOrWhiteSpace($d.Name)) {
+                    [void]$names.Add($d.Name)
+                }
+            } catch { }
+
+            $count = 0
+            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($d) } catch { $count = 0 }
+
+            for ($i = 0; $i -lt $count; $i++) {
+                $child = $null
+                try { $child = [System.Windows.Media.VisualTreeHelper]::GetChild($d, $i) } catch { $child = $null }
+                & $walk $child
+            }
+        }
+
+        & $walk $Root
+        return ($names | Sort-Object -Unique)
+    }
+
+    try {
+        $found = Get-QOTNamedElements -Root $window
+        Write-QLog ("[XAML] Named elements found: {0}" -f ($found -join ", ")) "DEBUG"
+    } catch { }
 
     # ------------------------------------------------------------
     # Initialise Tickets UI
@@ -69,68 +111,34 @@ function Start-QOTMainWindow {
         Initialize-QOTicketsUI -Window $window
     }
 
-        # ------------------------------------------------------------
-        # Initialise Apps UI (wire to CURRENT XAML names)
-        # ------------------------------------------------------------
-        try {
-            function Get-QOTNamedElements {
-                param([Parameter(Mandatory)]$Root)
-    
-                $names = New-Object System.Collections.Generic.List[string]
-    
-                $walk = {
-                    param($d)
-                    if ($null -eq $d) { return }
-                    try {
-                        if ($d -is [System.Windows.FrameworkElement] -and -not [string]::IsNullOrWhiteSpace($d.Name)) {
-                            [void]$names.Add($d.Name)
-                        }
-                    } catch { }
-    
-                    $count = 0
-                    try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($d) } catch { $count = 0 }
-    
-                    for ($i = 0; $i -lt $count; $i++) {
-                        $child = $null
-                        try { $child = [System.Windows.Media.VisualTreeHelper]::GetChild($d, $i) } catch { $child = $null }
-                        & $walk $child
-                    }
-                }
-    
-                & $walk $Root
-                return ($names | Sort-Object -Unique)
-            }
-    
-            $appsGrid        = $window.FindName("AppsGrid")
-            $installGrid     = $window.FindName("InstallGrid")
-            $btnScanApps     = $window.FindName("BtnScanApps")
-            $btnUninstallSel = $window.FindName("BtnUninstallSelected")
-            $btnRun          = $window.FindName("RunButton")
-    
-            if (-not $appsGrid -or -not $installGrid -or -not $btnRun) {
-                $found = Get-QOTNamedElements -Root $window
-                try { Write-QLog ("Apps UI binding failed. Expected names: AppsGrid, InstallGrid, RunButton. Found: {0}" -f ($found -join ", ")) "ERROR" } catch { }
-    
-                if (-not $appsGrid)    { throw "AppsGrid not found in MainWindow. Ensure the installed apps DataGrid has x:Name='AppsGrid'." }
-                if (-not $installGrid) { throw "InstallGrid not found in MainWindow. Ensure the common apps DataGrid has x:Name='InstallGrid'." }
-                if (-not $btnRun)      { throw "RunButton not found in MainWindow. Ensure the Run button has x:Name='RunButton'." }
-            }
-    
-            if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
-                throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
-            }
-    
-            Initialize-QOTAppsUI `
-                -BtnScanApps $btnScanApps `
-                -BtnUninstallSelected $btnUninstallSel `
-                -AppsGrid $appsGrid `
-                -InstallGrid $installGrid `
-                -RunButton $btnRun
-        }
-        catch {
-            try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    # ------------------------------------------------------------
+    # Initialise Apps UI (wire to CURRENT XAML names)
+    # ------------------------------------------------------------
+    try {
+        $appsGrid        = $window.FindName("AppsGrid")
+        $installGrid     = $window.FindName("InstallGrid")
+        $btnScanApps     = $window.FindName("BtnScanApps")
+        $btnUninstallSel = $window.FindName("BtnUninstallSelected")
+        $btnRun          = $window.FindName("RunButton")
+
+        if (-not $appsGrid)    { throw "AppsGrid not found. Ensure the installed apps DataGrid has x:Name='AppsGrid'." }
+        if (-not $installGrid) { throw "InstallGrid not found. Ensure the common apps DataGrid has x:Name='InstallGrid'." }
+        if (-not $btnRun)      { throw "RunButton not found. Ensure the Run button has x:Name='RunButton'." }
+
+        if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
+            throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
+        Initialize-QOTAppsUI `
+            -BtnScanApps $btnScanApps `
+            -BtnUninstallSelected $btnUninstallSel `
+            -AppsGrid $appsGrid `
+            -InstallGrid $installGrid `
+            -RunButton $btnRun
+    }
+    catch {
+        try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
 
     # ------------------------------------------------------------
     # Initialise Settings UI (hosted in SettingsHost)
