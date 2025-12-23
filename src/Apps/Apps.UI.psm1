@@ -111,23 +111,60 @@ function Enable-QOTSingleClickCheckboxes {
     )
 }
 
-function New-QOTCheckboxTemplateColumn {
+function New-QOTCheckBoxFactory {
     param(
-        [Parameter(Mandatory)][string]$BindingPath,
-        [int]$Width = 40
+        [Parameter(Mandatory)][string]$BindingPath
     )
 
     $checkFactory = New-Object System.Windows.FrameworkElementFactory([System.Windows.Controls.CheckBox])
     $checkFactory.SetValue([System.Windows.Controls.CheckBox]::HorizontalAlignmentProperty, [System.Windows.HorizontalAlignment]::Center)
     $checkFactory.SetValue([System.Windows.Controls.CheckBox]::VerticalAlignmentProperty, [System.Windows.VerticalAlignment]::Center)
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::FocusableProperty, $true)
 
     $binding = New-Object System.Windows.Data.Binding($BindingPath)
     $binding.Mode = [System.Windows.Data.BindingMode]::TwoWay
     $binding.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
     $checkFactory.SetBinding([System.Windows.Controls.CheckBox]::IsCheckedProperty, $binding)
 
+    # Add a handler so the checkbox fully owns the click, not the DataGrid
+    $handler = [System.Windows.RoutedEventHandler]{
+        param($sender, $e)
+
+        try {
+            # Sender is the CheckBox
+            $cb = [System.Windows.Controls.CheckBox]$sender
+            $cb.IsChecked = -not [bool]$cb.IsChecked
+
+            # Stop DataGrid from stealing the click
+            $e.Handled = $true
+
+            # Commit immediately
+            $grid = $cb
+            while ($grid -and -not ($grid -is [System.Windows.Controls.DataGrid])) {
+                $grid = [System.Windows.Media.VisualTreeHelper]::GetParent($grid)
+            }
+            if ($grid -is [System.Windows.Controls.DataGrid]) {
+                $grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
+                $grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
+            }
+        } catch { }
+    }
+
+    $checkFactory.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, $handler)
+
+    return $checkFactory
+}
+
+function New-QOTCheckboxTemplateColumn {
+    param(
+        [Parameter(Mandatory)][string]$BindingPath,
+        [int]$Width = 40
+    )
+
+    $factory = New-QOTCheckBoxFactory -BindingPath $BindingPath
+
     $template = New-Object System.Windows.DataTemplate
-    $template.VisualTree = $checkFactory
+    $template.VisualTree = $factory
 
     $col = New-Object System.Windows.Controls.DataGridTemplateColumn
     $col.Header = ""
@@ -136,6 +173,7 @@ function New-QOTCheckboxTemplateColumn {
     $col.CellEditingTemplate = $template
     return $col
 }
+
 
 function Initialize-QOTAppsGridsColumns {
     param(
