@@ -123,27 +123,34 @@ function Initialize-QOTAppsGridsColumns {
     $InstallGrid.CanUserAddRows      = $false
     $InstallGrid.IsReadOnly          = $false
     $InstallGrid.Columns.Clear()
-
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
-        Header  = ""
-        Binding = (New-Object System.Windows.Data.Binding "IsSelected")
-        Width   = 40
-    }))
-
+    
+    # Single click checkbox using a TemplateColumn (best behaviour in WPF)
+    $checkFactory = New-Object System.Windows.FrameworkElementFactory([System.Windows.Controls.CheckBox])
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::HorizontalAlignmentProperty, [System.Windows.HorizontalAlignment]::Center)
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::VerticalAlignmentProperty, [System.Windows.VerticalAlignment]::Center)
+    
+    $binding = New-Object System.Windows.Data.Binding("IsSelected")
+    $binding.Mode = [System.Windows.Data.BindingMode]::TwoWay
+    $binding.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
+    $checkFactory.SetBinding([System.Windows.Controls.CheckBox]::IsCheckedProperty, $binding)
+    
+    $cellTemplate = New-Object System.Windows.DataTemplate
+    $cellTemplate.VisualTree = $checkFactory
+    
+    $colCheck = New-Object System.Windows.Controls.DataGridTemplateColumn
+    $colCheck.Header = ""
+    $colCheck.Width  = 40
+    $colCheck.CellTemplate = $cellTemplate
+    $colCheck.CellEditingTemplate = $cellTemplate
+    $InstallGrid.Columns.Add($colCheck)
+    
+    # App name column
     $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
         Header     = "App"
         Binding    = (New-Object System.Windows.Data.Binding "Name")
         Width      = "*"
         IsReadOnly = $true
     }))
-
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Version"
-        Binding    = (New-Object System.Windows.Data.Binding "Version")
-        Width      = 140
-        IsReadOnly = $true
-    }))
-}
 
 function Start-QOTInstalledAppsScanAsync {
     param(
