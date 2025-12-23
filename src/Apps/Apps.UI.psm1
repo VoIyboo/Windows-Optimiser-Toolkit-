@@ -3,6 +3,9 @@
 
 $ErrorActionPreference = "Stop"
 
+# Keep worker alive so async scan reliably completes
+$script:QOT_InstalledAppsWorker = $null
+
 function Initialize-QOTAppsUI {
     param(
         [Parameter(Mandatory = $false)]
@@ -21,7 +24,6 @@ function Initialize-QOTAppsUI {
         [System.Windows.Controls.Button]$RunButton
     )
 
-    # Hide legacy buttons (you can remove them from XAML later)
     if ($BtnScanApps) { $BtnScanApps.Visibility = 'Collapsed' }
     if ($BtnUninstallSelected) { $BtnUninstallSelected.Visibility = 'Collapsed' }
 
@@ -32,18 +34,21 @@ function Initialize-QOTAppsUI {
 
     Initialize-QOTAppsGridsColumns -AppsGrid $AppsGrid -InstallGrid $InstallGrid
 
-    # Fix 2: Commit checkbox edits instantly so it is never "double click to select"
-    Enable-QOTImmediateCheckboxCommit -Grid $AppsGrid
-    Enable-QOTImmediateCheckboxCommit -Grid $InstallGrid
+    # Make checkbox clicks commit instantly (no double click)
+    Enable-QOTSingleClickCheckboxes -Grid $AppsGrid
+    Enable-QOTSingleClickCheckboxes -Grid $InstallGrid
 
-    # Common apps list should be instant and static
+    # Load common catalogue instantly (no winget list here)
     Initialize-QOTCommonAppsCatalogue
 
-    # Installed apps scan should not freeze UI
+    # Installed apps scan (async so UI stays responsive)
     Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid
 
     if ($RunButton) {
         $RunButton.Add_Click({
+            try { Commit-QOTGridEdits -Grid $AppsGrid } catch { }
+            try { Commit-QOTGridEdits -Grid $InstallGrid } catch { }
+
             try { Invoke-QOTUninstallSelectedApps -Grid $AppsGrid } catch { try { Write-QLog ("Uninstall failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
             try { Invoke-QOTInstallSelectedCommonApps -Grid $InstallGrid } catch { try { Write-QLog ("Install failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
         })
@@ -53,28 +58,83 @@ function Initialize-QOTAppsUI {
 }
 
 function Initialize-QOTAppsCollections {
-
     if (-not $Global:QOT_InstalledAppsCollection) {
         $Global:QOT_InstalledAppsCollection = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     }
-
     if (-not $Global:QOT_CommonAppsCollection) {
         $Global:QOT_CommonAppsCollection = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
     }
 }
 
-function Enable-QOTImmediateCheckboxCommit {
+function Commit-QOTGridEdits {
     param(
         [Parameter(Mandatory)]
         [System.Windows.Controls.DataGrid]$Grid
     )
 
+    try {
+        $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
+        $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
+    } catch { }
+}
+
+function Enable-QOTSingleClickCheckboxes {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
+    )
+
+    # Commit when focus changes too (helps with some templates)
     $Grid.Add_CurrentCellChanged({
-        try {
-            $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
-            $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
-        } catch { }
+        try { Commit-QOTGridEdits -Grid $Grid } catch { }
     })
+
+    # Bulletproof: on checkbox click, force edit begin and commit immediately
+    $Grid.AddHandler(
+        [System.Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+        [System.Windows.Input.MouseButtonEventHandler]{
+            param($sender, $e)
+
+            try {
+                $dep = $e.OriginalSource
+                while ($dep -and -not ($dep -is [System.Windows.Controls.CheckBox])) {
+                    $dep = [System.Windows.Media.VisualTreeHelper]::GetParent($dep)
+                }
+
+                if ($dep -is [System.Windows.Controls.CheckBox]) {
+                    $sender.BeginEdit() | Out-Null
+                    Commit-QOTGridEdits -Grid $sender
+                }
+            } catch { }
+        },
+        $true
+    )
+}
+
+function New-QOTCheckboxTemplateColumn {
+    param(
+        [Parameter(Mandatory)][string]$BindingPath,
+        [int]$Width = 40
+    )
+
+    $checkFactory = New-Object System.Windows.FrameworkElementFactory([System.Windows.Controls.CheckBox])
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::HorizontalAlignmentProperty, [System.Windows.HorizontalAlignment]::Center)
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::VerticalAlignmentProperty, [System.Windows.VerticalAlignment]::Center)
+
+    $binding = New-Object System.Windows.Data.Binding($BindingPath)
+    $binding.Mode = [System.Windows.Data.BindingMode]::TwoWay
+    $binding.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
+    $checkFactory.SetBinding([System.Windows.Controls.CheckBox]::IsCheckedProperty, $binding)
+
+    $template = New-Object System.Windows.DataTemplate
+    $template.VisualTree = $checkFactory
+
+    $col = New-Object System.Windows.Controls.DataGridTemplateColumn
+    $col.Header = ""
+    $col.Width  = $Width
+    $col.CellTemplate = $template
+    $col.CellEditingTemplate = $template
+    return $col
 }
 
 function Initialize-QOTAppsGridsColumns {
@@ -91,11 +151,7 @@ function Initialize-QOTAppsGridsColumns {
     $AppsGrid.IsReadOnly          = $false
     $AppsGrid.Columns.Clear()
 
-    $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
-        Header  = ""
-        Binding = (New-Object System.Windows.Data.Binding "IsSelected")
-        Width   = 40
-    }))
+    $AppsGrid.Columns.Add((New-QOTCheckboxTemplateColumn -BindingPath "IsSelected" -Width 40))
 
     $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
         Header     = "Name"
@@ -120,32 +176,14 @@ function Initialize-QOTAppsGridsColumns {
 
     # -------------------------
     # Common Apps grid
-    # Single click checkbox + App only
+    # Checkbox + App only (no Version)
     # -------------------------
     $InstallGrid.AutoGenerateColumns = $false
     $InstallGrid.CanUserAddRows      = $false
     $InstallGrid.IsReadOnly          = $false
     $InstallGrid.Columns.Clear()
 
-    # TemplateColumn checkbox (best behaviour)
-    $checkFactory = New-Object System.Windows.FrameworkElementFactory([System.Windows.Controls.CheckBox])
-    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::HorizontalAlignmentProperty, [System.Windows.HorizontalAlignment]::Center)
-    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::VerticalAlignmentProperty, [System.Windows.VerticalAlignment]::Center)
-
-    $binding = New-Object System.Windows.Data.Binding("IsSelected")
-    $binding.Mode = [System.Windows.Data.BindingMode]::TwoWay
-    $binding.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
-    $checkFactory.SetBinding([System.Windows.Controls.CheckBox]::IsCheckedProperty, $binding)
-
-    $cellTemplate = New-Object System.Windows.DataTemplate
-    $cellTemplate.VisualTree = $checkFactory
-
-    $colCheck = New-Object System.Windows.Controls.DataGridTemplateColumn
-    $colCheck.Header = ""
-    $colCheck.Width  = 40
-    $colCheck.CellTemplate = $cellTemplate
-    $colCheck.CellEditingTemplate = $cellTemplate
-    $InstallGrid.Columns.Add($colCheck)
+    $InstallGrid.Columns.Add((New-QOTCheckboxTemplateColumn -BindingPath "IsSelected" -Width 40))
 
     $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
         Header     = "App"
@@ -163,16 +201,22 @@ function Start-QOTInstalledAppsScanAsync {
     try {
         $dispatcher = $AppsGrid.Dispatcher
 
-        $bw = New-Object System.ComponentModel.BackgroundWorker
-        $bw.WorkerReportsProgress = $false
-        $bw.WorkerSupportsCancellation = $false
-
-        $bw.DoWork += {
-            param($sender, $e)
-            $e.Result = Get-QOTInstalledApps
+        if (-not (Get-Command Get-QOTInstalledApps -ErrorAction SilentlyContinue)) {
+            try { Write-QLog "Get-QOTInstalledApps not found. Check Apps\InstalledApps.psm1 is imported." "ERROR" } catch { }
+            return
         }
 
-        $bw.RunWorkerCompleted += {
+        $script:QOT_InstalledAppsWorker = New-Object System.ComponentModel.BackgroundWorker
+        $script:QOT_InstalledAppsWorker.WorkerReportsProgress = $false
+        $script:QOT_InstalledAppsWorker.WorkerSupportsCancellation = $false
+
+        $script:QOT_InstalledAppsWorker.DoWork += {
+            param($sender, $e)
+            try { Write-QLog "Installed apps scan started (async)." "DEBUG" } catch { }
+            $e.Result = @(Get-QOTInstalledApps)
+        }
+
+        $script:QOT_InstalledAppsWorker.RunWorkerCompleted += {
             param($sender, $e)
 
             try {
@@ -182,26 +226,25 @@ function Start-QOTInstalledAppsScanAsync {
                 }
 
                 $results = @($e.Result)
+                try { Write-QLog ("Installed apps scan completed. Count={0}" -f $results.Count) "DEBUG" } catch { }
 
                 $dispatcher.Invoke([action]{
                     $Global:QOT_InstalledAppsCollection.Clear()
-
                     foreach ($app in $results) {
                         Ensure-QOTInstalledAppForGrid -App $app
                         $Global:QOT_InstalledAppsCollection.Add($app)
                     }
                 })
 
-                try { Write-QLog ("Installed apps scan complete. Loaded {0} items." -f $results.Count) } catch { }
+                try { Write-QLog ("Installed apps UI populated. Count={0}" -f $Global:QOT_InstalledAppsCollection.Count) "DEBUG" } catch { }
             }
             catch {
-                try { Write-QLog ("Installed apps scan post processing failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+                try { Write-QLog ("Installed apps completion handler failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
             }
         }
 
-        if (-not $bw.IsBusy) {
-            try { Write-QLog "Starting installed apps scan (async)." } catch { }
-            $bw.RunWorkerAsync() | Out-Null
+        if (-not $script:QOT_InstalledAppsWorker.IsBusy) {
+            $script:QOT_InstalledAppsWorker.RunWorkerAsync() | Out-Null
         }
     }
     catch {
@@ -227,12 +270,13 @@ function Ensure-QOTInstalledAppForGrid {
 
 function Initialize-QOTCommonAppsCatalogue {
 
-    # Prefer catalogue from InstallCommonApps.psm1 if available
     $catalogue = $null
+
     $cmd = Get-Command Get-QOTCommonAppsCatalogue -ErrorAction SilentlyContinue
     if ($cmd) {
         $catalogue = @(Get-QOTCommonAppsCatalogue)
-    } else {
+    }
+    else {
         $catalogue = @(
             [pscustomobject]@{ IsSelected=$false; Name="Google Chrome";        WingetId="Google.Chrome";               Category="Browser" }
             [pscustomobject]@{ IsSelected=$false; Name="Microsoft Edge";       WingetId="Microsoft.Edge";              Category="Browser" }
@@ -261,6 +305,8 @@ function Invoke-QOTInstallSelectedCommonApps {
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
     )
 
+    try { Commit-QOTGridEdits -Grid $Grid } catch { }
+
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($_.WingetId) })
 
@@ -271,6 +317,10 @@ function Invoke-QOTInstallSelectedCommonApps {
 
     foreach ($app in $selected) {
         try {
+            if (-not (Get-Command Install-QOTCommonApp -ErrorAction SilentlyContinue)) {
+                throw "Install-QOTCommonApp not found. Check Apps\InstallCommonApps.psm1 is imported."
+            }
+
             Install-QOTCommonApp -Name $app.Name -WingetId $app.WingetId
             $app.IsSelected = $false
         }
@@ -284,6 +334,8 @@ function Invoke-QOTUninstallSelectedApps {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
     )
+
+    try { Commit-QOTGridEdits -Grid $Grid } catch { }
 
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true })
