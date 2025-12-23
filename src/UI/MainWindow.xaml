@@ -601,6 +601,7 @@
                 <StackPanel Grid.Column="1"
                             Orientation="Vertical"
                             VerticalAlignment="Center">
+                    <!-- Run button is named RunButton -->
                     <Button x:Name="RunButton"
                             Content="Run selected actions"
                             Width="190"
