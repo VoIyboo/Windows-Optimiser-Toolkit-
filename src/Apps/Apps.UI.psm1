@@ -1,5 +1,5 @@
 # src\Apps\Apps.UI.psm1
-# UI wiring for the Apps tab
+# UI wiring for the Apps tab (stable checkbox behaviour + async installed scan)
 
 $ErrorActionPreference = "Stop"
 
@@ -32,11 +32,14 @@ function Initialize-QOTAppsUI {
     $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
     $InstallGrid.ItemsSource = $Global:QOT_CommonAppsCollection
 
+    Set-QOTGridDefaults -Grid $AppsGrid
+    Set-QOTGridDefaults -Grid $InstallGrid
+
     Initialize-QOTAppsGridsColumns -AppsGrid $AppsGrid -InstallGrid $InstallGrid
 
-    # Make checkbox clicks commit instantly (no double click)
-    Enable-QOTSingleClickCheckboxes -Grid $AppsGrid
-    Enable-QOTSingleClickCheckboxes -Grid $InstallGrid
+    # Single click checkbox handling (no conflicting handlers)
+    Enable-QOTCheckboxBehaviour -Grid $AppsGrid
+    Enable-QOTCheckboxBehaviour -Grid $InstallGrid
 
     # Load common catalogue instantly (no winget list here)
     Initialize-QOTCommonAppsCatalogue
@@ -46,8 +49,8 @@ function Initialize-QOTAppsUI {
 
     if ($RunButton) {
         $RunButton.Add_Click({
-            try { Commit-QOTGridEdits -Grid $AppsGrid } catch { }
-            try { Commit-QOTGridEdits -Grid $InstallGrid } catch { }
+            Commit-QOTGridEdits -Grid $AppsGrid
+            Commit-QOTGridEdits -Grid $InstallGrid
 
             try { Invoke-QOTUninstallSelectedApps -Grid $AppsGrid } catch { try { Write-QLog ("Uninstall failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
             try { Invoke-QOTInstallSelectedCommonApps -Grid $InstallGrid } catch { try { Write-QLog ("Install failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
@@ -66,6 +69,25 @@ function Initialize-QOTAppsCollections {
     }
 }
 
+function Set-QOTGridDefaults {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
+    )
+
+    $Grid.AutoGenerateColumns = $false
+    $Grid.CanUserAddRows      = $false
+    $Grid.IsReadOnly          = $false
+
+    # These reduce the "row selection steals click" problem
+    $Grid.SelectionUnit = 'FullRow'
+    $Grid.SelectionMode = 'Single'
+    $Grid.IsSynchronizedWithCurrentItem = $false
+
+    # Optional, but makes it feel nicer
+    $Grid.HeadersVisibility = 'Column'
+}
+
 function Commit-QOTGridEdits {
     param(
         [Parameter(Mandatory)]
@@ -73,25 +95,26 @@ function Commit-QOTGridEdits {
     )
 
     try {
-        $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
-        $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
+        $null = $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true)
+        $null = $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true)
     } catch { }
 }
 
-function Enable-QOTSingleClickCheckboxes {
+function Enable-QOTCheckboxBehaviour {
     param(
         [Parameter(Mandatory)]
         [System.Windows.Controls.DataGrid]$Grid
     )
 
-    # Commit when focus changes too (helps with some templates)
+    # When the current cell changes, commit any pending checkbox change
     $Grid.Add_CurrentCellChanged({
         try { Commit-QOTGridEdits -Grid $Grid } catch { }
     })
 
-    # Bulletproof: on checkbox click, force edit begin and commit immediately
+    # When you click a checkbox, force begin edit and commit immediately.
+    # IMPORTANT: we do NOT manually toggle the checkbox here, binding handles it.
     $Grid.AddHandler(
-        [System.Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+        [System.Windows.UIElement]::PreviewMouseLeftButtonUpEvent,
         [System.Windows.Input.MouseButtonEventHandler]{
             param($sender, $e)
 
@@ -111,60 +134,24 @@ function Enable-QOTSingleClickCheckboxes {
     )
 }
 
-function New-QOTCheckBoxFactory {
-    param(
-        [Parameter(Mandatory)][string]$BindingPath
-    )
-
-    $checkFactory = New-Object System.Windows.FrameworkElementFactory([System.Windows.Controls.CheckBox])
-    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::HorizontalAlignmentProperty, [System.Windows.HorizontalAlignment]::Center)
-    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::VerticalAlignmentProperty, [System.Windows.VerticalAlignment]::Center)
-    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::FocusableProperty, $true)
-
-    $binding = New-Object System.Windows.Data.Binding($BindingPath)
-    $binding.Mode = [System.Windows.Data.BindingMode]::TwoWay
-    $binding.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
-    $checkFactory.SetBinding([System.Windows.Controls.CheckBox]::IsCheckedProperty, $binding)
-
-    # Add a handler so the checkbox fully owns the click, not the DataGrid
-    $handler = [System.Windows.RoutedEventHandler]{
-        param($sender, $e)
-
-        try {
-            # Sender is the CheckBox
-            $cb = [System.Windows.Controls.CheckBox]$sender
-            $cb.IsChecked = -not [bool]$cb.IsChecked
-
-            # Stop DataGrid from stealing the click
-            $e.Handled = $true
-
-            # Commit immediately
-            $grid = $cb
-            while ($grid -and -not ($grid -is [System.Windows.Controls.DataGrid])) {
-                $grid = [System.Windows.Media.VisualTreeHelper]::GetParent($grid)
-            }
-            if ($grid -is [System.Windows.Controls.DataGrid]) {
-                $grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Cell, $true) | Out-Null
-                $grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
-            }
-        } catch { }
-    }
-
-    $checkFactory.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, $handler)
-
-    return $checkFactory
-}
-
 function New-QOTCheckboxTemplateColumn {
     param(
         [Parameter(Mandatory)][string]$BindingPath,
         [int]$Width = 40
     )
 
-    $factory = New-QOTCheckBoxFactory -BindingPath $BindingPath
+    $checkFactory = New-Object System.Windows.FrameworkElementFactory([System.Windows.Controls.CheckBox])
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::HorizontalAlignmentProperty, [System.Windows.HorizontalAlignment]::Center)
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::VerticalAlignmentProperty, [System.Windows.VerticalAlignment]::Center)
+    $checkFactory.SetValue([System.Windows.Controls.CheckBox]::FocusableProperty, $false)
+
+    $binding = New-Object System.Windows.Data.Binding($BindingPath)
+    $binding.Mode = [System.Windows.Data.BindingMode]::TwoWay
+    $binding.UpdateSourceTrigger = [System.Windows.Data.UpdateSourceTrigger]::PropertyChanged
+    $checkFactory.SetBinding([System.Windows.Controls.CheckBox]::IsCheckedProperty, $binding)
 
     $template = New-Object System.Windows.DataTemplate
-    $template.VisualTree = $factory
+    $template.VisualTree = $checkFactory
 
     $col = New-Object System.Windows.Controls.DataGridTemplateColumn
     $col.Header = ""
@@ -173,7 +160,6 @@ function New-QOTCheckboxTemplateColumn {
     $col.CellEditingTemplate = $template
     return $col
 }
-
 
 function Initialize-QOTAppsGridsColumns {
     param(
@@ -184,9 +170,6 @@ function Initialize-QOTAppsGridsColumns {
     # -------------------------
     # Installed Apps grid
     # -------------------------
-    $AppsGrid.AutoGenerateColumns = $false
-    $AppsGrid.CanUserAddRows      = $false
-    $AppsGrid.IsReadOnly          = $false
     $AppsGrid.Columns.Clear()
 
     $AppsGrid.Columns.Add((New-QOTCheckboxTemplateColumn -BindingPath "IsSelected" -Width 40))
@@ -213,12 +196,8 @@ function Initialize-QOTAppsGridsColumns {
     }))
 
     # -------------------------
-    # Common Apps grid
-    # Checkbox + App only (no Version)
+    # Common Apps grid (checkbox + App only)
     # -------------------------
-    $InstallGrid.AutoGenerateColumns = $false
-    $InstallGrid.CanUserAddRows      = $false
-    $InstallGrid.IsReadOnly          = $false
     $InstallGrid.Columns.Clear()
 
     $InstallGrid.Columns.Add((New-QOTCheckboxTemplateColumn -BindingPath "IsSelected" -Width 40))
@@ -233,7 +212,8 @@ function Initialize-QOTAppsGridsColumns {
 
 function Start-QOTInstalledAppsScanAsync {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$AppsGrid
     )
 
     try {
@@ -340,10 +320,11 @@ function Initialize-QOTCommonAppsCatalogue {
 
 function Invoke-QOTInstallSelectedCommonApps {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
     )
 
-    try { Commit-QOTGridEdits -Grid $Grid } catch { }
+    Commit-QOTGridEdits -Grid $Grid
 
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($_.WingetId) })
@@ -370,10 +351,11 @@ function Invoke-QOTInstallSelectedCommonApps {
 
 function Invoke-QOTUninstallSelectedApps {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
+        [Parameter(Mandatory)]
+        [System.Windows.Controls.DataGrid]$Grid
     )
 
-    try { Commit-QOTGridEdits -Grid $Grid } catch { }
+    Commit-QOTGridEdits -Grid $Grid
 
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true })
