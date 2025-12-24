@@ -104,6 +104,21 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
+    # Optional: log key names present in LOADED XAML (helps catch mismatches)
+    # ------------------------------------------------------------
+    try {
+        $map = Get-QOTNamedElementsMap -Root $window
+        $wanted = @("AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton","SettingsHost","BtnSettings","MainTabControl","TabSettings")
+        foreach ($k in $wanted) {
+            if ($map.ContainsKey($k)) {
+                Write-QLog ("Found control: {0} ({1})" -f $k, $map[$k]) "DEBUG"
+            } else {
+                Write-QLog ("Missing control in loaded XAML: {0}" -f $k) "DEBUG"
+            }
+        }
+    } catch { }
+
+    # ------------------------------------------------------------
     # Initialise Tickets UI
     # ------------------------------------------------------------
     if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
@@ -111,48 +126,14 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
-    # Initialise Apps UI (wire to CURRENT XAML names)
+    # Initialise Apps UI (NEW: Apps.UI finds its own controls from Window)
     # ------------------------------------------------------------
     try {
-        # IMPORTANT: these must match your XAML x:Name values
-        $appsGrid        = $window.FindName("AppsGrid")
-        $installGrid     = $window.FindName("InstallGrid")
-        $btnScanApps     = $window.FindName("BtnScanApps")
-        $btnUninstallSel = $window.FindName("BtnUninstallSelected")
-        $btnRun          = $window.FindName("RunButton")
-
-        if (-not $appsGrid -or -not $installGrid -or -not $btnRun) {
-
-            $map = Get-QOTNamedElementsMap -Root $window
-            $known = @("AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton")
-
-            foreach ($k in $known) {
-                if ($map.ContainsKey($k)) {
-                    try { Write-QLog ("Found control: {0} ({1})" -f $k, $map[$k]) "DEBUG" } catch { }
-                } else {
-                    try { Write-QLog ("Missing control in loaded XAML: {0}" -f $k) "ERROR" } catch { }
-                }
-            }
-
-            # Also dump a short list of what IS present to help you spot mismatched names
-            try {
-                $sample = $map.Keys | Sort-Object | Select-Object -First 40
-                Write-QLog ("Named controls sample: {0}" -f ($sample -join ", ")) "DEBUG"
-            } catch { }
-
-            throw "Apps UI could not wire up because one or more required controls were not found in the LOADED XAML."
-        }
-
         if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
             throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
-        Initialize-QOTAppsUI `
-            -BtnScanApps $btnScanApps `
-            -BtnUninstallSelected $btnUninstallSel `
-            -AppsGrid $appsGrid `
-            -InstallGrid $installGrid `
-            -RunButton $btnRun
+        Initialize-QOTAppsUI -Window $window
     }
     catch {
         try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
