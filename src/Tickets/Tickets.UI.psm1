@@ -99,7 +99,7 @@ function Initialize-QOTicketsUI {
 
     Add-Type -AssemblyName PresentationFramework | Out-Null
 
-    # Capture commands now
+    # Capture core commands now
     $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
     $addTicketCmd  = Get-Command Add-QOTicket  -ErrorAction Stop
@@ -108,14 +108,20 @@ function Initialize-QOTicketsUI {
     $syncCmd = $null
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
 
+    # Capture UI local function commands (IMPORTANT: event handlers may not resolve them by name)
+    $refreshGridCmd = Get-Command Refresh-QOTicketsGrid -ErrorAction Stop
+    $emailSyncAndRefreshCmd = Get-Command Invoke-QOTicketsEmailSyncAndRefresh -ErrorAction Stop
+
     Write-QOTicketsUILog ("Captured Get-QOTickets from: " + $getTicketsCmd.Source)
     Write-QOTicketsUILog ("Captured New-QOTicket from: " + $newTicketCmd.Source)
     Write-QOTicketsUILog ("Captured Add-QOTicket from: " + $addTicketCmd.Source)
     Write-QOTicketsUILog ("Captured Remove-QOTicket from: " + $removeCmd.Source)
     Write-QOTicketsUILog ("Captured Sync-QOTicketsFromEmail from: " + (($syncCmd.Source) + ""))
+    Write-QOTicketsUILog ("Captured Refresh-QOTicketsGrid from: " + $refreshGridCmd.Source)
+    Write-QOTicketsUILog ("Captured Invoke-QOTicketsEmailSyncAndRefresh from: " + $emailSyncAndRefreshCmd.Source)
 
-    # IMPORTANT: capture stable local references for closures
-    $grid      = $Window.FindName("TicketsGrid")
+    # Capture stable local references for closures
+    $grid       = $Window.FindName("TicketsGrid")
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
@@ -143,9 +149,9 @@ function Initialize-QOTicketsUI {
         try {
             if (-not $script:TicketsEmailSyncRan) {
                 $script:TicketsEmailSyncRan = $true
-                Invoke-QOTicketsEmailSyncAndRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
+                & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
             } else {
-                Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
+                & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
             }
         } catch { }
     }.GetNewClosure()
@@ -153,7 +159,7 @@ function Initialize-QOTicketsUI {
     $grid.AddHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
 
     $script:TicketsRefreshHandler = {
-        Invoke-QOTicketsEmailSyncAndRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
+        & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
     }.GetNewClosure()
     $btnRefresh.Add_Click($script:TicketsRefreshHandler)
 
@@ -162,7 +168,7 @@ function Initialize-QOTicketsUI {
             $ticket = & $newTicketCmd -Title "New ticket"
             $null   = & $addTicketCmd -Ticket $ticket
 
-            Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
+            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
 
             $grid.SelectedItem = $ticket
             $grid.ScrollIntoView($ticket)
@@ -193,7 +199,7 @@ function Initialize-QOTicketsUI {
             if ($confirm -ne "Yes") { return }
 
             $null = & $removeCmd -Id $selected.Id
-            Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
+            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
         }
         catch {
             [System.Windows.MessageBox]::Show("Delete ticket failed.`r`n$($_.Exception.Message)") | Out-Null
@@ -201,7 +207,7 @@ function Initialize-QOTicketsUI {
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
 
-    Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
+    & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
