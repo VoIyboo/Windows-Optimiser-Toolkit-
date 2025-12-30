@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-# Track one time init for Tickets UI (Tickets tab content may not exist until selected)
+# One time init for Tickets UI
 $script:TicketsUIInitialised = $false
 
 function Get-QOTNamedElementsMap {
@@ -107,7 +107,7 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
-    # Optional: log key names present in LOADED XAML (helps catch mismatches)
+    # Optional: log key names present in LOADED XAML
     # ------------------------------------------------------------
     try {
         $map = Get-QOTNamedElementsMap -Root $window
@@ -116,6 +116,7 @@ function Start-QOTMainWindow {
             "SettingsHost","BtnSettings","MainTabControl","TabSettings",
             "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
         )
+
         foreach ($k in $wanted) {
             if ($map.ContainsKey($k)) {
                 Write-QLog ("Found control: {0} ({1})" -f $k, $map[$k]) "DEBUG"
@@ -126,35 +127,7 @@ function Start-QOTMainWindow {
     } catch { }
 
     # ------------------------------------------------------------
-    # Defer Tickets UI init until Tickets tab is selected
-    # ------------------------------------------------------------
-    $tabs      = $window.FindName("MainTabControl")
-    $tabTickets = $window.FindName("TabTickets")
-
-    if ($tabs -and $tabTickets -and (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue)) {
-
-        $initTickets = {
-            if ($script:TicketsUIInitialised) { return }
-
-            # Only init when tickets tab selected (content exists then)
-            if ($tabs.SelectedItem -ne $tabTickets) { return }
-
-            try {
-                Initialize-QOTicketsUI -Window $window
-                $script:TicketsUIInitialised = $true
-                try { Write-QLog "Tickets UI initialised on tab selection" "DEBUG" } catch { }
-            } catch {
-                try { Write-QLog ("Tickets UI init failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
-            }
-        }.GetNewClosure()
-
-        # Hook selection change, plus do one immediate check in case Tickets is default
-        $tabs.Add_SelectionChanged({ & $initTickets })
-        & $initTickets
-    }
-
-    # ------------------------------------------------------------
-    # Initialise Apps UI (NEW: Apps.UI finds its own controls from Window)
+    # Initialise Apps UI
     # ------------------------------------------------------------
     try {
         if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
@@ -197,12 +170,48 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
+    $tabs        = $window.FindName("MainTabControl")
     $btnSettings = $window.FindName("BtnSettings")
     $tabSettings = $window.FindName("TabSettings")
+    $tabTickets  = $window.FindName("TabTickets")
 
     if ($btnSettings -and $tabs -and $tabSettings) {
         $btnSettings.Add_Click({
             $tabs.SelectedItem = $tabSettings
+        })
+    }
+
+    # ------------------------------------------------------------
+    # Initialise Tickets UI after window render, forcing Tickets tab to build
+    # ------------------------------------------------------------
+    if ($tabs -and $tabTickets -and (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue)) {
+
+        $window.Add_ContentRendered({
+            try {
+                if ($script:TicketsUIInitialised) { return }
+
+                # Force create Tickets tab visual tree once
+                $prev = $tabs.SelectedItem
+                $tabs.SelectedItem = $tabTickets
+
+                # Let WPF breathe so the visual tree is created
+                $window.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
+
+                Initialize-QOTicketsUI -Window $window
+                $script:TicketsUIInitialised = $true
+
+                # Switch back if we want
+                if ($prev) { $tabs.SelectedItem = $prev }
+
+                try { Write-QLog "Tickets UI initialised after ContentRendered" "DEBUG" } catch { }
+            }
+            catch {
+                try { Write-QLog ("Tickets UI failed to load: {0}" -f $_.Exception.ToString()) "ERROR" } catch { }
+                try {
+                    Add-Type -AssemblyName PresentationFramework | Out-Null
+                    [System.Windows.MessageBox]::Show("Tickets UI failed to load.`r`n$($_.Exception.Message)","QOT") | Out-Null
+                } catch { }
+            }
         })
     }
 
