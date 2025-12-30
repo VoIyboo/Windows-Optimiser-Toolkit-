@@ -99,14 +99,11 @@ function Initialize-QOTicketsUI {
 
     Add-Type -AssemblyName PresentationFramework | Out-Null
 
-    # Capture commands now (core + local module helpers)
+    # Capture commands now
     $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
     $addTicketCmd  = Get-Command Add-QOTicket  -ErrorAction Stop
     $removeCmd     = Get-Command Remove-QOTicket -ErrorAction Stop
-
-    $refreshCmd    = Get-Command Refresh-QOTicketsGrid -ErrorAction Stop
-    $emailSyncCmd  = Get-Command Invoke-QOTicketsEmailSyncAndRefresh -ErrorAction Stop
 
     $syncCmd = $null
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
@@ -115,45 +112,26 @@ function Initialize-QOTicketsUI {
     Write-QOTicketsUILog ("Captured New-QOTicket from: " + $newTicketCmd.Source)
     Write-QOTicketsUILog ("Captured Add-QOTicket from: " + $addTicketCmd.Source)
     Write-QOTicketsUILog ("Captured Remove-QOTicket from: " + $removeCmd.Source)
-    Write-QOTicketsUILog ("Captured Refresh-QOTicketsGrid from: " + $refreshCmd.Source)
-    Write-QOTicketsUILog ("Captured Invoke-QOTicketsEmailSyncAndRefresh from: " + $emailSyncCmd.Source)
     Write-QOTicketsUILog ("Captured Sync-QOTicketsFromEmail from: " + (($syncCmd.Source) + ""))
 
-    # Locate controls
-    $script:TicketsGrid = $Window.FindName("TicketsGrid")
-    $btnRefresh         = $Window.FindName("BtnRefreshTickets")
-    $btnNew             = $Window.FindName("BtnNewTicket")
-    $btnDelete          = $Window.FindName("BtnDeleteTicket")
+    # IMPORTANT: capture stable local references for closures
+    $grid      = $Window.FindName("TicketsGrid")
+    $btnRefresh = $Window.FindName("BtnRefreshTickets")
+    $btnNew     = $Window.FindName("BtnNewTicket")
+    $btnDelete  = $Window.FindName("BtnDeleteTicket")
 
+    if (-not $grid)       { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
 
-    if (-not $script:TicketsGrid) {
-        Write-QOTicketsUILog "TicketsGrid not found at init, will re-resolve on demand" "WARN"
-    }
-
-    # Helper: ensure grid exists (tabs/templates can delay element creation)
-    $ensureGrid = {
-        if (-not $script:TicketsGrid) {
-            $script:TicketsGrid = $Window.FindName("TicketsGrid")
-        }
-
-        if (-not $script:TicketsGrid) {
-            [System.Windows.MessageBox]::Show(
-                "TicketsGrid is missing. Check MainWindow.xaml: DataGrid Name/x:Name must be exactly 'TicketsGrid'.",
-                "Quinn Optimiser Toolkit"
-            ) | Out-Null
-            return $false
-        }
-
-        return $true
-    }.GetNewClosure()
+    # Keep script state too (for anything else that references it)
+    $script:TicketsGrid = $grid
 
     # Remove previous handlers
     try {
-        if ($script:TicketsLoadedHandler -and $script:TicketsGrid) {
-            $script:TicketsGrid.RemoveHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
+        if ($script:TicketsLoadedHandler) {
+            $grid.RemoveHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
         }
     } catch { }
 
@@ -161,66 +139,49 @@ function Initialize-QOTicketsUI {
     try { if ($script:TicketsNewHandler)     { $btnNew.Remove_Click($script:TicketsNewHandler) } } catch { }
     try { if ($script:TicketsDeleteHandler)  { $btnDelete.Remove_Click($script:TicketsDeleteHandler) } } catch { }
 
-    # Loaded event (runs when grid actually exists)
     $script:TicketsLoadedHandler = [System.Windows.RoutedEventHandler]{
         try {
-            if (-not (& $ensureGrid)) { return }
-
             if (-not $script:TicketsEmailSyncRan) {
                 $script:TicketsEmailSyncRan = $true
-                & $emailSyncCmd -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
+                Invoke-QOTicketsEmailSyncAndRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
             } else {
-                & $refreshCmd -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd
+                Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
             }
         } catch { }
     }.GetNewClosure()
 
-    # Only attach Loaded handler if grid exists now, otherwise it will attach once grid is found
-    if ($script:TicketsGrid) {
-        $script:TicketsGrid.AddHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
-    }
+    $grid.AddHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
 
-    # Refresh click
     $script:TicketsRefreshHandler = {
-        try {
-            if (-not (& $ensureGrid)) { return }
-            & $emailSyncCmd -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
-        } catch {
-            [System.Windows.MessageBox]::Show("Refresh failed.`r`n$($_.Exception.Message)") | Out-Null
-        }
+        Invoke-QOTicketsEmailSyncAndRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd
     }.GetNewClosure()
     $btnRefresh.Add_Click($script:TicketsRefreshHandler)
 
-    # New ticket click
     $script:TicketsNewHandler = {
         try {
-            if (-not (& $ensureGrid)) { return }
-
             $ticket = & $newTicketCmd -Title "New ticket"
             $null   = & $addTicketCmd -Ticket $ticket
 
-            & $refreshCmd -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd
+            Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
 
-            $script:TicketsGrid.SelectedItem = $ticket
-            $script:TicketsGrid.ScrollIntoView($ticket)
+            $grid.SelectedItem = $ticket
+            $grid.ScrollIntoView($ticket)
 
-            if ($script:TicketsGrid.Columns.Count -gt 0) {
-                $script:TicketsGrid.CurrentCell = New-Object System.Windows.Controls.DataGridCellInfo($ticket, $script:TicketsGrid.Columns[0])
-                $script:TicketsGrid.BeginEdit()
+            if ($grid.Columns.Count -gt 0) {
+                $grid.CurrentCell = New-Object System.Windows.Controls.DataGridCellInfo($ticket, $grid.Columns[0])
+                $grid.BeginEdit()
             }
         }
         catch {
+            try { Write-QOTicketsUILog ("Create ticket failed: " + $_.Exception.ToString()) "ERROR" } catch { }
             [System.Windows.MessageBox]::Show("Create ticket failed.`r`n$($_.Exception.Message)") | Out-Null
         }
     }.GetNewClosure()
     $btnNew.Add_Click($script:TicketsNewHandler)
 
-    # Delete ticket click
     $script:TicketsDeleteHandler = {
         try {
-            if (-not (& $ensureGrid)) { return }
-
-            $selected = $script:TicketsGrid.SelectedItem
+            $selected = $grid.SelectedItem
             if (-not $selected) { [System.Windows.MessageBox]::Show("Select a ticket first.") | Out-Null; return }
 
             if (-not ($selected.PSObject.Properties.Name -contains "Id")) {
@@ -232,7 +193,7 @@ function Initialize-QOTicketsUI {
             if ($confirm -ne "Yes") { return }
 
             $null = & $removeCmd -Id $selected.Id
-            & $refreshCmd -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd
+            Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
         }
         catch {
             [System.Windows.MessageBox]::Show("Delete ticket failed.`r`n$($_.Exception.Message)") | Out-Null
@@ -240,12 +201,7 @@ function Initialize-QOTicketsUI {
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
 
-    # Initial refresh (only if grid exists now)
-    try {
-        if ($script:TicketsGrid) {
-            & $refreshCmd -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd
-        }
-    } catch { }
+    Refresh-QOTicketsGrid -Grid $grid -GetTicketsCmd $getTicketsCmd
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
