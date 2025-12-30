@@ -457,7 +457,7 @@
 
 <!-- Tickets -->
 <TabItem x:Name="TabTickets" Header="Tickets">
-    <Grid Margin="5,10,5,5">
+    <Grid Margin="4">
         <GroupBox Margin="0">
 
             <GroupBox.Header>
@@ -476,6 +476,20 @@
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
+
+                        <!-- Expand/Collapse details -->
+                        <Button x:Name="BtnToggleTicketDetails"
+                                Width="28"
+                                Height="28"
+                                Margin="0,0,8,0"
+                                ToolTip="Show details">
+                            <TextBlock x:Name="TicketDetailsChevron"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Text="&#xE70D;"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Button>
 
                         <Button x:Name="BtnRefreshTickets"
                                 Width="28"
@@ -516,13 +530,13 @@
                 </Grid>
             </GroupBox.Header>
 
-            <Grid Margin="4">
+            <Grid Margin="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
-                    <RowDefinition Height="6" />
-                    <RowDefinition Height="180" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- Main grid -->
                 <DataGrid x:Name="TicketsGrid"
                           Grid.Row="0"
                           Margin="0"
@@ -544,43 +558,98 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <GridSplitter Grid.Row="1"
-                              Height="6"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              Background="#111827" />
-
-                <!-- Details panel (uses the empty space nicely) -->
-                <Border Grid.Row="2"
+                <!-- Collapsible details drawer -->
+                <Border x:Name="TicketDetailsPanel"
+                        Grid.Row="1"
+                        Visibility="Collapsed"
                         Background="#0B1220"
                         BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="1"
                         CornerRadius="4"
+                        Margin="0,8,0,0"
                         Padding="10">
 
-                    <StackPanel>
-                        <TextBlock Text="Ticket details"
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Header -->
+                        <TextBlock Grid.ColumnSpan="2"
+                                   Text="Ticket details"
                                    Foreground="{StaticResource TextSubtle}"
                                    FontSize="12"
-                                   Margin="0,0,0,6" />
+                                   Margin="0,0,0,8" />
 
-                        <TextBlock Foreground="White"
-                                   FontSize="14"
-                                   Text="{Binding ElementName=TicketsGrid, Path=SelectedItem.Title}"
-                                   TextWrapping="Wrap" />
+                        <!-- Email/body viewer -->
+                        <Border Grid.Row="1"
+                                Grid.Column="0"
+                                Background="#020617"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="10"
+                                Margin="0,0,8,0">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <TextBlock x:Name="TicketEmailBodyText"
+                                           Text="Select a ticket to view details."
+                                           Foreground="#E5E7EB"
+                                           TextWrapping="Wrap" />
+                            </ScrollViewer>
+                        </Border>
 
-                        <TextBlock Foreground="{StaticResource TextSubtle}"
-                                   Margin="0,6,0,0"
-                                   Text="{Binding ElementName=TicketsGrid, Path=SelectedItem.CreatedAt}" />
-                    </StackPanel>
+                        <!-- Reply box -->
+                        <Border Grid.Row="1"
+                                Grid.Column="1"
+                                Background="#020617"
+                                BorderBrush="{StaticResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="10">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
 
+                                <TextBlock Text="Reply"
+                                           Foreground="{StaticResource TextSubtle}"
+                                           Margin="0,0,0,8" />
+
+                                <TextBox x:Name="TicketReplyText"
+                                         Grid.Row="1"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Background="#0B1220"
+                                         Foreground="White"
+                                         BorderBrush="{StaticResource BorderBrush}"
+                                         Padding="8" />
+
+                                <Button x:Name="BtnSendTicketReply"
+                                        Grid.Row="2"
+                                        Content="Send reply"
+                                        Width="110"
+                                        HorizontalAlignment="Right"
+                                        Margin="0,8,0,0"
+                                        IsEnabled="False" />
+                            </Grid>
+                        </Border>
+
+                    </Grid>
                 </Border>
+
             </Grid>
 
         </GroupBox>
     </Grid>
 </TabItem>
-
 
             </TabControl>
         </ContentControl>
