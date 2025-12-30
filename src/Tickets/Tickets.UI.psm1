@@ -6,10 +6,6 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot "..\Core\Logging\Logging.psm1") -Force -ErrorAction SilentlyContinue
 
-Write-QOTicketsUILog ("Tickets.UI path: " + $PSCommandPath)
-[System.Windows.MessageBox]::Show("Tickets.UI loaded from:`r`n$PSCommandPath","QOT") | Out-Null
-
-
 # -------------------------
 # State
 # -------------------------
