@@ -38,6 +38,37 @@ function New-QODefaultTicketDatabase {
     }
 }
 
+function New-QODefaultTicketsFile {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        New-QODefaultTicketDatabase | ConvertTo-Json -Depth 8 |
+            Set-Content -LiteralPath $Path -Encoding UTF8
+    }
+}
+
+function Test-QOIsBadTicketPath {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $true }
+
+    $p = [string]$Path
+
+    # Anything inside TEMP extraction paths is not stable
+    if ($p -like "*\AppData\Local\Temp\QuinnOptimiserToolkit\*") { return $true }
+    if ($p -like "*\Temp\QuinnOptimiserToolkit\*") { return $true }
+
+    # If it's not a JSON file, treat as bad
+    if ($p -notlike "*.json") { return $true }
+
+    return $false
+}
+
 function Get-QOTicketsStorePath {
     Initialize-QOTicketStorage
     return $script:TicketStorePath
@@ -53,7 +84,7 @@ function Ensure-QOTicketsStoreDirectory {
 }
 
 # =====================================================================
-# Storage initialisation
+# Storage initialisation (with path migration)
 # =====================================================================
 function Initialize-QOTicketStorage {
     if ($script:TicketStorePath -and $script:TicketBackupPath) { return }
@@ -64,12 +95,45 @@ function Initialize-QOTicketStorage {
     $settings = Ensure-QOSettingProperty $settings "LocalTicketBackupPath" ""
     $settings = Ensure-QOSettingProperty $settings "TicketsColumnLayout" @()
 
-    if ([string]::IsNullOrWhiteSpace($settings.TicketStorePath)) {
-        $settings.TicketStorePath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Tickets.json"
+    $stableStorePath  = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Tickets.json"
+    $stableBackupPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
+
+    $currentPath = [string]$settings.TicketStorePath
+    $needReset   = $false
+
+    # Decide if current path is unsafe or unusable
+    if (Test-QOIsBadTicketPath -Path $currentPath) {
+        $needReset = $true
+    } elseif (-not (Test-Path -LiteralPath $currentPath)) {
+        # Missing file, prefer stable path (we will attempt migrate if possible)
+        $needReset = $true
     }
 
-    if ([string]::IsNullOrWhiteSpace($settings.LocalTicketBackupPath)) {
-        $settings.LocalTicketBackupPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
+    # Attempt migration if we are changing paths AND old file exists somewhere
+    if ($needReset) {
+        # If old path exists and stable doesn't, copy it across
+        try {
+            if (-not [string]::IsNullOrWhiteSpace($currentPath)) {
+                if (Test-Path -LiteralPath $currentPath) {
+                    $stableDir = Split-Path -Parent $stableStorePath
+                    if (-not (Test-Path -LiteralPath $stableDir)) {
+                        New-Item -ItemType Directory -Path $stableDir -Force | Out-Null
+                    }
+
+                    if (-not (Test-Path -LiteralPath $stableStorePath)) {
+                        Copy-Item -LiteralPath $currentPath -Destination $stableStorePath -Force
+                    }
+                }
+            }
+        } catch { }
+
+        $settings.TicketStorePath = $stableStorePath
+    }
+
+    # Backup path should always be stable
+    if ([string]::IsNullOrWhiteSpace([string]$settings.LocalTicketBackupPath) -or
+        ([string]$settings.LocalTicketBackupPath -like "*\AppData\Local\Temp\QuinnOptimiserToolkit\*")) {
+        $settings.LocalTicketBackupPath = $stableBackupPath
     }
 
     Save-QOSettings -Settings $settings
@@ -77,13 +141,12 @@ function Initialize-QOTicketStorage {
     $script:TicketStorePath  = [string]$settings.TicketStorePath
     $script:TicketBackupPath = [string]$settings.LocalTicketBackupPath
 
+    # Ensure directories exist
     New-Item -ItemType Directory -Path (Split-Path -Parent $script:TicketStorePath) -Force | Out-Null
     New-Item -ItemType Directory -Path $script:TicketBackupPath -Force | Out-Null
 
-    if (-not (Test-Path -LiteralPath $script:TicketStorePath)) {
-        New-QODefaultTicketDatabase | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
-    }
+    # Ensure the tickets file exists
+    New-QODefaultTicketsFile -Path $script:TicketStorePath
 }
 
 # =====================================================================
@@ -201,11 +264,11 @@ function Add-QOTicketFromEmail {
         [pscustomobject]$Email
     )
 
-    $subject = ""
-    $from    = ""
-    $to      = ""
-    $body    = ""
-    $msgId   = ""
+    $subject  = ""
+    $from     = ""
+    $to       = ""
+    $body     = ""
+    $msgId    = ""
     $received = $null
 
     try { if ($Email.PSObject.Properties.Name -contains "Subject")   { $subject  = [string]$Email.Subject } } catch { }
@@ -263,11 +326,8 @@ function Add-QOTicketFromEmail {
 
 # =====================================================================
 # Sync stub (so UI can call it without exploding)
-# Later we will implement actual email reading here.
 # =====================================================================
 function Sync-QOTicketsFromEmail {
-    # Do nothing for now, this is just a safe hook.
-    # Next step will be to connect to Outlook/Graph and create tickets.
     return $null
 }
 
