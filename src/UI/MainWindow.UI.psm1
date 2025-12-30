@@ -42,6 +42,62 @@ function Get-QOTNamedElementsMap {
     return $map
 }
 
+function Find-QOTElementByName {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    try {
+        $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
+        $q.Enqueue($Root) | Out-Null
+
+        while ($q.Count -gt 0) {
+            $cur = $q.Dequeue()
+
+            if ($cur -is [System.Windows.FrameworkElement]) {
+                if ($cur.Name -eq $Name) { return $cur }
+            }
+
+            $count = 0
+            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
+
+            for ($i = 0; $i -lt $count; $i++) {
+                try {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                } catch { }
+            }
+        }
+    } catch { }
+
+    return $null
+}
+
+function Ensure-QOTWindowName {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    try {
+        $existing = $Window.FindName($Name)
+        if ($existing) { return $existing }
+
+        $found = Find-QOTElementByName -Root $Window -Name $Name
+        if (-not $found) { return $null }
+
+        # Register into window NameScope so Window.FindName starts working
+        try {
+            $Window.RegisterName($Name, $found)
+        } catch { }
+
+        return $found
+    } catch {
+        return $null
+    }
+}
+
 function Start-QOTMainWindow {
     param(
         [Parameter(Mandatory)]
@@ -108,7 +164,13 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     try {
         $map = Get-QOTNamedElementsMap -Root $window
-        $wanted = @("AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton","SettingsHost","BtnSettings","MainTabControl","TabSettings")
+
+        $wanted = @(
+            "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton",
+            "SettingsHost","BtnSettings","MainTabControl","TabSettings",
+            "TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
+        )
+
         foreach ($k in $wanted) {
             if ($map.ContainsKey($k)) {
                 Write-QLog ("Found control: {0} ({1})" -f $k, $map[$k]) "DEBUG"
@@ -119,6 +181,22 @@ function Start-QOTMainWindow {
     } catch { }
 
     # ------------------------------------------------------------
+    # Ensure Tickets controls are registered into Window NameScope
+    # (Fixes Window.FindName returning null for elements inside tab/template scopes)
+    # ------------------------------------------------------------
+    try {
+        $tg  = Ensure-QOTWindowName -Window $window -Name "TicketsGrid"
+        $br  = Ensure-QOTWindowName -Window $window -Name "BtnRefreshTickets"
+        $bn  = Ensure-QOTWindowName -Window $window -Name "BtnNewTicket"
+        $bd  = Ensure-QOTWindowName -Window $window -Name "BtnDeleteTicket"
+
+        if (-not $tg) { try { Write-QLog "TicketsGrid could not be found in visual tree." "WARN" } catch { } }
+        if (-not $br) { try { Write-QLog "BtnRefreshTickets could not be found in visual tree." "WARN" } catch { } }
+        if (-not $bn) { try { Write-QLog "BtnNewTicket could not be found in visual tree." "WARN" } catch { } }
+        if (-not $bd) { try { Write-QLog "BtnDeleteTicket could not be found in visual tree." "WARN" } catch { } }
+    } catch { }
+
+    # ------------------------------------------------------------
     # Initialise Tickets UI
     # ------------------------------------------------------------
     if (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue) {
@@ -126,7 +204,7 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
-    # Initialise Apps UI (NEW: Apps.UI finds its own controls from Window)
+    # Initialise Apps UI
     # ------------------------------------------------------------
     try {
         if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
