@@ -32,16 +32,6 @@ function Write-QOTicketsUILog {
 
 Write-QOTicketsUILog "=== Tickets.UI.psm1 LOADED ==="
 
-# Debug: show which Tickets.UI.psm1 is actually being loaded
-if (-not $script:TicketsUiPathShown) {
-    $script:TicketsUiPathShown = $true
-    Write-QOTicketsUILog ("Tickets.UI path: " + $PSCommandPath)
-    [System.Windows.MessageBox]::Show(
-        "Tickets.UI loaded from:`r`n$PSCommandPath",
-        "Quinn Optimiser Toolkit"
-    ) | Out-Null
-}
-
 function Get-QOTicketsForGrid {
     param([Parameter(Mandatory)]$GetTicketsCmd)
 
