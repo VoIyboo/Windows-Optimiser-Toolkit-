@@ -199,4 +199,4 @@ function Initialize-QOTicketsUI {
     Refresh-QOTicketsGrid -Grid $script:TicketsGrid -GetTicketsCmd $getTicketsCmd
 }
 
-Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
+Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh, Refresh-QOTicketsGrid
