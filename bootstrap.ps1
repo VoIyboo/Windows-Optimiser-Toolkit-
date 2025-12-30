@@ -1,7 +1,7 @@
 # bootstrap.ps1
-# Remote-first bootstrap for: irm "<raw url>" | iex
-# Downloads fresh repo zip into TEMP, extracts clean, runs Intro.ps1 in Windows PowerShell (STA)
-# IMPORTANT: Only deletes the TEMP extraction folder, never touches user data in %LOCALAPPDATA%\StudioVoly\QuinnToolkit
+# Remote bootstrap for: irm "<raw url>" | iex
+# Downloads fresh zip into TEMP, extracts clean, runs Intro.ps1 in Windows PowerShell (STA)
+# NOTE: Only deletes TEMP extraction folder, never touches %LOCALAPPDATA%\StudioVoly\QuinnToolkit
 
 $ErrorActionPreference   = "Stop"
 $ProgressPreference      = "SilentlyContinue"
@@ -22,39 +22,41 @@ Start-Transcript -Path $bootstrapLog -Append | Out-Null
 try {
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
-    # -------------------------
-    # Repo settings
-    # -------------------------
+    # Optional: minimise current PowerShell window (no here-string, safe in one-line too)
+    try {
+        $cs = 'using System; using System.Runtime.InteropServices; public static class NativeMethods { [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'
+        Add-Type -TypeDefinition $cs -ErrorAction SilentlyContinue | Out-Null
+        $psWindowHandle = [IntPtr](Get-Process -Id $PID).MainWindowHandle
+        if ($psWindowHandle -ne [IntPtr]::Zero) {
+            [NativeMethods]::ShowWindow($psWindowHandle, 6) | Out-Null
+        }
+    } catch { }
+
     $repoOwner = "VoIyboo"
     $repoName  = "Windows-Optimiser-Toolkit-"
     $branch    = "main"
 
-    # -------------------------
-    # TEMP workspace
-    # -------------------------
-    $baseTemp = Join-Path $env:TEMP "QuinnOptimiserToolkit"
-    $zipPath  = Join-Path $baseTemp "repo.zip"
+    $baseTemp  = Join-Path $env:TEMP "QuinnOptimiserToolkit"
+    $zipPath   = Join-Path $baseTemp "repo.zip"
 
-    # Always wipe TEMP extraction folder to avoid stale code
+    # Wipe TEMP only (code cache), never user data
     if (Test-Path -LiteralPath $baseTemp) {
-        try {
-            Remove-Item -LiteralPath $baseTemp -Recurse -Force -ErrorAction Stop
-        } catch {
-            # Fallback if something locks the folder
-            $baseTemp = Join-Path $env:TEMP ("QuinnOptimiserToolkit_{0}" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-            $zipPath  = Join-Path $baseTemp "repo.zip"
-        }
+        Remove-Item -LiteralPath $baseTemp -Recurse -Force -ErrorAction SilentlyContinue
     }
     New-Item -ItemType Directory -Path $baseTemp -Force | Out-Null
 
-    # Cache bust so GitHub returns a fresh zip
     $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust"
+
+    Write-Host ""
+    Write-Host "Downloading Quinn Optimiser Toolkit..." -ForegroundColor Cyan
+    Write-Host "URL: $zipUrl"
+    Write-Host ""
 
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -Headers @{ "Cache-Control"="no-cache" } -UseBasicParsing | Out-Null
     Expand-Archive -Path $zipPath -DestinationPath $baseTemp -Force
 
-    # Locate extracted repo root
+    # Extracted folder name is usually like Windows-Optimiser-Toolkit--main
     $rootFolder = Get-ChildItem -LiteralPath $baseTemp -Directory |
         Where-Object { $_.Name -like "$repoName*" } |
         Select-Object -First 1
@@ -75,9 +77,6 @@ try {
 
     $introLog = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 
-    Set-Location -LiteralPath $toolkitRoot
-
-    Write-Host ""
     Write-Host "Toolkit root:  $toolkitRoot"
     Write-Host "Intro path:    $introPath"
     Write-Host "Intro log:     $introLog"
@@ -85,16 +84,17 @@ try {
     Write-Host "Data folder:   $($env:LOCALAPPDATA)\StudioVoly\QuinnToolkit (not touched)"
     Write-Host ""
 
+    Set-Location -LiteralPath $toolkitRoot
+
     # Always run WPF in Windows PowerShell (STA)
     $psExe = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
     & $psExe -NoProfile -ExecutionPolicy Bypass -STA -File $introPath -LogPath $introLog
 }
 catch {
     try {
-        $msg = $_.Exception.Message
-        [System.Windows.MessageBox]::Show("Bootstrap failed.`r`n$msg","Quinn Optimiser Toolkit") | Out-Null
+        Add-Type -AssemblyName PresentationFramework -ErrorAction SilentlyContinue | Out-Null
+        [System.Windows.MessageBox]::Show("Bootstrap failed.`r`n$($_.Exception.Message)","Quinn Optimiser Toolkit") | Out-Null
     } catch { }
-
     throw
 }
 finally {
