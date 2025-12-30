@@ -73,16 +73,16 @@
                                                   VerticalAlignment="Center" />
                             </Border>
 
-                                <!-- Content card -->
-                                <Border Grid.Row="1"
-                                        Margin="0,4,0,0"
-                                        Background="{TemplateBinding Background}"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="{TemplateBinding BorderThickness}">
-                                    <ContentPresenter Margin="12,10,12,10"
-                                                      HorizontalAlignment="Stretch"
-                                                      VerticalAlignment="Stretch" />
-                                </Border>
+                            <!-- Content card -->
+                            <Border Grid.Row="1"
+                                    Margin="0,4,0,0"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                <ContentPresenter Margin="12,10,12,10"
+                                                  HorizontalAlignment="Stretch"
+                                                  VerticalAlignment="Stretch" />
+                            </Border>
                         </Grid>
                     </ControlTemplate>
                 </Setter.Value>
@@ -136,6 +136,8 @@
             <Setter Property="CanUserDeleteRows" Value="False" />
             <Setter Property="RowBackground" Value="#020617" />
             <Setter Property="AlternatingRowBackground" Value="#020617" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
@@ -243,58 +245,62 @@
                         <GroupBox Header="Cleaning &amp; Maintenance"
                                   Grid.Column="0"
                                   Margin="0,0,8,0">
-                            <StackPanel Margin="4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="4">
 
-                                <TextBlock Text="Storage cleanup" Style="{StaticResource SectionHeading}" />
-                                <CheckBox x:Name="CbCleanTempFiles" Content="Clear temporary files" />
-                                <CheckBox x:Name="CbEmptyRecycleBin" Content="Empty Recycle Bin" />
-                                <CheckBox x:Name="CbCleanDoCache" Content="Clean Delivery Optimisation cache" />
-                                <CheckBox x:Name="CbCleanWuCache" Content="Clear Windows Update cache" />
-                                <CheckBox x:Name="CbCleanThumbCache" Content="Clean thumbnail cache" />
+                                    <TextBlock Text="Storage cleanup" Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbCleanTempFiles" Content="Clear temporary files" />
+                                    <CheckBox x:Name="CbEmptyRecycleBin" Content="Empty Recycle Bin" />
+                                    <CheckBox x:Name="CbCleanDoCache" Content="Clean Delivery Optimisation cache" />
+                                    <CheckBox x:Name="CbCleanWuCache" Content="Clear Windows Update cache" />
+                                    <CheckBox x:Name="CbCleanThumbCache" Content="Clean thumbnail cache" />
 
-                                <Separator />
+                                    <Separator />
 
-                                <TextBlock Text="Windows housekeeping" Style="{StaticResource SectionHeading}" />
-                                <CheckBox x:Name="CbCleanErrorLogs" Content="Clean old error logs and crash dumps" />
-                                <CheckBox x:Name="CbCleanSetupLeftovers" Content="Remove safe setup / upgrade leftovers" />
-                                <CheckBox x:Name="CbClearStoreCache" Content="Clear Microsoft Store cache" />
+                                    <TextBlock Text="Windows housekeeping" Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbCleanErrorLogs" Content="Clean old error logs and crash dumps" />
+                                    <CheckBox x:Name="CbCleanSetupLeftovers" Content="Remove safe setup / upgrade leftovers" />
+                                    <CheckBox x:Name="CbClearStoreCache" Content="Clear Microsoft Store cache" />
 
-                                <Separator />
+                                    <Separator />
 
-                                <TextBlock Text="Browser cleanup (light)" Style="{StaticResource SectionHeading}" />
-                                <CheckBox x:Name="CbEdgeLightCleanup" Content="Light clean of Microsoft Edge cache" />
-                                <CheckBox x:Name="CbChromeLightCleanup" Content="Light clean of Chrome / Chromium cache" />
+                                    <TextBlock Text="Browser cleanup (light)" Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbEdgeLightCleanup" Content="Light clean of Microsoft Edge cache" />
+                                    <CheckBox x:Name="CbChromeLightCleanup" Content="Light clean of Chrome / Chromium cache" />
 
-                            </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
                         </GroupBox>
 
                         <GroupBox Header="Tweaks &amp; Privacy"
                                   Grid.Column="1"
                                   Margin="8,0,0,0">
-                            <StackPanel Margin="4">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="4">
 
-                                <TextBlock Text="Start menu &amp; recommendations" Style="{StaticResource SectionHeading}" />
-                                <CheckBox x:Name="CbDisableStartRecommended" Content="Hide Start menu recommended items" />
-                                <CheckBox x:Name="CbDisableSuggestedApps" Content="Turn off suggested apps and promotions" />
-                                <CheckBox x:Name="CbDisableTipsStart" Content="Disable tips and suggestions in Start" />
-                                <CheckBox x:Name="CbDisableBingSearch" Content="Turn off Bing / web results in Start search" />
-                                <CheckBox x:Name="CbClassicMoreOptions" Content="Use classic 'More options' right-click menu" />
+                                    <TextBlock Text="Start menu &amp; recommendations" Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbDisableStartRecommended" Content="Hide Start menu recommended items" />
+                                    <CheckBox x:Name="CbDisableSuggestedApps" Content="Turn off suggested apps and promotions" />
+                                    <CheckBox x:Name="CbDisableTipsStart" Content="Disable tips and suggestions in Start" />
+                                    <CheckBox x:Name="CbDisableBingSearch" Content="Turn off Bing / web results in Start search" />
+                                    <CheckBox x:Name="CbClassicMoreOptions" Content="Use classic 'More options' right-click menu" />
 
-                                <Separator />
+                                    <Separator />
 
-                                <TextBlock Text="Taskbar &amp; widgets" Style="{StaticResource SectionHeading}" />
-                                <CheckBox x:Name="CbDisableWidgets" Content="Turn off Widgets" />
-                                <CheckBox x:Name="CbDisableTaskbarNews" Content="Turn off News / taskbar content" />
-                                <CheckBox x:Name="CbDisableMeetNow" Content="Hide legacy Meet Now button (if present)" />
+                                    <TextBlock Text="Taskbar &amp; widgets" Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbDisableWidgets" Content="Turn off Widgets" />
+                                    <CheckBox x:Name="CbDisableTaskbarNews" Content="Turn off News / taskbar content" />
+                                    <CheckBox x:Name="CbDisableMeetNow" Content="Hide legacy Meet Now button (if present)" />
 
-                                <Separator />
+                                    <Separator />
 
-                                <TextBlock Text="Privacy &amp; telemetry (safe level)" Style="{StaticResource SectionHeading}" />
-                                <CheckBox x:Name="CbDisableAdvertisingId" Content="Turn off advertising ID" />
-                                <CheckBox x:Name="CbLimitFeedbackPrompts" Content="Reduce feedback and survey prompts" />
-                                <CheckBox x:Name="CbDisableOnlineTips" Content="Disable online tips and suggestions" />
+                                    <TextBlock Text="Privacy &amp; telemetry (safe level)" Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbDisableAdvertisingId" Content="Turn off advertising ID" />
+                                    <CheckBox x:Name="CbLimitFeedbackPrompts" Content="Reduce feedback and survey prompts" />
+                                    <CheckBox x:Name="CbDisableOnlineTips" Content="Disable online tips and suggestions" />
 
-                            </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
                         </GroupBox>
 
                     </Grid>
@@ -365,7 +371,12 @@
                                   Grid.Column="1"
                                   Margin="8,0,0,0">
                             <Grid Margin="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
                                 <DataGrid x:Name="InstallGrid"
+                                          Grid.Row="0"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
                                           IsReadOnly="False"
@@ -506,9 +517,8 @@
                             </GroupBox.Header>
 
                             <Grid Margin="4">
-
                                 <DataGrid x:Name="TicketsGrid"
-                                          Margin="0,4,0,8"
+                                          Margin="0,4,0,0"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
                                           IsReadOnly="False"
@@ -562,7 +572,6 @@
                                     </DataGrid.Columns>
 
                                 </DataGrid>
-
                             </Grid>
                         </GroupBox>
                     </Grid>
