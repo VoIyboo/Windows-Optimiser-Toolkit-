@@ -5,6 +5,12 @@ $ErrorActionPreference = "Stop"
 
 # Import Settings
 Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
+try {
+    Import-Module (Join-Path $PSScriptRoot "Tickets.Outlook.psm1") -Force -ErrorAction Stop
+} catch {
+    # Outlook integration is optional
+}
+
 
 # =====================================================================
 # Script state
