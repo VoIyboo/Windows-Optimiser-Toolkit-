@@ -328,7 +328,20 @@ function Add-QOTicketFromEmail {
 # Sync stub (so UI can call it without exploding)
 # =====================================================================
 function Sync-QOTicketsFromEmail {
-    return $null
+    param(
+        [int]$MaxPerMailbox = 50,
+        [switch]$MarkAsRead
+    )
+
+    # If Outlook sync exists, use it
+    if (Get-Command Sync-QOTicketsFromOutlook -ErrorAction SilentlyContinue) {
+        return Sync-QOTicketsFromOutlook -MaxPerMailbox $MaxPerMailbox -MarkAsRead:$MarkAsRead
+    }
+
+    return [pscustomobject]@{
+        Added = 0
+        Note  = "Outlook sync function not loaded."
+    }
 }
 
 Export-ModuleMember -Function `
