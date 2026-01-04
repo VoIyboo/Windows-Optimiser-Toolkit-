@@ -86,7 +86,7 @@ function Sync-QOTicketsFromOutlook {
         [string]$ProcessedCategory = "QOT Imported"
     )
 
-    $mailboxes = Get-QOMonitoredMailboxAddresses
+    $mailboxes = Get-QOTMonitoredMailboxAddresses
     if (-not $mailboxes -or $mailboxes.Count -eq 0) {
         return [pscustomobject]@{ Added = 0; Note = "No monitored mailbox addresses set." }
     }
