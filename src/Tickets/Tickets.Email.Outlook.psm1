@@ -91,10 +91,13 @@ function Sync-QOTicketsFromOutlook {
         return [pscustomobject]@{ Added = 0; Note = "No monitored mailbox addresses set." }
     }
 
-    $existing = Get-QOTickets
+    $existingDb = Get-QOTickets
     $existingIds = New-Object 'System.Collections.Generic.HashSet[string]'
-    foreach ($t in @($existing)) {
-        if ($t.SourceMessageId) { [void]$existingIds.Add([string]$t.SourceMessageId) }
+    
+    foreach ($t in @($existingDb.Tickets)) {
+        try {
+            if ($t.SourceMessageId) { [void]$existingIds.Add([string]$t.SourceMessageId) }
+        } catch { }
     }
 
     $mapi = Get-QOTOutlookNamespace
