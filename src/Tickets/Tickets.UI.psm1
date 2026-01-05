@@ -81,14 +81,23 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
 
     try {
         if ($SyncCmd) {
-            & $SyncCmd | Out-Null
-            Write-QOTicketsUILog "Tickets: Email sync finished"
+            $result = & $SyncCmd
+            $note   = ""
+            $added  = 0
+
+            try { if ($result.PSObject.Properties.Name -contains "Note")  { $note  = [string]$result.Note } } catch { }
+            try { if ($result.PSObject.Properties.Name -contains "Added") { $added = [int]$result.Added } } catch { }
+
+            Write-QOTicketsUILog ("Tickets: Email sync finished. Added=$added. Note=$note")
+            [System.Windows.MessageBox]::Show("Email sync finished.`r`nAdded: $added`r`n$note") | Out-Null
         } else {
             Write-QOTicketsUILog "Tickets: Sync command not available (skipping)" "WARN"
+            [System.Windows.MessageBox]::Show("Email sync not available (Sync command missing).") | Out-Null
         }
     }
     catch {
         Write-QOTicketsUILog ("Tickets: Email sync failed: " + $_.Exception.Message) "ERROR"
+        [System.Windows.MessageBox]::Show("Email sync failed.`r`n$($_.Exception.Message)") | Out-Null
     }
 
     Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd
