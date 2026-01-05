@@ -73,19 +73,25 @@ function Convert-QOTMailItemToTicket {
 
     $sourceId = if ($internetId) { $internetId } else { $entryId }
 
+        $sourceId = if ($internetId) { $internetId } else { $entryId }
+
     return [pscustomobject]@{
         Id              = (New-Guid).Guid
-        CreatedUtc      = (Get-Date).ToUniversalTime().ToString("o")
+
+        # Match the core schema so the grid displays properly
+        Title           = if ($subject) { $subject } else { "(No subject)" }
+        CreatedAt       = $received.ToString("yyyy-MM-dd HH:mm:ss")
+        Status          = "New"
+        Priority        = "Normal"
+
+        # Source and email metadata for UI
         Source          = "Outlook"
         SourceMailbox   = $MailboxAddress
         SourceMessageId = $sourceId
-        From            = $from
-        Title           = if ($subject) { $subject } else { "(No subject)" }
-        Body            = $body
-        ReceivedLocal   = $received.ToString("o")
-        Status          = "New"
+        EmailFrom       = $from
+        EmailReceived   = $received.ToString("yyyy-MM-dd HH:mm:ss")
+        EmailBody       = $body
     }
-}
 
 function Sync-QOTicketsFromOutlook {
     param(
