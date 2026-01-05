@@ -291,7 +291,8 @@
                        Foreground="{StaticResource TextSubtle}"
                        FontSize="12" />
 
-            <Border Height="16" Background="Transparent" />
+            <Border Height="16"
+                    Background="Transparent" />
 
         </StackPanel>
 
