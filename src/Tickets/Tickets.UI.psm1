@@ -82,22 +82,19 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
     try {
         if ($SyncCmd) {
             $result = & $SyncCmd
-            $note   = ""
-            $added  = 0
 
-            try { if ($result.PSObject.Properties.Name -contains "Note")  { $note  = [string]$result.Note } } catch { }
-            try { if ($result.PSObject.Properties.Name -contains "Added") { $added = [int]$result.Added } } catch { }
+            $note  = ""
+            $added = 0
+            try { if ($result -and ($result.PSObject.Properties.Name -contains "Note"))  { $note  = [string]$result.Note } } catch { }
+            try { if ($result -and ($result.PSObject.Properties.Name -contains "Added")) { $added = [int]$result.Added } } catch { }
 
             Write-QOTicketsUILog ("Tickets: Email sync finished. Added=$added. Note=$note")
-            [System.Windows.MessageBox]::Show("Email sync finished.`r`nAdded: $added`r`n$note") | Out-Null
         } else {
             Write-QOTicketsUILog "Tickets: Sync command not available (skipping)" "WARN"
-            [System.Windows.MessageBox]::Show("Email sync not available (Sync command missing).") | Out-Null
         }
     }
     catch {
         Write-QOTicketsUILog ("Tickets: Email sync failed: " + $_.Exception.Message) "ERROR"
-        [System.Windows.MessageBox]::Show("Email sync failed.`r`n$($_.Exception.Message)") | Out-Null
     }
 
     Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd
@@ -151,7 +148,7 @@ function Initialize-QOTicketsUI {
     } catch { }
 
     try { if ($script:TicketsRefreshHandler) { $btnRefresh.Remove_Click($script:TicketsRefreshHandler) } } catch { }
-    try { if ($script:TicketsNewHandler)     { $btnNew.Remove_Click($script:TicketsNewHandler) } } catch { }
+    try { if ($script:TicketsNewHandler)     { $btnNew.Remove_Click($script:TicketsNewHandler) } catch { } }
     try { if ($script:TicketsDeleteHandler)  { $btnDelete.Remove_Click($script:TicketsDeleteHandler) } } catch { }
 
     $script:TicketsLoadedHandler = [System.Windows.RoutedEventHandler]{
