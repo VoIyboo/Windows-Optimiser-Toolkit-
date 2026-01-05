@@ -48,6 +48,53 @@ function Get-QOTMailboxInboxFolder {
     }
 }
 
+# ---------------------------------------------------------------------
+# Watermark: only sync emails newer than last successful sync
+# Stored in Settings: Tickets.EmailIntegration.LastSyncUtc
+# ---------------------------------------------------------------------
+function Get-QOTLastEmailSyncUtc {
+    try {
+        $s = Get-QOSettings
+        if ($s -and $s.PSObject.Properties.Name -contains "Tickets") {
+            $t = $s.Tickets
+            if ($t -and $t.PSObject.Properties.Name -contains "EmailIntegration") {
+                $ei = $t.EmailIntegration
+                if ($ei -and $ei.PSObject.Properties.Name -contains "LastSyncUtc") {
+                    $v = [string]$ei.LastSyncUtc
+                    if (-not [string]::IsNullOrWhiteSpace($v)) {
+                        return ([datetime]::Parse($v)).ToUniversalTime()
+                    }
+                }
+            }
+        }
+    } catch { }
+
+    return [datetime]"1970-01-01T00:00:00Z"
+}
+
+function Set-QOTLastEmailSyncUtc {
+    param(
+        [Parameter(Mandatory)]
+        [datetime]$UtcTime
+    )
+
+    try {
+        $s = Get-QOSettings
+        if (-not $s) { return }
+
+        if ($s.PSObject.Properties.Name -notcontains "Tickets") {
+            $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+
+        if ($s.Tickets.PSObject.Properties.Name -notcontains "EmailIntegration") {
+            $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+
+        $s.Tickets.EmailIntegration.LastSyncUtc = $UtcTime.ToUniversalTime().ToString("o")
+        Save-QOSettings -Settings $s
+    } catch { }
+}
+
 function Convert-QOTMailItemToTicket {
     param(
         [Parameter(Mandatory)] [string]$MailboxAddress,
@@ -81,7 +128,7 @@ function Convert-QOTMailItemToTicket {
 
     $sourceId = if ($internetId) { $internetId } else { $entryId }
 
-    # Clean up noisy subjects (keeps the list tidy)
+    # Clean up noisy subjects
     $cleanTitle = ($subject + "").Trim()
     if ($cleanTitle) {
         $cleanTitle = $cleanTitle -replace '^(RE|FW|FWD):\s*', ''
@@ -104,7 +151,6 @@ function Convert-QOTMailItemToTicket {
     return [pscustomobject]@{
         Id              = ([guid]::NewGuid().ToString())
 
-        # Grid friendly fields
         Title           = $cleanTitle
         Created         = $createdStr
         CreatedAt       = $createdStr
@@ -123,7 +169,7 @@ function Convert-QOTMailItemToTicket {
 
 function Sync-QOTicketsFromOutlook {
     param(
-        [int]$MaxPerMailbox = 50,
+        [int]$MaxPerMailbox = 200,
         [switch]$MarkAsRead,
         [string]$ProcessedCategory = "QOT Imported"
     )
@@ -142,6 +188,7 @@ function Sync-QOTicketsFromOutlook {
         } catch { }
     }
 
+    $lastSyncUtc = Get-QOTLastEmailSyncUtc
     $mapi  = Get-QOTOutlookNamespace
     $added = 0
 
@@ -150,6 +197,14 @@ function Sync-QOTicketsFromOutlook {
 
         $items = $inbox.Items
         try { $items.Sort("[ReceivedTime]", $true) } catch { }
+
+        # Restrict to only new emails since last sync (Outlook expects local time formatting)
+        $localCutoff = $lastSyncUtc.ToLocalTime().ToString("g")
+        $filter = "[ReceivedTime] > '$localCutoff'"
+
+        try {
+            $items = $items.Restrict($filter)
+        } catch { }
 
         $count = 0
         foreach ($item in @($items)) {
@@ -189,7 +244,10 @@ function Sync-QOTicketsFromOutlook {
         }
     }
 
-    return [pscustomobject]@{ Added = $added; Note = "Sync complete." }
+    # Only update watermark after completing all mailboxes
+    Set-QOTLastEmailSyncUtc -UtcTime (Get-Date)
+
+    return [pscustomobject]@{ Added = $added; Note = ("Sync complete. CutoffUtc=" + $lastSyncUtc.ToString("o")) }
 }
 
 Export-ModuleMember -Function Sync-QOTicketsFromOutlook
