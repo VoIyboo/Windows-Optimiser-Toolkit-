@@ -66,15 +66,13 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Modern dark DatePicker styling (textbox + drop button + popup calendar) -->
+        <!-- Modern dark DatePicker styling (safe hosted version) -->
         <Style TargetType="DatePicker">
             <Setter Property="Foreground" Value="#E5E7EB" />
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="10,0" />
             <Setter Property="Height" Value="36" />
-            <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="DatePicker">
@@ -96,8 +94,8 @@
                                                        Background="Transparent"
                                                        Foreground="{TemplateBinding Foreground}"
                                                        BorderThickness="0"
-                                                       VerticalContentAlignment="Center"
                                                        Padding="10,0"
+                                                       VerticalContentAlignment="Center"
                                                        Focusable="True" />
 
                                     <Button x:Name="PART_Button"
@@ -163,6 +161,7 @@
                                                                 <ContentPresenter HorizontalAlignment="Center"
                                                                                   VerticalAlignment="Center" />
                                                             </Border>
+
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
                                                                     <Setter TargetName="DayBd" Property="Background" Value="#0F172A" />
@@ -193,11 +192,6 @@
                                                 </Setter>
                                             </Style>
 
-                                            <Style TargetType="CalendarDayButton"
-                                                   x:Key="{x:Static Calendar.DayButtonStyleKey}">
-                                                <Setter Property="Foreground" Value="#9CA3AF" />
-                                            </Style>
-
                                         </Calendar.Resources>
                                     </Calendar>
                                 </Border>
@@ -220,9 +214,7 @@
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Disabled"
-                  Margin="0"
-                  Padding="0">
+                  HorizontalScrollBarVisibility="Disabled">
 
         <StackPanel Margin="16"
                     HorizontalAlignment="Left"
