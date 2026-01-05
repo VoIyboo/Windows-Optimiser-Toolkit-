@@ -3,6 +3,14 @@
 
 $ErrorActionPreference = "Stop"
 
+# Import core tickets module so this module can call:
+# Get-QOTMonitoredMailboxAddresses, Get-QOTickets, Add-QOTicket
+try {
+    Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1") -Force -ErrorAction Stop
+} catch {
+    throw ("Failed to import Core Tickets module: " + $_.Exception.Message)
+}
+
 if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
     throw "PowerShell is not running in STA mode. Launch with: powershell.exe -STA"
 }
