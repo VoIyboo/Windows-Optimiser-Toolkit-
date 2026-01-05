@@ -81,20 +81,42 @@ function Convert-QOTMailItemToTicket {
 
     $sourceId = if ($internetId) { $internetId } else { $entryId }
 
+    # Clean up noisy subjects (keeps the list tidy)
+    $cleanTitle = ($subject + "").Trim()
+    if ($cleanTitle) {
+        $cleanTitle = $cleanTitle -replace '^(RE|FW|FWD):\s*', ''
+        $cleanTitle = $cleanTitle -replace '\*\*DO NOT REPLY\*\*', ''
+        $cleanTitle = $cleanTitle.Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($cleanTitle)) {
+        $cleanTitle = "(No subject)"
+    }
+
+    # Optional: basic priority hints
+    $priority = "Normal"
+    try {
+        if ($cleanTitle -match '(?i)\b(urgent|asap|immediately|critical|sev)\b') { $priority = "High" }
+        elseif ($cleanTitle -match '(?i)\b(password|login|access|mfa|2fa|locked)\b') { $priority = "High" }
+    } catch { }
+
+    $createdStr = $received.ToString("yyyy-MM-dd HH:mm:ss")
+
     return [pscustomobject]@{
         Id              = ([guid]::NewGuid().ToString())
 
-        Title           = if ($subject) { $subject } else { "(No subject)" }
-        CreatedAt       = $received.ToString("yyyy-MM-dd HH:mm:ss")
+        # Grid friendly fields
+        Title           = $cleanTitle
+        Created         = $createdStr
+        CreatedAt       = $createdStr
         Status          = "New"
-        Priority        = "Normal"
+        Priority        = $priority
 
         Source          = "Outlook"
         SourceMailbox   = $MailboxAddress
         SourceMessageId = $sourceId
 
         EmailFrom       = if ($from) { $from } else { "Unknown sender" }
-        EmailReceived   = $received.ToString("yyyy-MM-dd HH:mm:ss")
+        EmailReceived   = $createdStr
         EmailBody       = $body
     }
 }
@@ -105,9 +127,6 @@ function Sync-QOTicketsFromOutlook {
         [switch]$MarkAsRead,
         [string]$ProcessedCategory = "QOT Imported"
     )
-
-    # This function relies on Core\Tickets.psm1 providing:
-    # Get-QOTMonitoredMailboxAddresses, Get-QOTickets, Add-QOTicket
 
     $mailboxes = Get-QOTMonitoredMailboxAddresses
     if (-not $mailboxes -or $mailboxes.Count -eq 0) {
