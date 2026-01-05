@@ -36,6 +36,29 @@
             </Setter>
         </Style>
 
+        <Style x:Key="IconButtonGhost" TargetType="Button">
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="Height" Value="34" />
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
@@ -65,152 +88,6 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-
-        <!-- Modern dark DatePicker styling (safe hosted version) -->
-        <Style TargetType="DatePicker">
-            <Setter Property="Foreground" Value="#E5E7EB" />
-            <Setter Property="Background" Value="{StaticResource CardBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Height" Value="36" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="DatePicker">
-                        <Grid>
-                            <Border x:Name="Bd"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="8"
-                                    SnapsToDevicePixels="True">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition />
-                                        <ColumnDefinition Width="44" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <DatePickerTextBox x:Name="PART_TextBox"
-                                                       Grid.Column="0"
-                                                       Background="Transparent"
-                                                       Foreground="{TemplateBinding Foreground}"
-                                                       BorderThickness="0"
-                                                       Padding="10,0"
-                                                       VerticalContentAlignment="Center"
-                                                       Focusable="True" />
-
-                                    <Button x:Name="PART_Button"
-                                            Grid.Column="1"
-                                            Focusable="False"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Cursor="Hand">
-                                        <Grid Width="44" Height="34">
-                                            <Border Margin="6,4,6,4"
-                                                    Background="#0B1220"
-                                                    CornerRadius="7"
-                                                    BorderBrush="#1F2937"
-                                                    BorderThickness="1" />
-                                            <TextBlock Text="&#xE787;"
-                                                       FontFamily="Segoe MDL2 Assets"
-                                                       FontSize="16"
-                                                       Foreground="#E5E7EB"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
-                                        </Grid>
-                                    </Button>
-                                </Grid>
-                            </Border>
-
-                            <Popup x:Name="PART_Popup"
-                                   Placement="Bottom"
-                                   StaysOpen="False"
-                                   AllowsTransparency="True"
-                                   PopupAnimation="Fade">
-                                <Border Background="#0B1220"
-                                        BorderBrush="#1F2937"
-                                        BorderThickness="1"
-                                        CornerRadius="12"
-                                        Padding="10"
-                                        SnapsToDevicePixels="True">
-                                    <Calendar x:Name="PART_Calendar"
-                                              Background="#0B1220"
-                                              Foreground="#E5E7EB"
-                                              BorderThickness="0"
-                                              SelectionMode="SingleDate"
-                                              IsTodayHighlighted="True">
-                                        <Calendar.Resources>
-
-                                            <Style TargetType="CalendarDayButton">
-                                                <Setter Property="Foreground" Value="#E5E7EB" />
-                                                <Setter Property="Background" Value="Transparent" />
-                                                <Setter Property="BorderBrush" Value="Transparent" />
-                                                <Setter Property="BorderThickness" Value="0" />
-                                                <Setter Property="Padding" Value="0" />
-                                                <Setter Property="Template">
-                                                    <Setter.Value>
-                                                        <ControlTemplate TargetType="CalendarDayButton">
-                                                            <Border x:Name="DayBd"
-                                                                    CornerRadius="18"
-                                                                    Background="{TemplateBinding Background}"
-                                                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                                                    Width="36"
-                                                                    Height="36"
-                                                                    HorizontalAlignment="Center"
-                                                                    VerticalAlignment="Center">
-                                                                <ContentPresenter HorizontalAlignment="Center"
-                                                                                  VerticalAlignment="Center" />
-                                                            </Border>
-
-                                                            <ControlTemplate.Triggers>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="DayBd" Property="Background" Value="#0F172A" />
-                                                                    <Setter TargetName="DayBd" Property="BorderBrush" Value="#1F2937" />
-                                                                    <Setter TargetName="DayBd" Property="BorderThickness" Value="1" />
-                                                                </Trigger>
-
-                                                                <Trigger Property="IsSelected" Value="True">
-                                                                    <Setter TargetName="DayBd" Property="Background" Value="#2563EB" />
-                                                                    <Setter Property="Foreground" Value="White" />
-                                                                </Trigger>
-
-                                                                <Trigger Property="IsToday" Value="True">
-                                                                    <Setter TargetName="DayBd" Property="BorderBrush" Value="#2563EB" />
-                                                                    <Setter TargetName="DayBd" Property="BorderThickness" Value="1" />
-                                                                </Trigger>
-
-                                                                <Trigger Property="IsInactive" Value="True">
-                                                                    <Setter Property="Foreground" Value="#6B7280" />
-                                                                </Trigger>
-
-                                                                <Trigger Property="IsBlackout" Value="True">
-                                                                    <Setter Property="Foreground" Value="#374151" />
-                                                                </Trigger>
-                                                            </ControlTemplate.Triggers>
-                                                        </ControlTemplate>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Style>
-
-                                        </Calendar.Resources>
-                                    </Calendar>
-                                </Border>
-                            </Popup>
-                        </Grid>
-
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.5" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#2563EB" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -283,8 +160,27 @@
                     Opacity="0.25"
                     Margin="0,0,0,14" />
 
-            <DatePicker x:Name="DpEmailCutoff"
-                        ToolTip="Used for the first email sync only. After that, only new emails are imported." />
+            <DockPanel LastChildFill="True">
+                <Button x:Name="BtnPickEmailCutoff"
+                        DockPanel.Dock="Right"
+                        Style="{StaticResource IconButtonGhost}"
+                        ToolTip="Pick date"
+                        Margin="10,0,0,0">
+                    <TextBlock FontFamily="Segoe MDL2 Assets"
+                               FontSize="16"
+                               Text="&#xE787;" />
+                </Button>
+
+                <TextBox x:Name="TxtEmailCutoff"
+                         IsReadOnly="True"
+                         ToolTip="Used for the first email sync only. After that, only new emails are imported." />
+            </DockPanel>
+
+            <TextBlock x:Name="LblEmailCutoffHint"
+                       Margin="0,8,0,0"
+                       Foreground="{StaticResource TextSubtle}"
+                       FontSize="12"
+                       Text="Email sync start date will follow today's date until you choose one." />
 
             <TextBlock x:Name="LblHint"
                        Margin="0,12,0,0"
