@@ -3,6 +3,10 @@ $ErrorActionPreference = "Stop"
 Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot "..\Tickets.psm1")  -Force -ErrorAction Stop
 
+if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
+    throw "PowerShell is not running in STA mode. Close this window and open PowerShell using: powershell.exe -STA"
+}
+
 function Get-QOTOutlookNamespace {
     try {
         $outlook = New-Object -ComObject Outlook.Application
