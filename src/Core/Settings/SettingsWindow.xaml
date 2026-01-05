@@ -73,82 +73,93 @@
         </Style>
     </Window.Resources>
 
-    <StackPanel Margin="16"
-                HorizontalAlignment="Left"
-                Width="460">
+    <!-- KEY FIX: ScrollViewer so hosted view can scroll inside MainWindow -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Margin="0"
+                  Padding="0">
 
-        <TextBlock Text="Monitored mailbox addresses"
-                   Foreground="White"
-                   FontSize="14"
-                   FontWeight="SemiBold"
-                   Margin="0,0,0,8" />
+        <StackPanel Margin="16"
+                    HorizontalAlignment="Left"
+                    Width="460">
 
-        <Border Height="1"
-                Background="{StaticResource LineBrush}"
-                Opacity="0.25"
-                Margin="0,0,0,14" />
+            <TextBlock Text="Monitored mailbox addresses"
+                       Foreground="White"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,0,0,8" />
 
-        <DockPanel LastChildFill="True"
-                   Margin="0,0,0,14">
+            <Border Height="1"
+                    Background="{StaticResource LineBrush}"
+                    Opacity="0.25"
+                    Margin="0,0,0,14" />
 
-            <StackPanel DockPanel.Dock="Right"
-                        Orientation="Horizontal">
+            <DockPanel LastChildFill="True"
+                       Margin="0,0,0,14">
 
-                <Button x:Name="BtnAdd"
-                        Style="{StaticResource IconButton}"
-                        Margin="0,0,6,0"
-                        ToolTip="Add address">
-                    <TextBlock FontFamily="Segoe MDL2 Assets"
-                               FontSize="16"
-                               Text="&#xE710;" />
-                </Button>
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal">
 
-                <Button x:Name="BtnRemove"
-                        Style="{StaticResource IconButton}"
-                        ToolTip="Remove selected address">
-                    <TextBlock FontFamily="Segoe MDL2 Assets"
-                               FontSize="16"
-                               Text="&#xE74D;" />
-                </Button>
+                    <Button x:Name="BtnAdd"
+                            Style="{StaticResource IconButton}"
+                            Margin="0,0,6,0"
+                            ToolTip="Add address">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Text="&#xE710;" />
+                    </Button>
 
-            </StackPanel>
+                    <Button x:Name="BtnRemove"
+                            Style="{StaticResource IconButton}"
+                            ToolTip="Remove selected address">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Text="&#xE74D;" />
+                    </Button>
 
-            <TextBox x:Name="TxtEmail"
-                     ToolTip="Enter an email address" />
-        </DockPanel>
+                </StackPanel>
 
-        <Border Background="{StaticResource CardBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="8">
+                <TextBox x:Name="TxtEmail"
+                         ToolTip="Enter an email address" />
+            </DockPanel>
 
-            <ListBox x:Name="LstEmails"
-                     MinHeight="190"
-                     BorderThickness="0"
-                     Background="Transparent" />
-        </Border>
+            <Border Background="{StaticResource CardBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="8">
 
-        <TextBlock Text="Email sync start date"
-                   Foreground="White"
-                   FontSize="14"
-                   FontWeight="SemiBold"
-                   Margin="0,16,0,8" />
+                <ListBox x:Name="LstEmails"
+                         MinHeight="190"
+                         BorderThickness="0"
+                         Background="Transparent" />
+            </Border>
 
-        <Border Height="1"
-                Background="{StaticResource LineBrush}"
-                Opacity="0.25"
-                Margin="0,0,0,14" />
+            <TextBlock Text="Email sync start date"
+                       Foreground="White"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Margin="0,16,0,8" />
 
-        <DatePicker x:Name="DpEmailCutoff"
-                    ToolTip="Used for the first email sync only. After that, only new emails are imported."
-                    Background="{StaticResource CardBrush}"
-                    Foreground="White" />
+            <Border Height="1"
+                    Background="{StaticResource LineBrush}"
+                    Opacity="0.25"
+                    Margin="0,0,0,14" />
 
-        <TextBlock x:Name="LblHint"
-                   Margin="0,12,0,0"
-                   Foreground="{StaticResource TextSubtle}"
-                   FontSize="12" />
+            <DatePicker x:Name="DpEmailCutoff"
+                        ToolTip="Used for the first email sync only. After that, only new emails are imported."
+                        Background="{StaticResource CardBrush}"
+                        Foreground="White" />
 
-    </StackPanel>
+            <TextBlock x:Name="LblHint"
+                       Margin="0,12,0,0"
+                       Foreground="{StaticResource TextSubtle}"
+                       FontSize="12" />
+
+            <!-- Little bottom padding so last control isn't flush -->
+            <Border Height="16" Background="Transparent" />
+
+        </StackPanel>
+
+    </ScrollViewer>
 </Window>
