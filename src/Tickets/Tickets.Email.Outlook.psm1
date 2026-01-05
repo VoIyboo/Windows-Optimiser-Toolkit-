@@ -1,17 +1,13 @@
+# src\Tickets\Tickets.Email.Outlook.psm1
+# Outlook COM sync for QOT tickets (NO UI CODE)
+
 $ErrorActionPreference = "Stop"
 
-Import-Module (Join-Path $PSScriptRoot "..\Settings.psm1") -Force -ErrorAction Stop
-Import-Module (Join-Path $PSScriptRoot "..\Tickets.psm1")  -Force -ErrorAction Stop
-
 if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
-    throw "PowerShell is not running in STA mode. Close this window and open PowerShell using: powershell.exe -STA"
+    throw "PowerShell is not running in STA mode. Launch with: powershell.exe -STA"
 }
 
 function Get-QOTOutlookNamespace {
-    if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
-        throw "PowerShell is not running in STA mode. Launch with: powershell.exe -STA"
-    }
-
     try {
         $outlook = New-Object -ComObject Outlook.Application
         return $outlook.GetNamespace("MAPI")
@@ -69,29 +65,31 @@ function Convert-QOTMailItemToTicket {
     try { $entryId = [string]$MailItem.EntryID } catch { }
 
     $internetId = ""
-    try { $internetId = [string]$MailItem.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/InternetMessageId") } catch { }
+    try {
+        $internetId = [string]$MailItem.PropertyAccessor.GetProperty(
+            "http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/InternetMessageId"
+        )
+    } catch { }
 
     $sourceId = if ($internetId) { $internetId } else { $entryId }
 
-        $sourceId = if ($internetId) { $internetId } else { $entryId }
-
     return [pscustomobject]@{
-        Id              = (New-Guid).Guid
+        Id              = ([guid]::NewGuid().ToString())
 
-        # Match the core schema so the grid displays properly
         Title           = if ($subject) { $subject } else { "(No subject)" }
         CreatedAt       = $received.ToString("yyyy-MM-dd HH:mm:ss")
         Status          = "New"
         Priority        = "Normal"
 
-        # Source and email metadata for UI
         Source          = "Outlook"
         SourceMailbox   = $MailboxAddress
         SourceMessageId = $sourceId
-        EmailFrom       = $from
+
+        EmailFrom       = if ($from) { $from } else { "Unknown sender" }
         EmailReceived   = $received.ToString("yyyy-MM-dd HH:mm:ss")
         EmailBody       = $body
     }
+}
 
 function Sync-QOTicketsFromOutlook {
     param(
@@ -100,22 +98,24 @@ function Sync-QOTicketsFromOutlook {
         [string]$ProcessedCategory = "QOT Imported"
     )
 
+    # This function relies on Core\Tickets.psm1 providing:
+    # Get-QOTMonitoredMailboxAddresses, Get-QOTickets, Add-QOTicket
+
     $mailboxes = Get-QOTMonitoredMailboxAddresses
     if (-not $mailboxes -or $mailboxes.Count -eq 0) {
         return [pscustomobject]@{ Added = 0; Note = "No monitored mailbox addresses set." }
     }
 
-    $existingDb = Get-QOTickets
+    $existingDb  = Get-QOTickets
     $existingIds = New-Object 'System.Collections.Generic.HashSet[string]'
-    
+
     foreach ($t in @($existingDb.Tickets)) {
         try {
             if ($t.SourceMessageId) { [void]$existingIds.Add([string]$t.SourceMessageId) }
         } catch { }
     }
 
-    $mapi = Get-QOTOutlookNamespace
-
+    $mapi  = Get-QOTOutlookNamespace
     $added = 0
 
     foreach ($mb in $mailboxes) {
@@ -142,12 +142,12 @@ function Sync-QOTicketsFromOutlook {
             $ticket = Convert-QOTMailItemToTicket -MailboxAddress $mb -MailItem $item
             if (-not $ticket.SourceMessageId) { continue }
 
-            if ($existingIds.Contains($ticket.SourceMessageId)) {
+            if ($existingIds.Contains([string]$ticket.SourceMessageId)) {
                 continue
             }
 
             Add-QOTicket -Ticket $ticket
-            [void]$existingIds.Add($ticket.SourceMessageId)
+            [void]$existingIds.Add([string]$ticket.SourceMessageId)
 
             try {
                 if ($ProcessedCategory) {
