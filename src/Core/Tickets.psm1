@@ -339,16 +339,24 @@ function Sync-QOTicketsFromEmail {
         [switch]$MarkAsRead
     )
 
-    # If Outlook sync exists, use it
-    if (Get-Command Sync-QOTicketsFromOutlook -ErrorAction SilentlyContinue) {
-        return Sync-QOTicketsFromOutlook -MaxPerMailbox $MaxPerMailbox -MarkAsRead:$MarkAsRead
-    }
+    try {
+        if (-not (Get-Command Sync-QOTicketsFromOutlook -ErrorAction SilentlyContinue)) {
+            return [pscustomobject]@{ Added = 0; Note = "Outlook sync function not loaded." }
+        }
 
-    return [pscustomobject]@{
-        Added = 0
-        Note  = "Outlook sync function not loaded."
+        $r = Sync-QOTicketsFromOutlook -MaxPerMailbox $MaxPerMailbox -MarkAsRead:$MarkAsRead
+        if (-not $r) { $r = [pscustomobject]@{ Added = 0; Note = "Outlook sync returned nothing." } }
+
+        return $r
+    }
+    catch {
+        return [pscustomobject]@{
+            Added = 0
+            Note  = ("Sync failed: " + $_.Exception.Message)
+        }
     }
 }
+
 
 Export-ModuleMember -Function `
     Initialize-QOTicketStorage, `
