@@ -114,19 +114,11 @@ function Initialize-QOTicketsUI {
     $syncCmd = $null
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
 
-    # Capture UI local function commands (IMPORTANT: event handlers may not resolve them by name)
+    # Capture UI local function commands
     $refreshGridCmd = Get-Command Refresh-QOTicketsGrid -ErrorAction Stop
     $emailSyncAndRefreshCmd = Get-Command Invoke-QOTicketsEmailSyncAndRefresh -ErrorAction Stop
 
-    Write-QOTicketsUILog ("Captured Get-QOTickets from: " + $getTicketsCmd.Source)
-    Write-QOTicketsUILog ("Captured New-QOTicket from: " + $newTicketCmd.Source)
-    Write-QOTicketsUILog ("Captured Add-QOTicket from: " + $addTicketCmd.Source)
-    Write-QOTicketsUILog ("Captured Remove-QOTicket from: " + $removeCmd.Source)
-    Write-QOTicketsUILog ("Captured Sync-QOTicketsFromEmail from: " + (($syncCmd.Source) + ""))
-    Write-QOTicketsUILog ("Captured Refresh-QOTicketsGrid from: " + $refreshGridCmd.Source)
-    Write-QOTicketsUILog ("Captured Invoke-QOTicketsEmailSyncAndRefresh from: " + $emailSyncAndRefreshCmd.Source)
-
-    # Capture stable local references for closures
+    # Capture stable local references
     $grid       = $Window.FindName("TicketsGrid")
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
@@ -137,19 +129,32 @@ function Initialize-QOTicketsUI {
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
 
-    # Keep script state too (for anything else that references it)
     $script:TicketsGrid = $grid
 
-    # Remove previous handlers
+    # Remove previous handlers safely
     try {
         if ($script:TicketsLoadedHandler) {
             $grid.RemoveHandler([System.Windows.FrameworkElement]::LoadedEvent, $script:TicketsLoadedHandler)
         }
     } catch { }
 
-    try { if ($script:TicketsRefreshHandler) { $btnRefresh.Remove_Click($script:TicketsRefreshHandler) } } catch { }
-    try { if ($script:TicketsNewHandler)     { $btnNew.Remove_Click($script:TicketsNewHandler) } catch { } }
-    try { if ($script:TicketsDeleteHandler)  { $btnDelete.Remove_Click($script:TicketsDeleteHandler) } } catch { }
+    try {
+        if ($script:TicketsRefreshHandler) {
+            $btnRefresh.Remove_Click($script:TicketsRefreshHandler)
+        }
+    } catch { }
+
+    try {
+        if ($script:TicketsNewHandler) {
+            $btnNew.Remove_Click($script:TicketsNewHandler)
+        }
+    } catch { }
+
+    try {
+        if ($script:TicketsDeleteHandler) {
+            $btnDelete.Remove_Click($script:TicketsDeleteHandler)
+        }
+    } catch { }
 
     $script:TicketsLoadedHandler = [System.Windows.RoutedEventHandler]{
         try {
@@ -185,8 +190,7 @@ function Initialize-QOTicketsUI {
             }
         }
         catch {
-            try { Write-QOTicketsUILog ("Create ticket failed: " + $_.Exception.ToString()) "ERROR" } catch { }
-            [System.Windows.MessageBox]::Show("Create ticket failed.`r`n$($_.Exception.Message)") | Out-Null
+            Write-QOTicketsUILog ("Create ticket failed: " + $_.Exception.Message) "ERROR"
         }
     }.GetNewClosure()
     $btnNew.Add_Click($script:TicketsNewHandler)
@@ -194,12 +198,9 @@ function Initialize-QOTicketsUI {
     $script:TicketsDeleteHandler = {
         try {
             $selected = $grid.SelectedItem
-            if (-not $selected) { [System.Windows.MessageBox]::Show("Select a ticket first.") | Out-Null; return }
+            if (-not $selected) { return }
 
-            if (-not ($selected.PSObject.Properties.Name -contains "Id")) {
-                [System.Windows.MessageBox]::Show("Selected ticket has no Id.") | Out-Null
-                return
-            }
+            if (-not ($selected.PSObject.Properties.Name -contains "Id")) { return }
 
             $confirm = [System.Windows.MessageBox]::Show("Delete this ticket?","Confirm","YesNo","Warning")
             if ($confirm -ne "Yes") { return }
@@ -207,9 +208,7 @@ function Initialize-QOTicketsUI {
             $null = & $removeCmd -Id $selected.Id
             & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
         }
-        catch {
-            [System.Windows.MessageBox]::Show("Delete ticket failed.`r`n$($_.Exception.Message)") | Out-Null
-        }
+        catch { }
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
 
