@@ -374,5 +374,6 @@ Export-ModuleMember -Function `
     Remove-QOTicket, `
     Get-QOTMonitoredMailboxAddresses, `
     Add-QOTicketFromEmail, `
-    Sync-QOTicketsFromEmail
+    Sync-QOTicketsFromEmail, `
     Sync-QOTicketsFromOutlook
+
