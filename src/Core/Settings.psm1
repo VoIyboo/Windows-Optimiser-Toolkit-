@@ -43,10 +43,13 @@ function New-QODefaultSettings {
 
         TicketsColumnLayout   = @()
 
-        # Important for your email list
         Tickets = [pscustomobject]@{
             EmailIntegration = [pscustomobject]@{
-                MonitoredAddresses = @()
+                MonitoredAddresses      = @()
+
+                # New: If empty, UI defaults to today's date (not saved).
+                # Once user selects a date, we store it as yyyy-MM-dd
+                InitialSyncCutoffDate   = ""
             }
         }
     }
@@ -91,6 +94,14 @@ function Get-QOSettings {
 
         if ($null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
             $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
+        }
+
+        # New setting: InitialSyncCutoffDate
+        if ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -notcontains "InitialSyncCutoffDate") {
+            $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName InitialSyncCutoffDate -NotePropertyValue "" -Force
+        }
+        if ($null -eq $settings.Tickets.EmailIntegration.InitialSyncCutoffDate) {
+            $settings.Tickets.EmailIntegration.InitialSyncCutoffDate = ""
         }
 
         return $settings
@@ -180,6 +191,61 @@ function Set-QOMonitoredMailboxAddresses {
 }
 
 # --------------------------------------------------------------------
+# New: Canonical API for initial email sync cutoff date
+# Storage: Tickets.EmailIntegration.InitialSyncCutoffDate (yyyy-MM-dd)
+# Behaviour: if empty, UI uses today's date (not saved)
+# --------------------------------------------------------------------
+function Get-QOInitialEmailSyncCutoffDate {
+    $s = Get-QOSettings
+    if (-not $s) { return $null }
+
+    try {
+        $v = [string]$s.Tickets.EmailIntegration.InitialSyncCutoffDate
+        $v = ($v + "").Trim()
+        if ([string]::IsNullOrWhiteSpace($v)) { return $null }
+
+        # Stored as yyyy-MM-dd
+        return [datetime]::ParseExact($v, "yyyy-MM-dd", $null)
+    } catch {
+        return $null
+    }
+}
+
+function Set-QOInitialEmailSyncCutoffDate {
+    param(
+        [Parameter(Mandatory)]
+        [datetime]$Date
+    )
+
+    $s = Get-QOSettings
+    if (-not $s) { $s = New-QODefaultSettings -NoSave }
+
+    if (-not $s.Tickets) {
+        $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    if (-not $s.Tickets.EmailIntegration) {
+        $s.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+
+    $s.Tickets.EmailIntegration.InitialSyncCutoffDate = $Date.Date.ToString("yyyy-MM-dd")
+    Save-QOSettings -Settings $s
+
+    return $s.Tickets.EmailIntegration.InitialSyncCutoffDate
+}
+
+function Clear-QOInitialEmailSyncCutoffDate {
+    $s = Get-QOSettings
+    if (-not $s) { return $null }
+
+    try {
+        $s.Tickets.EmailIntegration.InitialSyncCutoffDate = ""
+        Save-QOSettings -Settings $s
+    } catch { }
+
+    return $null
+}
+
+# --------------------------------------------------------------------
 # Compatibility wrappers (because UI/Tickets code may call these names)
 # --------------------------------------------------------------------
 function Set-QOMonitoredAddresses {
@@ -203,4 +269,7 @@ Export-ModuleMember -Function `
     Get-QOMonitoredMailboxAddresses, `
     Set-QOMonitoredMailboxAddresses, `
     Get-QOMonitoredAddresses, `
-    Set-QOMonitoredAddresses
+    Set-QOMonitoredAddresses, `
+    Get-QOInitialEmailSyncCutoffDate, `
+    Set-QOInitialEmailSyncCutoffDate, `
+    Clear-QOInitialEmailSyncCutoffDate
