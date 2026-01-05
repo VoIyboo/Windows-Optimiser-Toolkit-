@@ -6,10 +6,21 @@ $ErrorActionPreference = "Stop"
 # Import Settings
 Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
 try {
-    Import-Module (Join-Path $PSScriptRoot "Tickets.Outlook.psm1") -Force -ErrorAction Stop
+    $outlookMod = Join-Path $PSScriptRoot "..\Tickets\Tickets.Email.psm1"
+    if (Test-Path -LiteralPath $outlookMod) {
+        Import-Module $outlookMod -Force -ErrorAction Stop
+    } else {
+        # If the filename isn't exactly Tickets.Email.psm1, try to find it
+        $found = Get-ChildItem -Path (Join-Path $PSScriptRoot "..\Tickets") -Filter "*Outlook*.psm1" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $found) { $found = Get-ChildItem -Path (Join-Path $PSScriptRoot "..\Tickets") -Filter "*Email*.psm1" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+        if ($found) {
+            Import-Module $found.FullName -Force -ErrorAction Stop
+        }
+    }
 } catch {
     # Outlook integration is optional
 }
+
 
 
 # =====================================================================
