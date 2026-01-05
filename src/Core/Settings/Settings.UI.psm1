@@ -130,22 +130,184 @@ function Convert-SettingsWindowToHostableRoot {
 }
 
 # ------------------------------------------------------------
+# Calendar flyout (custom Window)
+# ------------------------------------------------------------
+function Show-QOTCalendarFlyout {
+    param(
+        [Parameter(Mandatory)][System.Windows.FrameworkElement]$Anchor,
+        [Parameter(Mandatory)][datetime]$InitialDate
+    )
+
+    Initialize-QOSettingsUIAssemblies
+
+    $xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="320"
+        Height="360"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True">
+    <Border Background="#0B1220"
+            BorderBrush="#1F2937"
+            BorderThickness="1"
+            CornerRadius="14"
+            Padding="12">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                <TextBlock x:Name="LblTitle"
+                           DockPanel.Dock="Left"
+                           Foreground="#E5E7EB"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Text="Select date"/>
+                <Button x:Name="BtnClose"
+                        DockPanel.Dock="Right"
+                        Width="30"
+                        Height="30"
+                        Background="#0F172A"
+                        BorderBrush="#1F2937"
+                        BorderThickness="1"
+                        Cursor="Hand">
+                    <TextBlock FontFamily="Segoe MDL2 Assets"
+                               Foreground="#E5E7EB"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Text="&#xE711;"/>
+                </Button>
+            </DockPanel>
+
+            <Calendar x:Name="Cal"
+                      Grid.Row="1"
+                      Background="#0B1220"
+                      Foreground="#E5E7EB"
+                      BorderThickness="0"
+                      SelectionMode="SingleDate"
+                      IsTodayHighlighted="True" />
+
+            <DockPanel Grid.Row="2" Margin="0,10,0,0">
+                <Button x:Name="BtnClear"
+                        DockPanel.Dock="Left"
+                        Padding="10,6"
+                        Background="#0F172A"
+                        BorderBrush="#1F2937"
+                        BorderThickness="1"
+                        Foreground="#E5E7EB"
+                        Cursor="Hand">
+                    Clear
+                </Button>
+
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="BtnCancel"
+                            Margin="0,0,8,0"
+                            Padding="10,6"
+                            Background="#0F172A"
+                            BorderBrush="#1F2937"
+                            BorderThickness="1"
+                            Foreground="#E5E7EB"
+                            Cursor="Hand">
+                        Cancel
+                    </Button>
+
+                    <Button x:Name="BtnOk"
+                            Padding="10,6"
+                            Background="#2563EB"
+                            BorderBrush="#2563EB"
+                            BorderThickness="1"
+                            Foreground="White"
+                            Cursor="Hand">
+                        OK
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </Grid>
+    </Border>
+</Window>
+"@
+
+    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
+    $win = [System.Windows.Markup.XamlReader]::Load($reader)
+
+    $cal      = $win.FindName("Cal")
+    $btnOk    = $win.FindName("BtnOk")
+    $btnCancel= $win.FindName("BtnCancel")
+    $btnClose = $win.FindName("BtnClose")
+    $btnClear = $win.FindName("BtnClear")
+
+    $cal.DisplayDate = $InitialDate
+    $cal.SelectedDate = $InitialDate
+
+    # Position under the anchor
+    $pt = $Anchor.PointToScreen([System.Windows.Point]::new(0, $Anchor.ActualHeight))
+    $win.Left = $pt.X
+    $win.Top  = $pt.Y + 6
+
+    $selected = $null
+    $cleared  = $false
+
+    $btnClose.Add_Click({
+        $win.DialogResult = $false
+        $win.Close()
+    })
+
+    $btnCancel.Add_Click({
+        $win.DialogResult = $false
+        $win.Close()
+    })
+
+    $btnClear.Add_Click({
+        $cleared = $true
+        $win.DialogResult = $true
+        $win.Close()
+    })
+
+    $btnOk.Add_Click({
+        $selected = $cal.SelectedDate
+        $win.DialogResult = $true
+        $win.Close()
+    })
+
+    $null = $win.ShowDialog()
+
+    if ($cleared) {
+        return [pscustomobject]@{ Cleared = $true; Date = $null }
+    }
+
+    if ($selected) {
+        return [pscustomobject]@{ Cleared = $false; Date = [datetime]$selected }
+    }
+
+    return $null
+}
+
+# ------------------------------------------------------------
 # Stored handlers to avoid double wiring
 # ------------------------------------------------------------
-$script:QOSettings_AddHandler  = $null
-$script:QOSettings_RemHandler  = $null
-$script:QOSettings_DateHandler = $null
+$script:QOSettings_AddHandler    = $null
+$script:QOSettings_RemHandler    = $null
+$script:QOSettings_PickDateHandler = $null
 
 function New-QOTSettingsView {
     Initialize-QOSettingsUIAssemblies
 
-    # Capture commands NOW, so handlers can always call them later
+    # Capture commands NOW
     $setMonitoredCmd = Get-Command Set-QOMonitoredAddresses -ErrorAction Stop
     $getSettingsCmd  = Get-Command Get-QOSettings -ErrorAction Stop
+    $getMonitoredCmd = Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction Stop
 
-    $getCutoffCmd  = Get-Command Get-QOInitialEmailSyncCutoffDate -ErrorAction Stop
-    $setCutoffCmd  = Get-Command Set-QOInitialEmailSyncCutoffDate -ErrorAction Stop
-    $clearCutoffCmd = Get-Command Clear-QOInitialEmailSyncCutoffDate -ErrorAction Stop
+    $getCutoffStateCmd = Get-Command Get-QOEmailSyncStartDateState -ErrorAction Stop
+    $setCutoffPinnedCmd = Get-Command Set-QOEmailSyncStartDatePinned -ErrorAction Stop
+    $clearCutoffCmd = Get-Command Clear-QOEmailSyncStartDate -ErrorAction Stop
 
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
@@ -161,48 +323,53 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    $txtEmail = Get-QOControl -Root $root -Name "TxtEmail"      -Type ([System.Windows.Controls.TextBox])
-    $btnAdd   = Get-QOControl -Root $root -Name "BtnAdd"        -Type ([System.Windows.Controls.Button])
-    $btnRem   = Get-QOControl -Root $root -Name "BtnRemove"     -Type ([System.Windows.Controls.Button])
-    $list     = Get-QOControl -Root $root -Name "LstEmails"     -Type ([System.Windows.Controls.ListBox])
-    $hint     = Get-QOControl -Root $root -Name "LblHint"       -Type ([System.Windows.Controls.TextBlock])
-    $dpCutoff = Get-QOControl -Root $root -Name "DpEmailCutoff" -Type ([System.Windows.Controls.DatePicker])
+    $txtEmail   = Get-QOControl -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
+    $btnAdd     = Get-QOControl -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
+    $btnRem     = Get-QOControl -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
+    $list       = Get-QOControl -Root $root -Name "LstEmails" -Type ([System.Windows.Controls.ListBox])
+    $hint       = Get-QOControl -Root $root -Name "LblHint"   -Type ([System.Windows.Controls.TextBlock])
+
+    $txtCutoff  = Get-QOControl -Root $root -Name "TxtEmailCutoff" -Type ([System.Windows.Controls.TextBox])
+    $btnPick    = Get-QOControl -Root $root -Name "BtnPickEmailCutoff" -Type ([System.Windows.Controls.Button])
+    $cutHint    = Get-QOControl -Root $root -Name "LblEmailCutoffHint" -Type ([System.Windows.Controls.TextBlock])
 
     if (-not $txtEmail) { throw "TxtEmail not found (TextBox)" }
     if (-not $btnAdd)   { throw "BtnAdd not found (Button)" }
     if (-not $btnRem)   { throw "BtnRemove not found (Button)" }
     if (-not $list)     { throw "LstEmails not found (ListBox)" }
-    if (-not $dpCutoff) { throw "DpEmailCutoff not found (DatePicker)" }
+    if (-not $txtCutoff){ throw "TxtEmailCutoff not found (TextBox)" }
+    if (-not $btnPick)  { throw "BtnPickEmailCutoff not found (Button)" }
 
-    # Load monitored addresses
+    # Load addresses from settings
     $addresses = New-Object "System.Collections.ObjectModel.ObservableCollection[string]"
-    $getMonitoredCmd = Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction Stop
-
     foreach ($e in @(& $getMonitoredCmd)) {
         $v = ([string]$e).Trim()
         if ($v) { $addresses.Add($v) }
     }
-
     $list.ItemsSource = $addresses
-    Write-QOSettingsUILog ("Bound list. Count=" + $addresses.Count)
 
-    # Load cutoff date
-    $savedDate = $null
-    try { $savedDate = & $getCutoffCmd } catch { $savedDate = $null }
+    # Load cutoff display
+    $state = & $getCutoffStateCmd
+    $displayDate = Get-Date
+    $pinned = $false
 
-    if ($savedDate) {
-        $dpCutoff.SelectedDate = $savedDate.Date
-        if ($hint) { $hint.Text = "Email sync start date is set to " + $savedDate.ToString("dd MMM yyyy") }
+    try { $pinned = [bool]$state.Pinned } catch { $pinned = $false }
+    if ($pinned -and $state.Date) {
+        $displayDate = [datetime]$state.Date
+        if ($cutHint) { $cutHint.Text = "Pinned. Only emails from this date onwards will be considered during the initial import." }
     } else {
-        # Auto follow computer date until user selects a date
-        $dpCutoff.SelectedDate = (Get-Date).Date
-        if ($hint) { $hint.Text = "Email sync start date will follow today's date until you choose one." }
+        if ($cutHint) { $cutHint.Text = "Email sync start date will follow today's date until you choose one." }
     }
 
-    # Remove previous handlers
-    try { if ($script:QOSettings_AddHandler)  { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } } catch { }
-    try { if ($script:QOSettings_RemHandler)  { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } } catch { }
-    try { if ($script:QOSettings_DateHandler) { $dpCutoff.RemoveHandler([System.Windows.Controls.DatePicker]::SelectedDateChangedEvent, $script:QOSettings_DateHandler) } } catch { }
+    # AU style display
+    $txtCutoff.Text = $displayDate.ToString("dd/MM/yyyy")
+
+    # Remove old handlers (emails)
+    try { if ($script:QOSettings_AddHandler) { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } } catch { }
+    try { if ($script:QOSettings_RemHandler) { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } } catch { }
+
+    # Remove old handler (date)
+    try { if ($script:QOSettings_PickDateHandler) { $btnPick.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_PickDateHandler) } } catch { }
 
     $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
         try {
@@ -229,11 +396,7 @@ function New-QOTSettingsView {
             $saveList = @($addresses | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
             $null = & $setMonitoredCmd -Addresses $saveList
 
-            $after = & $getSettingsCmd
-            $count = @($after.Tickets.EmailIntegration.MonitoredAddresses).Count
-            Write-QOSettingsUILog ("Saved. Stored count=" + $count)
-
-            if ($hint) { $hint.Text = "Added " + $addr }
+            if ($hint) { $hint.Text = "Added $addr" }
         }
         catch {
             Write-QOSettingsUILog ("Add failed: " + $_.Exception.ToString())
@@ -256,11 +419,7 @@ function New-QOTSettingsView {
             $saveList = @($addresses | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
             $null = & $setMonitoredCmd -Addresses $saveList
 
-            $after = & $getSettingsCmd
-            $count = @($after.Tickets.EmailIntegration.MonitoredAddresses).Count
-            Write-QOSettingsUILog ("Removed. Stored count=" + $count)
-
-            if ($hint) { $hint.Text = "Removed " + $sel }
+            if ($hint) { $hint.Text = "Removed $sel" }
         }
         catch {
             Write-QOSettingsUILog ("Remove failed: " + $_.Exception.ToString())
@@ -268,30 +427,49 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    $script:QOSettings_DateHandler = [System.Windows.RoutedEventHandler]{
+    $script:QOSettings_PickDateHandler = [System.Windows.RoutedEventHandler]{
         try {
-            $selDate = $dpCutoff.SelectedDate
+            # Determine initial date for picker
+            $state = & $getCutoffStateCmd
+            $init = Get-Date
+            $isPinned = $false
+            try { $isPinned = [bool]$state.Pinned } catch { $isPinned = $false }
+            if ($isPinned -and $state.Date) {
+                $init = [datetime]$state.Date
+            }
 
-            if ($selDate) {
-                $stored = & $setCutoffCmd -Date ([datetime]$selDate)
-                Write-QOSettingsUILog ("Cutoff date saved: " + $stored)
-                if ($hint) { $hint.Text = "Email sync start date saved as " + ([datetime]$selDate).ToString("dd MMM yyyy") }
-            } else {
+            $pick = Show-QOTCalendarFlyout -Anchor $btnPick -InitialDate $init
+            if (-not $pick) { return }
+
+            if ($pick.Cleared) {
                 $null = & $clearCutoffCmd
-                Write-QOSettingsUILog "Cutoff date cleared"
-                $dpCutoff.SelectedDate = (Get-Date).Date
-                if ($hint) { $hint.Text = "Email sync start date will follow today's date until you choose one." }
+
+                $today = Get-Date
+                $txtCutoff.Text = $today.ToString("dd/MM/yyyy")
+                if ($cutHint) { $cutHint.Text = "Email sync start date will follow today's date until you choose one." }
+                if ($hint) { $hint.Text = "Cleared pinned date. Following today's date." }
+                return
+            }
+
+            if ($pick.Date) {
+                $chosen = [datetime]$pick.Date
+                $null = & $setCutoffPinnedCmd -Date $chosen
+
+                $txtCutoff.Text = $chosen.ToString("dd/MM/yyyy")
+                if ($cutHint) { $cutHint.Text = "Pinned. Only emails from this date onwards will be considered during the initial import." }
+                if ($hint) { $hint.Text = "Pinned start date: " + $chosen.ToString("dd/MM/yyyy") }
             }
         }
         catch {
-            Write-QOSettingsUILog ("Date change failed: " + $_.Exception.ToString())
-            Write-QOSettingsUILog ("Date stack: " + $_.ScriptStackTrace)
+            Write-QOSettingsUILog ("Pick date failed: " + $_.Exception.ToString())
+            Write-QOSettingsUILog ("Pick date stack: " + $_.ScriptStackTrace)
+            if ($hint) { $hint.Text = "Date picker failed. Check logs." }
         }
     }.GetNewClosure()
 
     $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
     $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
-    $dpCutoff.AddHandler([System.Windows.Controls.DatePicker]::SelectedDateChangedEvent, $script:QOSettings_DateHandler)
+    $btnPick.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_PickDateHandler)
 
     Write-QOSettingsUILog "Wired handlers using AddHandler"
 
