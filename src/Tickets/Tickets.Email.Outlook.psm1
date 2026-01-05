@@ -8,11 +8,15 @@ if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
 }
 
 function Get-QOTOutlookNamespace {
+    if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne 'STA') {
+        throw "PowerShell is not running in STA mode. Launch with: powershell.exe -STA"
+    }
+
     try {
         $outlook = New-Object -ComObject Outlook.Application
         return $outlook.GetNamespace("MAPI")
     } catch {
-        throw "Outlook not available. Make sure Outlook is installed and opened at least once."
+        throw ("Outlook COM failed: " + $_.Exception.Message)
     }
 }
 
