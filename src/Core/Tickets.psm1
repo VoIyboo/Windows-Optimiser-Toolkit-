@@ -363,17 +363,25 @@ function Sync-QOTicketsFromEmail {
 }
 
 
-Export-ModuleMember -Function `
-    Initialize-QOTicketStorage, `
-    Get-QOTicketsStorePath, `
-    Ensure-QOTicketsStoreDirectory, `
-    Get-QOTickets, `
-    Save-QOTickets, `
-    New-QOTicket, `
-    Add-QOTicket, `
-    Remove-QOTicket, `
-    Get-QOTMonitoredMailboxAddresses, `
-    Add-QOTicketFromEmail, `
-    Sync-QOTicketsFromEmail, `
-    Sync-QOTicketsFromOutlook
+$exports = @(
+    "Initialize-QOTicketStorage",
+    "Get-QOTicketsStorePath",
+    "Ensure-QOTicketsStoreDirectory",
+    "Get-QOTickets",
+    "Save-QOTickets",
+    "New-QOTicket",
+    "Add-QOTicket",
+    "Remove-QOTicket",
+    "Get-QOTMonitoredMailboxAddresses",
+    "Add-QOTicketFromEmail",
+    "Sync-QOTicketsFromEmail"
+)
+
+# Only export Outlook sync if it actually exists (module loaded)
+if (Get-Command Sync-QOTicketsFromOutlook -ErrorAction SilentlyContinue) {
+    $exports += "Sync-QOTicketsFromOutlook"
+}
+
+Export-ModuleMember -Function $exports
+
 
