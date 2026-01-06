@@ -67,32 +67,13 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Calendar base -->
-        <Style TargetType="{x:Type Calendar}">
-            <Setter Property="Background" Value="#0B1220"/>
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-
-        <!-- Month header / navigation (January 2026, arrows) -->
-        <Style TargetType="{x:Type primitives:CalendarButton}"
-               x:Key="{x:Static Calendar.CalendarButtonStyleKey}">
-            <Setter Property="Foreground" Value="#E5E7EB"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="6,2"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-
-        <!-- Day buttons (date numbers + weekday headers) -->
-        <Style TargetType="{x:Type primitives:CalendarDayButton}"
-               x:Key="{x:Static Calendar.CalendarDayButtonStyleKey}">
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
+        <!-- Calendar day buttons (numbers) -->
+        <Style x:Key="QOT_CalendarDayButtonStyle" TargetType="{x:Type primitives:CalendarDayButton}">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type primitives:CalendarDayButton}">
@@ -106,45 +87,63 @@
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
                             <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
+                                              VerticalAlignment="Center" />
                         </Border>
 
                         <ControlTemplate.Triggers>
 
-                            <!-- Weekday header row is a CalendarDayButton too, but disabled -->
+                            <!-- Weekday header row is disabled day buttons -->
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#9CA3AF"/>
+                                <Setter Property="Foreground" Value="#9CA3AF" />
                             </Trigger>
 
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="DayBd" Property="Background" Value="#0F172A"/>
-                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#1F2937"/>
-                                <Setter TargetName="DayBd" Property="BorderThickness" Value="1"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter TargetName="DayBd" Property="Background" Value="#0F172A" />
+                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#1F2937" />
+                                <Setter TargetName="DayBd" Property="BorderThickness" Value="1" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
                             </Trigger>
 
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="DayBd" Property="Background" Value="#2563EB"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter TargetName="DayBd" Property="Background" Value="#2563EB" />
+                                <Setter Property="Foreground" Value="#FFFFFF" />
                             </Trigger>
 
                             <Trigger Property="IsToday" Value="True">
-                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#2563EB"/>
-                                <Setter TargetName="DayBd" Property="BorderThickness" Value="1"/>
+                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#2563EB" />
+                                <Setter TargetName="DayBd" Property="BorderThickness" Value="1" />
                             </Trigger>
 
+                            <!-- Days from previous/next month -->
                             <Trigger Property="IsInactive" Value="True">
-                                <Setter Property="Foreground" Value="#9CA3AF"/>
+                                <Setter Property="Foreground" Value="#9CA3AF" />
                             </Trigger>
 
                             <Trigger Property="IsBlackout" Value="True">
-                                <Setter Property="Foreground" Value="#4B5563"/>
+                                <Setter Property="Foreground" Value="#4B5563" />
                             </Trigger>
 
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Month title + nav buttons (January 2026, arrows) -->
+        <Style x:Key="QOT_CalendarButtonStyle" TargetType="{x:Type primitives:CalendarButton}">
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- Calendar base -->
+        <Style x:Key="QOT_CalendarStyle" TargetType="{x:Type Calendar}">
+            <Setter Property="Background" Value="#0B1220" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
 
     </Window.Resources>
@@ -243,6 +242,9 @@
                     Padding="10">
 
                 <Calendar x:Name="CalEmailCutoff"
+                          Style="{StaticResource QOT_CalendarStyle}"
+                          CalendarButtonStyle="{StaticResource QOT_CalendarButtonStyle}"
+                          CalendarDayButtonStyle="{StaticResource QOT_CalendarDayButtonStyle}"
                           SelectionMode="SingleDate"
                           IsTodayHighlighted="True" />
             </Border>
