@@ -281,7 +281,7 @@ function New-QOTSettingsView {
             }
         } catch { }
     }
-
+    
     # Load date state
     try {
         $state = & $getDateStateCmd
@@ -293,23 +293,34 @@ function New-QOTSettingsView {
         Write-QOSettingsUILog ("Load date state failed: " + $_.Exception.ToString())
         if ($hint) { $hint.Text = "Date state failed to load. Check logs." }
     }
-
+    
     # Remove old handlers
-    try { if ($script:QOSettings_CalHandler) { $cal.RemoveHandler([System.Windows.Controls.Calendar]::SelectedDatesChangedEvent, $script:QOSettings_CalHandler) } } catch { }
-    try { if ($script:QOSettings_FollowHandler) { $btnToday.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_FollowHandler) } } catch { }
-
-    # Correct delegate type for Calendar SelectedDatesChanged
-    $script:QOSettings_CalHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
+    try {
+        if ($script:QOSettings_CalHandler) {
+            $cal.RemoveHandler([System.Windows.Controls.Calendar]::SelectedDatesChangedEvent, $script:QOSettings_CalHandler)
+        }
+    } catch { }
+    
+    try {
+        if ($script:QOSettings_FollowHandler) {
+            $btnToday.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_FollowHandler)
+        }
+    } catch { }
+    
+    # IMPORTANT: correct delegate type for Calendar SelectedDatesChanged
+    $script:QOSettings_CalHandler = [System.EventHandler[System.Windows.Controls.SelectionChangedEventArgs]]{
+        param($sender, $e)
+    
         try {
             $picked = $cal.SelectedDate
             if (-not $picked) { return }
-
+    
             $picked = ([datetime]$picked).Date
             $null = & $pinDateCmd -Date $picked
-
+    
             $state2 = & $getDateStateCmd
             Set-HintFromState -state $state2
-
+    
             Write-QOSettingsUILog ("Pinned date selected: " + $picked.ToString("yyyy-MM-dd"))
         }
         catch {
@@ -317,20 +328,23 @@ function New-QOTSettingsView {
             if ($hint) { $hint.Text = "Date select failed. Check logs." }
         }
     }.GetNewClosure()
-
+    
     $cal.AddHandler([System.Windows.Controls.Calendar]::SelectedDatesChangedEvent, $script:QOSettings_CalHandler)
-
+    
+    # Follow today button handler stays RoutedEventHandler (this one is correct)
     $script:QOSettings_FollowHandler = [System.Windows.RoutedEventHandler]{
+        param($sender, $e)
+    
         try {
             $null = & $clearDateCmd
-
+    
             $today = (Get-Date).Date
             $cal.SelectedDate = $today
             $cal.DisplayDate  = $today
-
+    
             $state3 = & $getDateStateCmd
             Set-HintFromState -state $state3
-
+    
             Write-QOSettingsUILog "Follow today pressed (unpinned)."
         }
         catch {
@@ -338,40 +352,11 @@ function New-QOTSettingsView {
             if ($hint) { $hint.Text = "Follow today failed. Check logs." }
         }
     }.GetNewClosure()
-
+    
     $btnToday.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_FollowHandler)
-
-    # Timer: if not pinned, keep following today's date (in case app stays open overnight)
-    try {
-        if (-not $script:QOSettings_DateTimer) {
-            $script:QOSettings_DateTimer = New-Object System.Windows.Threading.DispatcherTimer
-            $script:QOSettings_DateTimer.Interval = [TimeSpan]::FromMinutes(1)
-
-            $script:QOSettings_DateTimer.Add_Tick({
-                try {
-                    $st = & $getDateStateCmd
-                    if ($st.Pinned) { return }
-
-                    $today = (Get-Date).Date
-                    $cur = $cal.SelectedDate
-                    if ($cur) { $cur = ([datetime]$cur).Date }
-
-                    if (-not $cur -or $cur -ne $today) {
-                        $cal.SelectedDate = $today
-                        $cal.DisplayDate  = $today
-                        Set-HintFromState -state $st
-                    }
-                } catch { }
-            }) | Out-Null
-
-            $script:QOSettings_DateTimer.Start()
-            Write-QOSettingsUILog "Started follow-today timer (1 min)."
-        }
-    } catch {
-        Write-QOSettingsUILog ("Timer init failed: " + $_.Exception.ToString())
-    }
-
+    
     Write-QOSettingsUILog "Wired calendar handlers using correct delegate types"
+
 
     return $root
 }
