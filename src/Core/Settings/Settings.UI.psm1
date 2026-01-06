@@ -132,21 +132,22 @@ function Convert-SettingsWindowToHostableRoot {
 # ------------------------------------------------------------
 # Stored handlers to avoid double wiring
 # ------------------------------------------------------------
-$script:QOSettings_AddHandler = $null
-$script:QOSettings_RemHandler = $null
-$script:QOSettings_CalHandler = $null
+$script:QOSettings_AddHandler   = $null
+$script:QOSettings_RemHandler   = $null
 $script:QOSettings_TodayHandler = $null
+
+# Event subscription tokens for Register-ObjectEvent (so we can cleanly unregister)
+$script:QOSettings_CalSub   = $null
 
 function New-QOTSettingsView {
     Initialize-QOSettingsUIAssemblies
 
     $setMonitoredCmd = Get-Command Set-QOMonitoredAddresses -ErrorAction Stop
-    $getSettingsCmd  = Get-Command Get-QOSettings -ErrorAction Stop
     $getMonitoredCmd = Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction Stop
 
-    $getCutoffStateCmd = Get-Command Get-QOEmailSyncStartDateState -ErrorAction Stop
-    $setCutoffPinnedCmd = Get-Command Set-QOEmailSyncStartDatePinned -ErrorAction Stop
-    $clearCutoffPinnedCmd = Get-Command Clear-QOEmailSyncStartDatePinned -ErrorAction Stop
+    $getCutoffStateCmd      = Get-Command Get-QOEmailSyncStartDateState -ErrorAction Stop
+    $setCutoffPinnedCmd     = Get-Command Set-QOEmailSyncStartDatePinned -ErrorAction Stop
+    $clearCutoffPinnedCmd   = Get-Command Clear-QOEmailSyncStartDatePinned -ErrorAction Stop
 
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
@@ -162,15 +163,15 @@ function New-QOTSettingsView {
     $root   = [System.Windows.Markup.XamlReader]::Load($reader)
     if (-not $root) { throw "Failed to load Settings view from SettingsWindow.xaml" }
 
-    $txtEmail = Get-QOControl -Root $root -Name "TxtEmail"  -Type ([System.Windows.Controls.TextBox])
-    $btnAdd   = Get-QOControl -Root $root -Name "BtnAdd"    -Type ([System.Windows.Controls.Button])
-    $btnRem   = Get-QOControl -Root $root -Name "BtnRemove" -Type ([System.Windows.Controls.Button])
-    $list     = Get-QOControl -Root $root -Name "LstEmails" -Type ([System.Windows.Controls.ListBox])
-    $hint     = Get-QOControl -Root $root -Name "LblHint"   -Type ([System.Windows.Controls.TextBlock])
+    $txtEmail   = Get-QOControl -Root $root -Name "TxtEmail"        -Type ([System.Windows.Controls.TextBox])
+    $btnAdd     = Get-QOControl -Root $root -Name "BtnAdd"          -Type ([System.Windows.Controls.Button])
+    $btnRem     = Get-QOControl -Root $root -Name "BtnRemove"       -Type ([System.Windows.Controls.Button])
+    $list       = Get-QOControl -Root $root -Name "LstEmails"       -Type ([System.Windows.Controls.ListBox])
+    $hint       = Get-QOControl -Root $root -Name "LblHint"         -Type ([System.Windows.Controls.TextBlock])
 
-    $txtCutoff = Get-QOControl -Root $root -Name "TxtEmailCutoff" -Type ([System.Windows.Controls.TextBox])
-    $calCutoff = Get-QOControl -Root $root -Name "CalEmailCutoff" -Type ([System.Windows.Controls.Calendar])
-    $btnToday  = Get-QOControl -Root $root -Name "BtnUseToday"    -Type ([System.Windows.Controls.Button])
+    $txtCutoff  = Get-QOControl -Root $root -Name "TxtEmailCutoff"  -Type ([System.Windows.Controls.TextBox])
+    $calCutoff  = Get-QOControl -Root $root -Name "CalEmailCutoff"  -Type ([System.Windows.Controls.Calendar])
+    $btnToday   = Get-QOControl -Root $root -Name "BtnUseToday"     -Type ([System.Windows.Controls.Button])
 
     if (-not $txtEmail)  { throw "TxtEmail not found (TextBox)" }
     if (-not $btnAdd)    { throw "BtnAdd not found (Button)" }
@@ -190,7 +191,7 @@ function New-QOTSettingsView {
     $list.ItemsSource = $addresses
     Write-QOSettingsUILog ("Bound mailbox list. Count=" + $addresses.Count)
 
-    # Initialise cutoff UI
+    # Init cutoff UI
     $state = & $getCutoffStateCmd
     $today = (Get-Date).Date
 
@@ -210,21 +211,27 @@ function New-QOTSettingsView {
     if ($pinned -and $pinnedDate) {
         $txtCutoff.Text = $pinnedDate.ToString("dd/MM/yyyy")
         $calCutoff.SelectedDate = $pinnedDate
-        $calCutoff.DisplayDate = $pinnedDate
-        if ($hint) { $hint.Text = "Pinned start date is saved. New mail imports will start from this date on first run." }
+        $calCutoff.DisplayDate  = $pinnedDate
+        if ($hint) { $hint.Text = "Pinned start date is saved. Select a different date to update it, or click the clock to follow today." }
     } else {
         $txtCutoff.Text = $today.ToString("dd/MM/yyyy")
         $calCutoff.SelectedDate = $today
-        $calCutoff.DisplayDate = $today
+        $calCutoff.DisplayDate  = $today
         if ($hint) { $hint.Text = "Start date follows today until you select a date." }
     }
 
-    # Unwire previous handlers
+    # Unwire previous click handlers
     try { if ($script:QOSettings_AddHandler) { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) } } catch { }
     try { if ($script:QOSettings_RemHandler) { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) } } catch { }
-
-    try { if ($script:QOSettings_CalHandler) { $calCutoff.Remove_SelectedDatesChanged($script:QOSettings_CalHandler) } } catch { }
     try { if ($script:QOSettings_TodayHandler) { $btnToday.Remove_Click($script:QOSettings_TodayHandler) } } catch { }
+
+    # Unregister old calendar event subscription
+    try {
+        if ($script:QOSettings_CalSub) {
+            Unregister-Event -SubscriptionId $script:QOSettings_CalSub.Id -ErrorAction SilentlyContinue
+            $script:QOSettings_CalSub = $null
+        }
+    } catch { }
 
     # Add mailbox handler
     $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
@@ -286,11 +293,30 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Calendar selection handler (IMPORTANT: correct delegate type)
-    $script:QOSettings_CalHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
-        param($sender, $args)
+    # Use today handler
+    $script:QOSettings_TodayHandler = {
         try {
-            $d = $calCutoff.SelectedDate
+            $t = (Get-Date).Date
+            $txtCutoff.Text = $t.ToString("dd/MM/yyyy")
+            $calCutoff.SelectedDate = $t
+            $calCutoff.DisplayDate  = $t
+
+            $null = & $clearCutoffPinnedCmd
+
+            if ($hint) { $hint.Text = "Start date now follows today until you select a date." }
+            Write-QOSettingsUILog "Cutoff set to follow today (unpinned)"
+        }
+        catch {
+            Write-QOSettingsUILog ("Use today failed: " + $_.Exception.ToString())
+            Write-QOSettingsUILog ("Use today stack: " + $_.ScriptStackTrace)
+            if ($hint) { $hint.Text = "Use today failed. Check logs." }
+        }
+    }.GetNewClosure()
+
+    # Register calendar selection using Register-ObjectEvent (no delegate mismatch)
+    $script:QOSettings_CalSub = Register-ObjectEvent -InputObject $calCutoff -EventName SelectedDatesChanged -Action {
+        try {
+            $d = $Event.Sender.SelectedDate
             if (-not $d) { return }
 
             $dt = [datetime]$d
@@ -306,35 +332,13 @@ function New-QOTSettingsView {
             Write-QOSettingsUILog ("Calendar stack: " + $_.ScriptStackTrace)
             if ($hint) { $hint.Text = "Date save failed. Check logs." }
         }
-    }.GetNewClosure()
-
-    # Use today handler
-    $script:QOSettings_TodayHandler = {
-        try {
-            $t = (Get-Date).Date
-            $txtCutoff.Text = $t.ToString("dd/MM/yyyy")
-            $calCutoff.SelectedDate = $t
-            $calCutoff.DisplayDate = $t
-
-            $null = & $clearCutoffPinnedCmd
-
-            if ($hint) { $hint.Text = "Start date now follows today until you select a date." }
-            Write-QOSettingsUILog "Cutoff set to follow today (unpinned)"
-        }
-        catch {
-            Write-QOSettingsUILog ("Use today failed: " + $_.Exception.ToString())
-            Write-QOSettingsUILog ("Use today stack: " + $_.ScriptStackTrace)
-            if ($hint) { $hint.Text = "Use today failed. Check logs." }
-        }
-    }.GetNewClosure()
+    }
 
     $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
     $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
-
-    $calCutoff.Add_SelectedDatesChanged($script:QOSettings_CalHandler)
     $btnToday.Add_Click($script:QOSettings_TodayHandler)
 
-    Write-QOSettingsUILog "Wired handlers: mail add/remove, calendar select, use today"
+    Write-QOSettingsUILog "Wired handlers: mail add/remove, calendar event subscription, use today"
 
     return $root
 }
