@@ -196,14 +196,14 @@
                               Margin="0" />
 
                     <Button x:Name="BtnFollowToday"
-                            Grid.Column="1"
-                            Style="{StaticResource IconButton}"
-                            Width="62"
-                            Height="62"
-                            Margin="16,0,0,0"
-                            VerticalAlignment="Top"
-                            HorizontalAlignment="Right"
-                            ToolTip="Follow today (do not pin a date)">
+                        Grid.Column="1"
+                        Style="{StaticResource IconButton}"
+                        Width="36"
+                        Height="36"
+                        Margin="16,8,0,0"
+                        VerticalAlignment="Top"
+                        HorizontalAlignment="Right"
+                        ToolTip="Follow today (do not pin a date)">
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="18"
                                    Text="&#xE121;" />
