@@ -22,6 +22,13 @@ try {
 # =====================================================================
 $script:TicketStorePath  = $null
 $script:TicketBackupPath = $null
+$script:ValidTicketStatuses = @(
+    "New",
+    "In Progress",
+    "Waiting on User",
+    "No Longer Required",
+    "Completed"
+)
 
 # =====================================================================
 # Helpers
@@ -176,6 +183,29 @@ function Get-QOTickets {
 
         if ($null -eq $db.Tickets) { $db.Tickets = @() }
         $db.Tickets = @($db.Tickets)
+        foreach ($ticket in $db.Tickets) {
+            if ($null -eq $ticket) { continue }
+
+            if (-not ($ticket.PSObject.Properties.Name -contains "Folder")) {
+                $ticket | Add-Member -NotePropertyName Folder -NotePropertyValue "Active" -Force
+            }
+
+            if (-not ($ticket.PSObject.Properties.Name -contains "DeletedAt")) {
+                $ticket | Add-Member -NotePropertyName DeletedAt -NotePropertyValue $null -Force
+            }
+
+            if (-not ($ticket.PSObject.Properties.Name -contains "Status")) {
+                $ticket | Add-Member -NotePropertyName Status -NotePropertyValue "New" -Force
+            }
+
+            if ([string]::IsNullOrWhiteSpace([string]$ticket.Status)) {
+                $ticket.Status = "New"
+            }
+
+            if ($ticket.Status -eq "Open") {
+                $ticket.Status = "In Progress"
+            }
+        }
 
         return $db
     }
@@ -212,8 +242,10 @@ function New-QOTicket {
         Id        = [guid]::NewGuid().ToString()
         Title     = $Title
         CreatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
-        Status    = "Open"
+        Status    = "New"
         Priority  = $Priority
+        Folder    = "Active"
+        DeletedAt = $null
     }
 }
 
@@ -227,10 +259,71 @@ function Add-QOTicket {
 }
 
 function Remove-QOTicket {
-    param([Parameter(Mandatory)][string]$Id)
+    param([Parameter(Mandatory)][string[]]$Id)
 
     $db = Get-QOTickets
-    $db.Tickets = @($db.Tickets | Where-Object { $_.Id -ne $Id })
+    $ids = @($Id | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ids.Count -eq 0) {
+        return
+    }
+
+    $now = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    foreach ($ticket in @($db.Tickets)) {
+        if ($null -eq $ticket) { continue }
+        if ($ids -contains $ticket.Id) {
+            $ticket.Folder = "Deleted"
+            $ticket.DeletedAt = $now
+        }
+    }
+    Save-QOTickets -Database $db
+}
+
+function Restore-QOTickets {
+    param([Parameter(Mandatory)][string[]]$Id)
+
+    $db = Get-QOTickets
+    $ids = @($Id | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ids.Count -eq 0) {
+        return
+    }
+
+    foreach ($ticket in @($db.Tickets)) {
+        if ($null -eq $ticket) { continue }
+        if ($ids -contains $ticket.Id) {
+            $ticket.Folder = "Active"
+            $ticket.DeletedAt = $null
+        }
+    }
+
+    Save-QOTickets -Database $db
+}
+
+function Set-QOTicketsStatus {
+    param(
+        [Parameter(Mandatory)][string[]]$Id,
+        [Parameter(Mandatory)][string]$Status
+    )
+
+    $statusValue = [string]$Status
+    if ($statusValue -eq "Open") { $statusValue = "In Progress" }
+
+    if ($script:ValidTicketStatuses -notcontains $statusValue) {
+        throw "Invalid status '$Status'. Allowed: $($script:ValidTicketStatuses -join ', ')."
+    }
+
+    $db = Get-QOTickets
+    $ids = @($Id | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ids.Count -eq 0) {
+        return
+    }
+
+    foreach ($ticket in @($db.Tickets)) {
+        if ($null -eq $ticket) { continue }
+        if ($ids -contains $ticket.Id) {
+            $ticket.Status = $statusValue
+        }
+    }
+
     Save-QOTickets -Database $db
 }
 
@@ -321,7 +414,8 @@ function Add-QOTicketFromEmail {
         CreatedAt      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         Priority       = "Normal"
         Source         = "Email"
-
+        Folder         = "Active"
+        DeletedAt      = $null
         EmailFrom      = $from
         EmailTo        = $to
         EmailReceived  = $received
@@ -372,6 +466,8 @@ $exports = @(
     "New-QOTicket",
     "Add-QOTicket",
     "Remove-QOTicket",
+    "Restore-QOTickets",
+    "Set-QOTicketsStatus",
     "Get-QOTMonitoredMailboxAddresses",
     "Add-QOTicketFromEmail",
     "Sync-QOTicketsFromEmail"
@@ -383,5 +479,3 @@ if (Get-Command Sync-QOTicketsFromOutlook -ErrorAction SilentlyContinue) {
 }
 
 Export-ModuleMember -Function $exports
-
-
