@@ -95,6 +95,40 @@ function Set-QOTLastEmailSyncUtc {
     } catch { }
 }
 
+# ---------------------------------------------------------------------
+# Decide cutoff:
+# - If never synced before (LastSyncUtc is default), use pinned start date
+# - If not pinned, follow today (today at midnight local)
+# - Otherwise use LastSyncUtc for incremental sync
+# ---------------------------------------------------------------------
+function Get-QOTEffectiveEmailCutoffUtc {
+    param(
+        [Parameter(Mandatory)]
+        [datetime]$LastSyncUtc
+    )
+
+    $neverSynced = ($LastSyncUtc -le [datetime]"1970-01-02T00:00:00Z")
+
+    if (-not $neverSynced) {
+        return $LastSyncUtc
+    }
+
+    $pinned = $null
+    try {
+        # This should exist in Settings.psm1 based on your UI wiring
+        $pinned = Get-QOEmailSyncStartDatePinned
+    } catch { }
+
+    if ($pinned) {
+        # Treat pinned as a date (start of day) in local time, then convert to UTC
+        $localStart = ([datetime]$pinned).Date
+        return $localStart.ToUniversalTime()
+    }
+
+    # Follow today: use start of today (local), then convert to UTC
+    return (Get-Date).Date.ToUniversalTime()
+}
+
 function Convert-QOTMailItemToTicket {
     param(
         [Parameter(Mandatory)] [string]$MailboxAddress,
@@ -188,7 +222,9 @@ function Sync-QOTicketsFromOutlook {
         } catch { }
     }
 
-    $lastSyncUtc = Get-QOTLastEmailSyncUtc
+    $lastSyncUtc  = Get-QOTLastEmailSyncUtc
+    $cutoffUtc    = Get-QOTEffectiveEmailCutoffUtc -LastSyncUtc $lastSyncUtc
+
     $mapi  = Get-QOTOutlookNamespace
     $added = 0
 
@@ -198,8 +234,9 @@ function Sync-QOTicketsFromOutlook {
         $items = $inbox.Items
         try { $items.Sort("[ReceivedTime]", $true) } catch { }
 
-        # Restrict to only new emails since last sync (Outlook expects local time formatting)
-        $localCutoff = $lastSyncUtc.ToLocalTime().ToString("g")
+        # Restrict to only emails since cutoff
+        # Outlook filter expects LOCAL time formatting
+        $localCutoff = $cutoffUtc.ToLocalTime().ToString("g")
         $filter = "[ReceivedTime] > '$localCutoff'"
 
         try {
@@ -247,7 +284,10 @@ function Sync-QOTicketsFromOutlook {
     # Only update watermark after completing all mailboxes
     Set-QOTLastEmailSyncUtc -UtcTime (Get-Date)
 
-    return [pscustomobject]@{ Added = $added; Note = ("Sync complete. CutoffUtc=" + $lastSyncUtc.ToString("o")) }
+    return [pscustomobject]@{
+        Added = $added
+        Note  = ("Sync complete. CutoffUtc=" + $cutoffUtc.ToString("o") + " LastSyncUtcWas=" + $lastSyncUtc.ToString("o"))
+    }
 }
 
 Export-ModuleMember -Function Sync-QOTicketsFromOutlook
