@@ -40,7 +40,10 @@ function Get-QOTicketsForGrid {
         if ($null -eq $db) { return @() }
 
         if ($db.PSObject.Properties.Name -contains "Tickets") {
-            return @($db.Tickets)
+            return @(
+                $db.Tickets |
+                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Folder") -and ($_.Folder -ne "Deleted") }
+            )
         }
 
         if ($db -is [System.Collections.IEnumerable]) {
@@ -197,15 +200,27 @@ function Initialize-QOTicketsUI {
 
     $script:TicketsDeleteHandler = {
         try {
-            $selected = $grid.SelectedItem
-            if (-not $selected) { return }
+            $selectedItems = @($grid.SelectedItems)
+            if ($selectedItems.Count -eq 0) { return }
 
-            if (-not ($selected.PSObject.Properties.Name -contains "Id")) { return }
+            $ids = @(
+                $selectedItems |
+                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Id") } |
+                    ForEach-Object { $_.Id }
+            )
+            if ($ids.Count -eq 0) { return }
 
-            $confirm = [System.Windows.MessageBox]::Show("Delete this ticket?","Confirm","YesNo","Warning")
+            $confirmText = if ($ids.Count -gt 1) {
+                "Delete {0} tickets?" -f $ids.Count
+            } else {
+                "Delete this ticket?"
+            }
+            $confirm = [System.Windows.MessageBox]::Show($confirmText,"Confirm","YesNo","Warning")
+
+            
             if ($confirm -ne "Yes") { return }
 
-            $null = & $removeCmd -Id $selected.Id
+            $null = & $removeCmd -Id $ids
             & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
         }
         catch { }
