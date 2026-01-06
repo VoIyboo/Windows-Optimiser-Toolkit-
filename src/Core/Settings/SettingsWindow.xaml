@@ -67,7 +67,7 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Calendar day buttons (numbers) -->
+        <!-- Day numbers -->
         <Style x:Key="QOT_CalendarDayButtonStyle" TargetType="{x:Type primitives:CalendarDayButton}">
             <Setter Property="Foreground" Value="#FFFFFF" />
             <Setter Property="Background" Value="Transparent" />
@@ -92,7 +92,7 @@
 
                         <ControlTemplate.Triggers>
 
-                            <!-- Weekday header row is disabled day buttons -->
+                            <!-- Weekday headers come through as disabled buttons -->
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#9CA3AF" />
                             </Trigger>
@@ -114,24 +114,15 @@
                                 <Setter TargetName="DayBd" Property="BorderThickness" Value="1" />
                             </Trigger>
 
-                            <!-- Days from previous/next month -->
-                            <Trigger Property="IsInactive" Value="True">
-                                <Setter Property="Foreground" Value="#9CA3AF" />
-                            </Trigger>
-
-                            <Trigger Property="IsBlackout" Value="True">
-                                <Setter Property="Foreground" Value="#4B5563" />
-                            </Trigger>
-
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <!-- Month title + nav buttons (January 2026, arrows) -->
+        <!-- Month title and nav buttons -->
         <Style x:Key="QOT_CalendarButtonStyle" TargetType="{x:Type primitives:CalendarButton}">
-            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -139,7 +130,6 @@
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
-        <!-- Calendar base -->
         <Style x:Key="QOT_CalendarStyle" TargetType="{x:Type Calendar}">
             <Setter Property="Background" Value="#0B1220" />
             <Setter Property="Foreground" Value="#E5E7EB" />
