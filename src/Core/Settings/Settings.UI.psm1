@@ -132,21 +132,21 @@ function Convert-SettingsWindowToHostableRoot {
 # ------------------------------------------------------------
 # Stored handlers to avoid double wiring
 # ------------------------------------------------------------
-$script:QOSettings_AddHandler      = $null
-$script:QOSettings_RemHandler      = $null
-$script:QOSettings_CalHandler      = $null
-$script:QOSettings_FollowHandler   = $null
+$script:QOSettings_AddHandler    = $null
+$script:QOSettings_RemHandler    = $null
+$script:QOSettings_CalHandler    = $null
+$script:QOSettings_FollowHandler = $null
 
 function New-QOTSettingsView {
     Initialize-QOSettingsUIAssemblies
 
-    $setMonitoredCmd     = Get-Command Set-QOMonitoredAddresses -ErrorAction Stop
-    $getSettingsCmd      = Get-Command Get-QOSettings -ErrorAction Stop
-    $getMonitoredCmd     = Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction Stop
+    $setMonitoredCmd = Get-Command Set-QOMonitoredAddresses -ErrorAction Stop
+    $getSettingsCmd  = Get-Command Get-QOSettings -ErrorAction Stop
+    $getMonitoredCmd = Get-Command Get-QOMonitoredMailboxAddresses -ErrorAction Stop
 
-    $getPinnedCmd        = Get-Command Get-QOEmailSyncStartDatePinned -ErrorAction Stop
-    $setPinnedCmd        = Get-Command Set-QOEmailSyncStartDatePinned -ErrorAction Stop
-    $clearPinnedCmd      = Get-Command Clear-QOEmailSyncStartDatePinned -ErrorAction Stop
+    $getPinnedCmd   = Get-Command Get-QOEmailSyncStartDatePinned -ErrorAction Stop
+    $setPinnedCmd   = Get-Command Set-QOEmailSyncStartDatePinned -ErrorAction Stop
+    $clearPinnedCmd = Get-Command Clear-QOEmailSyncStartDatePinned -ErrorAction Stop
 
     $xamlPath = Join-Path $PSScriptRoot "SettingsWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
@@ -206,22 +206,22 @@ function New-QOTSettingsView {
         if ($hint) { $hint.Text = "Calendar initialisation failed. Check logs." }
     }
 
-    # Remove old handlers safely
+    # Remove old handlers safely (use remove_* accessors, NOT RemoveHandler)
     try {
-        if ($script:QOSettings_AddHandler) { $btnAdd.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler) }
+        if ($script:QOSettings_AddHandler)    { $btnAdd.remove_Click($script:QOSettings_AddHandler) }
     } catch { }
     try {
-        if ($script:QOSettings_RemHandler) { $btnRem.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler) }
+        if ($script:QOSettings_RemHandler)    { $btnRem.remove_Click($script:QOSettings_RemHandler) }
     } catch { }
     try {
-        if ($script:QOSettings_CalHandler) { $cal.RemoveHandler([System.Windows.Controls.Calendar]::SelectedDatesChangedEvent, $script:QOSettings_CalHandler) }
+        if ($script:QOSettings_CalHandler)    { $cal.remove_SelectedDatesChanged($script:QOSettings_CalHandler) }
     } catch { }
     try {
-        if ($script:QOSettings_FollowHandler) { $btnFollow.RemoveHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_FollowHandler) }
+        if ($script:QOSettings_FollowHandler) { $btnFollow.remove_Click($script:QOSettings_FollowHandler) }
     } catch { }
 
     # Add mailbox
-    $script:QOSettings_AddHandler = [System.Windows.RoutedEventHandler]{
+    $script:QOSettings_AddHandler = {
         try {
             $addr = ([string]$txtEmail.Text).Trim()
             Write-QOSettingsUILog ("Add clicked. Input='" + $addr + "'")
@@ -260,7 +260,7 @@ function New-QOTSettingsView {
     }.GetNewClosure()
 
     # Remove mailbox
-    $script:QOSettings_RemHandler = [System.Windows.RoutedEventHandler]{
+    $script:QOSettings_RemHandler = {
         try {
             $sel = $list.SelectedItem
             Write-QOSettingsUILog ("Remove clicked. Selected='" + ($sel + "") + "'")
@@ -288,15 +288,18 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Calendar selected date changed (MUST be SelectionChangedEventHandler)
-    $script:QOSettings_CalHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
+    # Calendar selected date changed (use native add_SelectedDatesChanged)
+    $script:QOSettings_CalHandler = [System.EventHandler[System.Windows.Controls.SelectionChangedEventArgs]]{
         param(
             [object]$sender,
             [System.Windows.Controls.SelectionChangedEventArgs]$e
         )
 
         try {
-            $picked = $cal.SelectedDate
+            # Ignore events with no added dates (helps reduce noise)
+            if (-not $e -or -not $e.AddedItems -or $e.AddedItems.Count -lt 1) { return }
+
+            $picked = $sender.SelectedDate
             if ($picked) {
                 $null = & $setPinnedCmd -Date $picked
                 if ($hint) { $hint.Text = "Start date pinned to " + $picked.ToString("dd/MM/yyyy") }
@@ -309,7 +312,7 @@ function New-QOTSettingsView {
     }.GetNewClosure()
 
     # Follow today button (clears pin)
-    $script:QOSettings_FollowHandler = [System.Windows.RoutedEventHandler]{
+    $script:QOSettings_FollowHandler = {
         try {
             $null = & $clearPinnedCmd
             $cal.SelectedDate = $null
@@ -322,14 +325,13 @@ function New-QOTSettingsView {
         }
     }.GetNewClosure()
 
-    # Wire handlers using AddHandler (strongly typed)
-    $btnAdd.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_AddHandler)
-    $btnRem.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_RemHandler)
+    # Wire handlers (NO AddHandler)
+    $btnAdd.add_Click($script:QOSettings_AddHandler)
+    $btnRem.add_Click($script:QOSettings_RemHandler)
+    $cal.add_SelectedDatesChanged($script:QOSettings_CalHandler)
+    $btnFollow.add_Click($script:QOSettings_FollowHandler)
 
-    $cal.AddHandler([System.Windows.Controls.Calendar]::SelectedDatesChangedEvent, $script:QOSettings_CalHandler)
-    $btnFollow.AddHandler([System.Windows.Controls.Button]::ClickEvent, $script:QOSettings_FollowHandler)
-
-    Write-QOSettingsUILog "Wired handlers using AddHandler"
+    Write-QOSettingsUILog "Wired handlers using add_* accessors (no AddHandler)"
 
     return $root
 }
