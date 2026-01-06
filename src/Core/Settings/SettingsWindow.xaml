@@ -14,22 +14,21 @@
         <SolidColorBrush x:Key="LineBrush" Color="#E5E7EB" />
 
         <Style x:Key="IconButton" TargetType="Button">
-            <Setter Property="Width" Value="44" />
-            <Setter Property="Height" Value="44" />
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
             <Setter Property="Background" Value="{StaticResource AccentBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1"
-                                CornerRadius="10">
+                                CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
@@ -70,23 +69,37 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Calendar look (bigger + readable like your screenshot 2 vibe) -->
+        <!-- Calendar: make it readable + fill space -->
         <Style TargetType="Calendar">
             <Setter Property="Background" Value="#0B1220" />
-            <Setter Property="Foreground" Value="#E5E7EB" />
+            <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
 
+        <!-- Day buttons: bigger, clean, readable -->
         <Style TargetType="CalendarDayButton">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="52" />
+            <Setter Property="Height" Value="52" />
+        </Style>
+
+        <!-- Month header etc -->
+        <Style TargetType="CalendarButton">
             <Setter Property="Foreground" Value="#E5E7EB" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Width" Value="44" />
-            <Setter Property="Height" Value="44" />
         </Style>
 
+        <Style TargetType="CalendarItem">
+            <Setter Property="Foreground" Value="#E5E7EB" />
+        </Style>
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -94,9 +107,8 @@
 
         <StackPanel Margin="16"
                     HorizontalAlignment="Left"
-                    Width="540">
+                    Width="460">
 
-            <!-- Mailboxes -->
             <TextBlock Text="Monitored mailbox addresses"
                        Foreground="White"
                        FontSize="14"
@@ -116,7 +128,7 @@
 
                     <Button x:Name="BtnAdd"
                             Style="{StaticResource IconButton}"
-                            Margin="0,0,8,0"
+                            Margin="0,0,6,0"
                             ToolTip="Add address">
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="16"
@@ -140,55 +152,58 @@
             <Border Background="{StaticResource CardBrush}"
                     BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="1"
-                    CornerRadius="10"
-                    Padding="10">
+                    CornerRadius="6"
+                    Padding="8">
 
                 <ListBox x:Name="LstEmails"
-                         MinHeight="160"
+                         MinHeight="190"
                          BorderThickness="0"
                          Background="Transparent" />
             </Border>
 
-            <!-- Email sync start date -->
             <TextBlock Text="Email sync start date"
                        Foreground="White"
                        FontSize="14"
                        FontWeight="SemiBold"
-                       Margin="0,18,0,8" />
+                       Margin="0,16,0,8" />
 
             <Border Height="1"
                     Background="{StaticResource LineBrush}"
                     Opacity="0.25"
                     Margin="0,0,0,14" />
 
+            <!-- Big classy card (Calendar fills space, button on right) -->
             <Border Background="#0B1220"
                     BorderBrush="#1F2937"
                     BorderThickness="1"
-                    CornerRadius="14"
-                    Padding="16">
+                    CornerRadius="10"
+                    Padding="14">
 
-                <!-- This is the key: calendar uses the space, button is on the right -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <Calendar x:Name="CalEmailCutoff"
                               Grid.Column="0"
                               SelectionMode="SingleDate"
                               IsTodayHighlighted="True"
-                              HorizontalAlignment="Left"
-                              VerticalAlignment="Top" />
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              MinWidth="400"
+                              MinHeight="300"
+                              Margin="0" />
 
                     <Button x:Name="BtnFollowToday"
                             Grid.Column="1"
                             Style="{StaticResource IconButton}"
-                            Width="54"
-                            Height="54"
-                            ToolTip="Follow today (do not pin a date)"
+                            Width="62"
+                            Height="62"
+                            Margin="16,0,0,0"
                             VerticalAlignment="Top"
-                            HorizontalAlignment="Right">
+                            HorizontalAlignment="Right"
+                            ToolTip="Follow today (do not pin a date)">
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="18"
                                    Text="&#xE121;" />
@@ -201,7 +216,8 @@
                        Foreground="{StaticResource TextSubtle}"
                        FontSize="12" />
 
-            <Border Height="14" Background="Transparent" />
+            <Border Height="16"
+                    Background="Transparent" />
 
         </StackPanel>
 
