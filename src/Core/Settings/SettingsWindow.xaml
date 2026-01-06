@@ -66,16 +66,94 @@
             </Style.Triggers>
         </Style>
 
-        <Style TargetType="Calendar">
-            <Setter Property="Background" Value="#0B1220" />
-            <Setter Property="Foreground" Value="#E5E7EB" />
-            <Setter Property="BorderThickness" Value="0" />
+        <!-- Calendar base -->
+        <Style TargetType="{x:Type Calendar}">
+            <Setter Property="Background" Value="#0B1220"/>
+            <Setter Property="Foreground" Value="#E5E7EB"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        
+        <!-- Month header buttons (eg January 2026 text, navigation buttons are also buttons) -->
+        <Style TargetType="{x:Type System.Windows.Controls.Primitives.CalendarButton}">
+            <Setter Property="Foreground" Value="#E5E7EB"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        
+        <!-- Weekday headers (Mo Tu We...) -->
+        <Style TargetType="{x:Type System.Windows.Controls.Primitives.CalendarDayButton}"
+               x:Key="{x:Static Calendar.DayButtonStyleKey}">
+            <Setter Property="Foreground" Value="#9CA3AF"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        
+        <!-- Day numbers -->
+        <Style TargetType="{x:Type System.Windows.Controls.Primitives.CalendarDayButton}">
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type System.Windows.Controls.Primitives.CalendarDayButton}">
+                        <Border x:Name="DayBd"
+                                CornerRadius="18"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Width="36"
+                                Height="36"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+        
+                        <ControlTemplate.Triggers>
+        
+                            <!-- Hover -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="DayBd" Property="Background" Value="#0F172A"/>
+                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#1F2937"/>
+                                <Setter TargetName="DayBd" Property="BorderThickness" Value="1"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+        
+                            <!-- Selected -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="DayBd" Property="Background" Value="#2563EB"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+        
+                            <!-- Today outline -->
+                            <Trigger Property="IsToday" Value="True">
+                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#2563EB"/>
+                                <Setter TargetName="DayBd" Property="BorderThickness" Value="1"/>
+                            </Trigger>
+        
+                            <!-- Inactive days (prev/next month) -->
+                            <Trigger Property="IsInactive" Value="True">
+                                <Setter Property="Foreground" Value="#9CA3AF"/>
+                            </Trigger>
+        
+                            <!-- Disabled/blackout -->
+                            <Trigger Property="IsBlackout" Value="True">
+                                <Setter Property="Foreground" Value="#4B5563"/>
+                            </Trigger>
+        
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style TargetType="CalendarDayButton">
-            <Setter Property="Foreground" Value="#E5E7EB" />
-            <Setter Property="Background" Value="Transparent" />
-        </Style>
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
