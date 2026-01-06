@@ -17,6 +17,7 @@ $script:TicketsLoadedHandler  = $null
 $script:TicketsRefreshHandler = $null
 $script:TicketsNewHandler     = $null
 $script:TicketsDeleteHandler  = $null
+$script:TicketsStatusHandler  = $null
 
 function Write-QOTicketsUILog {
     param(
@@ -113,7 +114,9 @@ function Initialize-QOTicketsUI {
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
     $addTicketCmd  = Get-Command Add-QOTicket  -ErrorAction Stop
     $removeCmd     = Get-Command Remove-QOTicket -ErrorAction Stop
-
+    $setStatusCmd  = Get-Command Set-QOTicketsStatus -ErrorAction Stop
+    $getStatusesCmd = Get-Command Get-QOTicketStatuses -ErrorAction Stop
+    
     $syncCmd = $null
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
 
@@ -126,11 +129,15 @@ function Initialize-QOTicketsUI {
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
+    $statusSelector = $Window.FindName("TicketStatusSelector")
+    $btnSetStatus = $Window.FindName("BtnSetTicketStatus")
 
     if (-not $grid)       { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
+    if (-not $statusSelector) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketStatusSelector") | Out-Null; return }
+    if (-not $btnSetStatus)   { [System.Windows.MessageBox]::Show("Missing XAML control: BtnSetTicketStatus") | Out-Null; return }
 
     $script:TicketsGrid = $grid
 
@@ -156,6 +163,22 @@ function Initialize-QOTicketsUI {
     try {
         if ($script:TicketsDeleteHandler) {
             $btnDelete.Remove_Click($script:TicketsDeleteHandler)
+        }
+    } catch { }
+
+    try {
+        if ($script:TicketsStatusHandler) {
+            $btnSetStatus.Remove_Click($script:TicketsStatusHandler)
+        }
+    } catch { }
+
+    try {
+        $statusList = & $getStatusesCmd
+        if ($statusList) {
+            $statusSelector.ItemsSource = @($statusList)
+            if (-not $statusSelector.SelectedItem -and $statusSelector.Items.Count -gt 0) {
+                $statusSelector.SelectedIndex = 0
+            }
         }
     } catch { }
 
@@ -226,6 +249,28 @@ function Initialize-QOTicketsUI {
         catch { }
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
+
+ $script:TicketsStatusHandler = {
+        try {
+            $selectedItems = @($grid.SelectedItems)
+            if ($selectedItems.Count -eq 0) { return }
+
+            $statusValue = [string]$statusSelector.SelectedItem
+            if ([string]::IsNullOrWhiteSpace($statusValue)) { return }
+
+            $ids = @(
+                $selectedItems |
+                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Id") } |
+                    ForEach-Object { $_.Id }
+            )
+            if ($ids.Count -eq 0) { return }
+
+            $null = & $setStatusCmd -Id $ids -Status $statusValue
+            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
+        }
+        catch { }
+    }.GetNewClosure()
+    $btnSetStatus.Add_Click($script:TicketsStatusHandler)
 
     & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
 }
