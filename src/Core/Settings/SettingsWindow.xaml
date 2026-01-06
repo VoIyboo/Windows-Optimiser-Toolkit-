@@ -13,7 +13,6 @@
         <SolidColorBrush x:Key="TextSubtle" Color="#9CA3AF" />
         <SolidColorBrush x:Key="LineBrush" Color="#E5E7EB" />
 
-        <!-- Icon button -->
         <Style x:Key="IconButton" TargetType="Button">
             <Setter Property="Width" Value="34" />
             <Setter Property="Height" Value="34" />
@@ -38,7 +37,6 @@
             </Setter>
         </Style>
 
-        <!-- TextBox -->
         <Style TargetType="TextBox">
             <Setter Property="Height" Value="34" />
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
@@ -49,7 +47,6 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
 
-        <!-- ListBox -->
         <Style TargetType="ListBox">
             <Setter Property="Background" Value="{StaticResource CardBrush}" />
             <Setter Property="Foreground" Value="White" />
@@ -72,83 +69,35 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Calendar base -->
+        <!-- Calendar base styling -->
         <Style TargetType="Calendar">
             <Setter Property="Background" Value="#0B1220" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="VerticalAlignment" Value="Stretch" />
         </Style>
 
-        <!-- Month header / nav buttons -->
+        <!-- Month header and nav buttons -->
         <Style TargetType="CalendarButton">
             <Setter Property="Foreground" Value="#E5E7EB" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
-        <Style TargetType="CalendarItem">
-            <Setter Property="Foreground" Value="#E5E7EB" />
-        </Style>
-
-        <!-- Day buttons: make them actually big and readable -->
+        <!-- Day buttons readable -->
         <Style TargetType="CalendarDayButton">
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CalendarDayButton">
-                        <Border x:Name="DayBd"
-                                Width="44"
-                                Height="44"
-                                CornerRadius="22"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                        </Border>
-
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="DayBd" Property="Background" Value="#0F172A" />
-                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#1F2937" />
-                            </Trigger>
-
-                            <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="DayBd" Property="Background" Value="#2563EB" />
-                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#2563EB" />
-                                <Setter Property="Foreground" Value="White" />
-                            </Trigger>
-
-                            <Trigger Property="IsToday" Value="True">
-                                <Setter TargetName="DayBd" Property="BorderBrush" Value="#2563EB" />
-                            </Trigger>
-
-                            <Trigger Property="IsInactive" Value="True">
-                                <Setter Property="Foreground" Value="#9CA3AF" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="BorderThickness" Value="0" />
         </Style>
-
     </Window.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
 
         <StackPanel Margin="16"
-                    HorizontalAlignment="Stretch"
+                    HorizontalAlignment="Stretch">
 
             <TextBlock Text="Monitored mailbox addresses"
                        Foreground="White"
@@ -213,11 +162,11 @@
                     Opacity="0.25"
                     Margin="0,0,0,14" />
 
-            <!-- Big classy card (Calendar fills space, button on right) -->
+            <!-- Big classy card (calendar uses space, button on the right) -->
             <Border Background="#0B1220"
                     BorderBrush="#1F2937"
                     BorderThickness="1"
-                    CornerRadius="12"
+                    CornerRadius="10"
                     Padding="14">
 
                 <Grid>
@@ -226,27 +175,34 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Calendar x:Name="CalEmailCutoff"
-                              Grid.Column="0"
-                              SelectionMode="SingleDate"
-                              IsTodayHighlighted="True"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              MinWidth="380"
-                              MinHeight="300"
-                              Margin="0" />
+                    <!-- Viewbox scales the calendar up cleanly -->
+                    <Viewbox Grid.Column="0"
+                             Stretch="Uniform"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Margin="0,8,0,0">
 
+                        <Calendar x:Name="CalEmailCutoff"
+                                  SelectionMode="SingleDate"
+                                  IsTodayHighlighted="True"
+                                  Width="420"
+                                  Height="360" />
+
+                    </Viewbox>
+
+                    <!-- Follow today button (small, tidy) -->
                     <Button x:Name="BtnFollowToday"
                             Grid.Column="1"
                             Style="{StaticResource IconButton}"
-                            Width="38"
-                            Height="38"
-                            Margin="14,8,0,0"
+                            Width="30"
+                            Height="30"
+                            Margin="12,10,0,0"
                             VerticalAlignment="Top"
                             HorizontalAlignment="Right"
-                            ToolTip="Follow today (do not pin a date)">
+                            ToolTip="Follow today (do not pin a date)"
+                            Opacity="0.9">
                         <TextBlock FontFamily="Segoe MDL2 Assets"
-                                   FontSize="16"
+                                   FontSize="14"
                                    Text="&#xE121;" />
                     </Button>
                 </Grid>
