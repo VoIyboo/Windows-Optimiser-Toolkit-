@@ -302,33 +302,35 @@ function Restore-QOTickets {
     Save-QOTickets -Database $db
 }
 
-function Set-QOTicketsStatus {
+function Get-QOTicketStatuses {
+    return @($script:ValidTicketStatuses)
+}
+
+function Get-QOTicketsFiltered {
     param(
-        [Parameter(Mandatory)][string[]]$Id,
-        [Parameter(Mandatory)][string]$Status
+        [string[]]$Status,
+        [switch]$IncludeDeleted
     )
 
-    $statusValue = [string]$Status
-    if ($statusValue -eq "Open") { $statusValue = "In Progress" }
-
-    if ($script:ValidTicketStatuses -notcontains $statusValue) {
-        throw "Invalid status '$Status'. Allowed: $($script:ValidTicketStatuses -join ', ')."
-    }
-
     $db = Get-QOTickets
-    $ids = @($Id | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
-    if ($ids.Count -eq 0) {
-        return
+    $statuses = @(
+        $Status |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+            ForEach-Object { [string]$_ }
+    )
+
+    if ($statuses.Count -eq 0) {
+        $statuses = @($script:ValidTicketStatuses)
     }
 
-    foreach ($ticket in @($db.Tickets)) {
-        if ($null -eq $ticket) { continue }
-        if ($ids -contains $ticket.Id) {
-            $ticket.Status = $statusValue
-        }
-    }
+    $includeDeleted = $IncludeDeleted.IsPresent
 
-    Save-QOTickets -Database $db
+    return @(
+        $db.Tickets |
+            Where-Object { $_ } |
+            Where-Object { $statuses -contains $_.Status } |
+            Where-Object { $includeDeleted -or ($_.Folder -ne "Deleted") }
+    )
 }
 
 # =====================================================================
