@@ -74,8 +74,9 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
 
-        <!-- Month header buttons (January 2026) -->
-        <Style TargetType="{x:Type primitives:CalendarButton}">
+        <!-- Month header / navigation (January 2026, arrows) -->
+        <Style TargetType="{x:Type primitives:CalendarButton}"
+               x:Key="{x:Static Calendar.CalendarButtonStyleKey}">
             <Setter Property="Foreground" Value="#E5E7EB"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
@@ -84,18 +85,9 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
-        <!-- Weekday headers (Mo Tu We...) -->
+        <!-- Day buttons (date numbers + weekday headers) -->
         <Style TargetType="{x:Type primitives:CalendarDayButton}"
-               x:Key="{x:Static Calendar.DayButtonStyleKey}">
-            <Setter Property="Foreground" Value="#9CA3AF"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-
-        <!-- Day numbers -->
-        <Style TargetType="{x:Type primitives:CalendarDayButton}">
+               x:Key="{x:Static Calendar.CalendarDayButtonStyleKey}">
             <Setter Property="Foreground" Value="#FFFFFF"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
@@ -118,6 +110,11 @@
                         </Border>
 
                         <ControlTemplate.Triggers>
+
+                            <!-- Weekday header row is a CalendarDayButton too, but disabled -->
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#9CA3AF"/>
+                            </Trigger>
 
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="DayBd" Property="Background" Value="#0F172A"/>
