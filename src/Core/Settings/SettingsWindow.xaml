@@ -169,51 +169,50 @@
                     Opacity="0.25"
                     Margin="0,0,0,14" />
 
-            <!-- Big classy card (Calendar uses the space, button on right) -->
-            <Border Background="#0B1220"
-                    BorderBrush="#1F2937"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    Padding="16">
-
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Viewbox scales the calendar to fill this area neatly -->
-                    <Viewbox Grid.Column="0"
-                             Stretch="Uniform"
-                             StretchDirection="Both"
-                             HorizontalAlignment="Center"
-                             VerticalAlignment="Center"
-                             Margin="0,0,14,0"
-                             MaxHeight="360">
-
-                        <!-- Design size that scales up nicely -->
-                        <Calendar x:Name="CalEmailCutoff"
-                                  Width="520"
-                                  Height="360"
-                                  SelectionMode="SingleDate"
-                                  IsTodayHighlighted="True" />
-                    </Viewbox>
-
-                    <Button x:Name="BtnFollowToday"
-                            Grid.Column="1"
-                            Style="{StaticResource IconButton}"
-                            Width="36"
-                            Height="36"
-                            Margin="0,4,0,0"
-                            VerticalAlignment="Top"
-                            HorizontalAlignment="Right"
-                            ToolTip="Follow today (do not pin a date)">
-                        <TextBlock FontFamily="Segoe MDL2 Assets"
-                                   FontSize="18"
-                                   Text="&#xE121;" />
-                    </Button>
-                </Grid>
-            </Border>
+            <!-- Big classy card (Calendar fills space, button on right) -->
+                <Border Background="#0B1220"
+                        BorderBrush="#1F2937"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="16"
+                        Height="360">
+                
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                
+                        <!-- This MUST stretch, otherwise it stays tiny -->
+                        <Viewbox Grid.Column="0"
+                                 Stretch="Uniform"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Stretch"
+                                 Margin="0,0,14,0">
+                
+                            <!-- Baseline design size that scales UP to fill -->
+                            <Calendar x:Name="CalEmailCutoff"
+                                      Width="520"
+                                      Height="360"
+                                      SelectionMode="SingleDate"
+                                      IsTodayHighlighted="True" />
+                        </Viewbox>
+                
+                        <Button x:Name="BtnFollowToday"
+                                Grid.Column="1"
+                                Style="{StaticResource IconButton}"
+                                Width="36"
+                                Height="36"
+                                Margin="0,4,0,0"
+                                VerticalAlignment="Top"
+                                HorizontalAlignment="Right"
+                                ToolTip="Follow today (do not pin a date)">
+                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                       FontSize="18"
+                                       Text="&#xE121;" />
+                        </Button>
+                    </Grid>
+                </Border>
 
             <TextBlock x:Name="LblHint"
                        Margin="0,10,0,0"
