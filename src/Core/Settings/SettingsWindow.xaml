@@ -148,8 +148,7 @@
                   HorizontalScrollBarVisibility="Disabled">
 
         <StackPanel Margin="16"
-                    HorizontalAlignment="Left"
-                    Width="460">
+                    HorizontalAlignment="Stretch"
 
             <TextBlock Text="Monitored mailbox addresses"
                        Foreground="White"
