@@ -14,20 +14,20 @@
         <SolidColorBrush x:Key="LineBrush" Color="#E5E7EB" />
 
         <Style x:Key="IconButton" TargetType="Button">
-            <Setter Property="Width" Value="34" />
-            <Setter Property="Height" Value="34" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
             <Setter Property="Background" Value="{StaticResource AccentBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
             <Setter Property="Foreground" Value="White" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Top" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1"
-                                CornerRadius="6">
+                                CornerRadius="8">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center" />
                         </Border>
@@ -66,15 +66,63 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Calendar styling -->
         <Style TargetType="Calendar">
-            <Setter Property="Background" Value="#0B1220" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#E5E7EB" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="14" />
         </Style>
 
+        <!-- Make day numbers readable and keep the "blue bubble" look -->
         <Style TargetType="CalendarDayButton">
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Foreground" Value="#E5E7EB" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Width" Value="38" />
+            <Setter Property="Height" Value="38" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CalendarDayButton">
+                        <Border x:Name="Bd"
+                                CornerRadius="19"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#0F172A" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#1F2937" />
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="1" />
+                            </Trigger>
+
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2563EB" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+
+                            <Trigger Property="IsToday" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#2563EB" />
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="1" />
+                            </Trigger>
+
+                            <Trigger Property="IsInactive" Value="True">
+                                <Setter Property="Foreground" Value="#94A3B8" />
+                            </Trigger>
+
+                            <Trigger Property="IsBlackout" Value="True">
+                                <Setter Property="Foreground" Value="#475569" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
@@ -83,7 +131,7 @@
 
         <StackPanel Margin="16"
                     HorizontalAlignment="Left"
-                    Width="460">
+                    Width="520">
 
             <TextBlock Text="Monitored mailbox addresses"
                        Foreground="White"
@@ -141,28 +189,31 @@
                        Foreground="White"
                        FontSize="14"
                        FontWeight="SemiBold"
-                       Margin="0,16,0,8" />
+                       Margin="0,18,0,8" />
 
             <Border Height="1"
                     Background="{StaticResource LineBrush}"
                     Opacity="0.25"
-                    Margin="0,0,0,12" />
+                    Margin="0,0,0,14" />
 
-            <Button x:Name="BtnUseToday"
-                    Style="{StaticResource IconButton}"
-                    HorizontalAlignment="Right"
-                    Margin="0,0,0,10"
-                    ToolTip="Follow today (do not pin a date)">
-                <TextBlock FontFamily="Segoe MDL2 Assets"
-                           FontSize="16"
-                           Text="&#xE121;" />
-            </Button>
+            <!-- Follow today button only (no textbox bar) -->
+            <DockPanel LastChildFill="True"
+                       Margin="0,0,0,10">
+                <Button x:Name="BtnUseToday"
+                        Style="{StaticResource IconButton}"
+                        DockPanel.Dock="Right"
+                        ToolTip="Follow today (do not pin a date)">
+                    <TextBlock FontFamily="Segoe MDL2 Assets"
+                               FontSize="16"
+                               Text="&#xE121;" />
+                </Button>
+            </DockPanel>
 
             <Border Background="#0B1220"
                     BorderBrush="#1F2937"
                     BorderThickness="1"
-                    CornerRadius="10"
-                    Padding="10">
+                    CornerRadius="12"
+                    Padding="14">
 
                 <Calendar x:Name="CalEmailCutoff"
                           SelectionMode="SingleDate"
