@@ -205,6 +205,10 @@ function Get-QOTickets {
             if ($ticket.Status -eq "Open") {
                 $ticket.Status = "In Progress"
             }
+            
+            if ($script:ValidTicketStatuses -notcontains $ticket.Status) {
+                $ticket.Status = "New"
+            }
         }
 
         return $db
@@ -429,6 +433,10 @@ function Add-QOTicketFromEmail {
     return $ticket
 }
 
+function Get-QOTicketStatuses {
+    return @($script:ValidTicketStatuses)
+}
+
 # =====================================================================
 # Sync stub (so UI can call it without exploding)
 # =====================================================================
@@ -468,6 +476,7 @@ $exports = @(
     "Remove-QOTicket",
     "Restore-QOTickets",
     "Set-QOTicketsStatus",
+    "Get-QOTicketStatuses",
     "Get-QOTMonitoredMailboxAddresses",
     "Add-QOTicketFromEmail",
     "Sync-QOTicketsFromEmail"
