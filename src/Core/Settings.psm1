@@ -24,8 +24,8 @@ function Save-QOSettings {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
 
-    # Depth must be high enough for nested settings objects
-    $json = $Settings | ConvertTo-Json -Depth 20
+    # Depth must be high enough for nested objects
+    $json = $Settings | ConvertTo-Json -Depth 25
     Set-Content -LiteralPath $path -Value $json -Encoding UTF8
 }
 
@@ -45,13 +45,11 @@ function New-QODefaultSettings {
 
         Tickets = [pscustomobject]@{
             EmailIntegration = [pscustomobject]@{
-                MonitoredAddresses        = @()
+                MonitoredAddresses      = @()
 
-                # If Pinned = $false, UI follows today's date automatically
-                EmailSyncStartDatePinned  = $false
-
-                # Stored as yyyy-MM-dd when pinned. Empty/null means not pinned.
-                EmailSyncStartDate        = ""
+                # If null/empty: follow today's date (dynamic)
+                # If set: pinned start date in yyyy-MM-dd
+                EmailSyncStartDatePinned = $null
             }
         }
     }
@@ -85,7 +83,6 @@ function Get-QOSettings {
             }
         }
 
-        # Ensure nested structure exists
         if (-not $settings.Tickets) {
             $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue $defaults.Tickets -Force
         }
@@ -98,12 +95,8 @@ function Get-QOSettings {
             $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
         }
 
-        if ($null -eq $settings.Tickets.EmailIntegration.EmailSyncStartDatePinned) {
-            $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName EmailSyncStartDatePinned -NotePropertyValue $false -Force
-        }
-
-        if ($null -eq $settings.Tickets.EmailIntegration.EmailSyncStartDate) {
-            $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName EmailSyncStartDate -NotePropertyValue "" -Force
+        if (-not ($settings.Tickets.EmailIntegration.PSObject.Properties.Name -contains "EmailSyncStartDatePinned")) {
+            $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName EmailSyncStartDatePinned -NotePropertyValue $null -Force
         }
 
         return $settings
@@ -168,7 +161,6 @@ function Set-QOMonitoredMailboxAddresses {
     $s = Get-QOSettings
     if (-not $s) { $s = New-QODefaultSettings -NoSave }
 
-    # Ensure nesting (belt and braces)
     if (-not $s.Tickets) {
         $s | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
     }
@@ -193,65 +185,58 @@ function Set-QOMonitoredMailboxAddresses {
 }
 
 # --------------------------------------------------------------------
-# Email Sync Start Date (Calendar)
-# - If pinned: use stored EmailSyncStartDate
-# - If not pinned: follows today's date
+# Email sync start date behaviour
+# If EmailSyncStartDatePinned is null/empty -> follow today (dynamic)
+# If set -> pinned start date (yyyy-MM-dd)
 # --------------------------------------------------------------------
-function Get-QOEmailSyncStartDateState {
+function Get-QOEmailSyncStartDatePinned {
     $s = Get-QOSettings
-    if (-not $s) { $s = New-QODefaultSettings -NoSave }
+    if (-not $s) { return $null }
 
-    $pinned = $false
-    try { $pinned = [bool]$s.Tickets.EmailIntegration.EmailSyncStartDatePinned } catch { $pinned = $false }
+    $v = $null
+    try { $v = $s.Tickets.EmailIntegration.EmailSyncStartDatePinned } catch { $v = $null }
 
-    $raw = ""
-    try { $raw = [string]$s.Tickets.EmailIntegration.EmailSyncStartDate } catch { $raw = "" }
+    $v = ([string]$v).Trim()
+    if ([string]::IsNullOrWhiteSpace($v)) { return $null }
 
-    $dt = $null
-
-    if ($pinned -and $raw) {
-        try {
-            $dt = [datetime]::ParseExact($raw, "yyyy-MM-dd", $null)
-        } catch {
-            $dt = $null
-        }
-    }
-
-    if (-not $dt) {
-        $dt = (Get-Date).Date
-    }
-
-    return [pscustomobject]@{
-        Pinned = $pinned
-        Date   = $dt
+    # Validate / parse
+    try {
+        return [DateTime]::ParseExact($v, "yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        return $null
     }
 }
 
 function Set-QOEmailSyncStartDatePinned {
     param(
         [Parameter(Mandatory)]
-        [datetime]$Date
+        [DateTime]$Date
     )
 
     $s = Get-QOSettings
     if (-not $s) { $s = New-QODefaultSettings -NoSave }
 
-    $s.Tickets.EmailIntegration.EmailSyncStartDatePinned = $true
-    $s.Tickets.EmailIntegration.EmailSyncStartDate = $Date.Date.ToString("yyyy-MM-dd")
+    $iso = $Date.Date.ToString("yyyy-MM-dd")
 
+    $s.Tickets.EmailIntegration.EmailSyncStartDatePinned = $iso
     Save-QOSettings -Settings $s
-    return $s
+
+    return $iso
 }
 
 function Clear-QOEmailSyncStartDatePinned {
     $s = Get-QOSettings
     if (-not $s) { $s = New-QODefaultSettings -NoSave }
 
-    $s.Tickets.EmailIntegration.EmailSyncStartDatePinned = $false
-    $s.Tickets.EmailIntegration.EmailSyncStartDate = ""
-
+    $s.Tickets.EmailIntegration.EmailSyncStartDatePinned = $null
     Save-QOSettings -Settings $s
-    return $s
+    return $null
+}
+
+function Get-QOEffectiveEmailSyncStartDate {
+    $pinned = Get-QOEmailSyncStartDatePinned
+    if ($pinned) { return $pinned.Date }
+    return (Get-Date).Date
 }
 
 # --------------------------------------------------------------------
@@ -279,6 +264,7 @@ Export-ModuleMember -Function `
     Set-QOMonitoredMailboxAddresses, `
     Get-QOMonitoredAddresses, `
     Set-QOMonitoredAddresses, `
-    Get-QOEmailSyncStartDateState, `
+    Get-QOEmailSyncStartDatePinned, `
     Set-QOEmailSyncStartDatePinned, `
-    Clear-QOEmailSyncStartDatePinned
+    Clear-QOEmailSyncStartDatePinned, `
+    Get-QOEffectiveEmailSyncStartDate
