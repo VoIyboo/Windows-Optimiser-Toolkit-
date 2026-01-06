@@ -518,10 +518,26 @@
                         <Button x:Name="BtnDeleteTicket"
                                 Width="28"
                                 Height="28"
+                                Margin="0,0,8,0"
                                 ToolTip="Delete selected ticket">
                             <TextBlock FontFamily="Segoe MDL2 Assets"
                                        FontSize="14"
                                        Text="&#xE74D;"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Button>
+
+                        <ComboBox x:Name="TicketStatusSelector"
+                                  Width="160"
+                                  Height="28"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Set status for selected tickets" />
+
+                        <Button x:Name="BtnSetTicketStatus"
+                                Width="70"
+                                Height="28"
+                                ToolTip="Apply status to selected tickets">
+                            <TextBlock Text="Apply"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                         </Button>
