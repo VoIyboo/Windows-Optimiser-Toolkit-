@@ -81,15 +81,18 @@ function Refresh-QOTicketsGrid {
 
 function Get-QOTicketFilterState {
     param(
-        [Parameter(Mandatory)][hashtable]$StatusBoxes,
-        [Parameter(Mandatory)][System.Windows.Controls.CheckBox]$IncludeDeletedBox
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
     )
 
-    $statuses = @(
-        $StatusBoxes.GetEnumerator() |
-            Where-Object { $_.Value -and $_.Value.IsChecked } |
-            ForEach-Object { $_.Key }
-    )
+    $statuses = @()
+    if ($StatusBoxes) {
+        $statuses = @(
+            $StatusBoxes.GetEnumerator() |
+                Where-Object { $_.Value -and $_.Value.IsChecked } |
+                ForEach-Object { $_.Key }
+        )
+    }
 
     $includeDeleted = $false
     try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
@@ -102,16 +105,19 @@ function Get-QOTicketFilterState {
 
 function Update-QOTicketFilterIndicator {
     param(
-        [Parameter(Mandatory)][hashtable]$StatusBoxes,
-        [Parameter(Mandatory)][System.Windows.Controls.CheckBox]$IncludeDeletedBox,
-        [Parameter(Mandatory)][System.Windows.UIElement]$Indicator
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox,
+        [AllowNull()][System.Windows.UIElement]$Indicator
     )
+    if (-not $Indicator) { return }
 
     $allSelected = $true
-    foreach ($box in $StatusBoxes.Values) {
-        if (-not $box.IsChecked) {
-            $allSelected = $false
-            break
+    if ($StatusBoxes) {
+        foreach ($box in $StatusBoxes.Values) {
+            if (-not $box.IsChecked) {
+                $allSelected = $false
+                break
+            }
         }
     }
 
@@ -127,8 +133,8 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
         [Parameter(Mandatory)]$GetTicketsCmd,
         [Parameter(Mandatory)]$SyncCmd,
-        [hashtable]$StatusBoxes,
-        [System.Windows.Controls.CheckBox]$IncludeDeletedBox
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
     )
 
     Write-QOTicketsUILog "Tickets: Email sync started"
@@ -158,8 +164,8 @@ function Invoke-QOTicketsGridRefresh {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
         [Parameter(Mandatory)]$GetTicketsCmd,
-        [Parameter(Mandatory)][hashtable]$StatusBoxes,
-        [Parameter(Mandatory)][System.Windows.Controls.CheckBox]$IncludeDeletedBox
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
     )
 
     $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
