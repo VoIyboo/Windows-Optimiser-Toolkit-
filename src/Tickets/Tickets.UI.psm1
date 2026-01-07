@@ -122,28 +122,14 @@ function Update-QOTicketFilterIndicator {
     $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
 }
 
-    $includeDeleted = $false
-    try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
-
-    $indicatorActive = (-not $allSelected) -or $includeDeleted
-    $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
-}
-
-    $allSelected = $true
-    foreach ($box in $StatusBoxes.Values) {
-        if (-not $box.IsChecked) {
-            $allSelected = $false
-            break
-        }
-    }
-
-    $includeDeleted = $false
-    try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
-
-    $indicatorActive = (-not $allSelected) -or $includeDeleted
-    $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
-}
-
+function Invoke-QOTicketsEmailSyncAndRefresh {
+    param(
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
+        [Parameter(Mandatory)]$GetTicketsCmd,
+        [Parameter(Mandatory)]$SyncCmd,
+        [hashtable]$StatusBoxes,
+        [System.Windows.Controls.CheckBox]$IncludeDeletedBox
+    )
 
     Write-QOTicketsUILog "Tickets: Email sync started"
 
