@@ -100,21 +100,27 @@ function Get-QOTicketFilterState {
     }
 }
 
-function Invoke-QOTicketsEmailSyncAndRefresh {
-    param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
-        [Parameter(Mandatory)]$GetTicketsCmd,
-        [Parameter(Mandatory)]$SyncCmd,
-        [hashtable]$StatusBoxes,
-        [System.Windows.Controls.CheckBox]$IncludeDeletedBox
-    )
-
-    function Update-QOTicketFilterIndicator {
+function Update-QOTicketFilterIndicator {
     param(
         [Parameter(Mandatory)][hashtable]$StatusBoxes,
         [Parameter(Mandatory)][System.Windows.Controls.CheckBox]$IncludeDeletedBox,
         [Parameter(Mandatory)][System.Windows.UIElement]$Indicator
     )
+
+    $allSelected = $true
+    foreach ($box in $StatusBoxes.Values) {
+        if (-not $box.IsChecked) {
+            $allSelected = $false
+            break
+        }
+    }
+
+    $includeDeleted = $false
+    try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
+
+    $indicatorActive = (-not $allSelected) -or $includeDeleted
+    $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
+}
 
     $allSelected = $true
     foreach ($box in $StatusBoxes.Values) {
@@ -199,14 +205,14 @@ function Initialize-QOTicketsUI {
     $filterActiveDot = $Window.FindName("TicketFilterActiveDot")
     $statusSelector = $Window.FindName("TicketStatusSelector")
     $btnSetStatus = $Window.FindName("BtnSetTicketStatus")
-    $filterStatusNew = $Window.FindName("FilterStatusNew")
-    $filterStatusInProgress = $Window.FindName("FilterStatusInProgress")
-    $filterStatusWaitingOnUser = $Window.FindName("FilterStatusWaitingOnUser")
-    $filterStatusNoLongerRequired = $Window.FindName("FilterStatusNoLongerRequired")
-    $filterStatusCompleted = $Window.FindName("FilterStatusCompleted")
-    $filterIncludeDeleted = $Window.FindName("FilterIncludeDeleted")
-    $btnFilterSelectAll = $Window.FindName("BtnFilterSelectAllStatuses")
-    $btnFilterClearAll = $Window.FindName("BtnFilterClearAllStatuses")
+    $filterStatusNew = $Window.FindName("TicketFilterStatusNew")
+    $filterStatusInProgress = $Window.FindName("TicketFilterStatusInProgress")
+    $filterStatusWaitingOnUser = $Window.FindName("TicketFilterStatusWaitingOnUser")
+    $filterStatusNoLongerRequired = $Window.FindName("TicketFilterStatusNoLongerRequired")
+    $filterStatusCompleted = $Window.FindName("TicketFilterStatusCompleted")
+    $filterIncludeDeleted = $Window.FindName("TicketFilterIncludeDeleted")
+    $btnFilterSelectAll = $Window.FindName("BtnTicketFilterSelectAllStatuses")
+    $btnFilterClearAll = $Window.FindName("BtnTicketFilterClearAllStatuses")
 
     if (-not $grid)       { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
@@ -219,14 +225,14 @@ function Initialize-QOTicketsUI {
     if (-not $filterActiveDot) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterActiveDot") | Out-Null; return }
     if (-not $statusSelector) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketStatusSelector") | Out-Null; return }
     if (-not $btnSetStatus)   { [System.Windows.MessageBox]::Show("Missing XAML control: BtnSetTicketStatus") | Out-Null; return }
-    if (-not $filterStatusNew) { [System.Windows.MessageBox]::Show("Missing XAML control: FilterStatusNew") | Out-Null; return }
-    if (-not $filterStatusInProgress) { [System.Windows.MessageBox]::Show("Missing XAML control: FilterStatusInProgress") | Out-Null; return }
-    if (-not $filterStatusWaitingOnUser) { [System.Windows.MessageBox]::Show("Missing XAML control: FilterStatusWaitingOnUser") | Out-Null; return }
-    if (-not $filterStatusNoLongerRequired) { [System.Windows.MessageBox]::Show("Missing XAML control: FilterStatusNoLongerRequired") | Out-Null; return }
-    if (-not $filterStatusCompleted) { [System.Windows.MessageBox]::Show("Missing XAML control: FilterStatusCompleted") | Out-Null; return }
-    if (-not $filterIncludeDeleted) { [System.Windows.MessageBox]::Show("Missing XAML control: FilterIncludeDeleted") | Out-Null; return }
-    if (-not $btnFilterSelectAll) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnFilterSelectAllStatuses") | Out-Null; return }
-    if (-not $btnFilterClearAll) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnFilterClearAllStatuses") | Out-Null; return }
+    if (-not $filterStatusNew) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterStatusNew") | Out-Null; return }
+    if (-not $filterStatusInProgress) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterStatusInProgress") | Out-Null; return }
+    if (-not $filterStatusWaitingOnUser) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterStatusWaitingOnUser") | Out-Null; return }
+    if (-not $filterStatusNoLongerRequired) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterStatusNoLongerRequired") | Out-Null; return }
+    if (-not $filterStatusCompleted) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterStatusCompleted") | Out-Null; return }
+    if (-not $filterIncludeDeleted) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterIncludeDeleted") | Out-Null; return }
+    if (-not $btnFilterSelectAll) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketFilterSelectAllStatuses") | Out-Null; return }
+    if (-not $btnFilterClearAll) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketFilterClearAllStatuses") | Out-Null; return }
 
     $script:TicketsGrid = $grid
     $script:TicketFilterActiveDot = $filterActiveDot
@@ -292,7 +298,7 @@ function Initialize-QOTicketsUI {
         }
     } catch { }
 
-        try {
+    try {
         if ($script:TicketsFilterToggleHandler) {
             $btnFilterToggle.Remove_Click($script:TicketsFilterToggleHandler)
         }
@@ -497,4 +503,3 @@ function Initialize-QOTicketsUI {
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
-
