@@ -132,6 +132,18 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
     Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
 }
 
+function Invoke-QOTicketsGridRefresh {
+    param(
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
+        [Parameter(Mandatory)]$GetTicketsCmd,
+        [Parameter(Mandatory)][hashtable]$StatusBoxes,
+        [Parameter(Mandatory)][System.Windows.Controls.CheckBox]$IncludeDeletedBox
+    )
+
+    $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
+    Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+}
+
 function Initialize-QOTicketsUI {
     param([Parameter(Mandatory)]$Window)
 
@@ -158,6 +170,7 @@ function Initialize-QOTicketsUI {
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
+    $btnDelete  = $Window.FindName("BtnDeleteTicket")
     $btnRestore = $Window.FindName("BtnRestoreTicket")
     $statusSelector = $Window.FindName("TicketStatusSelector")
     $btnSetStatus = $Window.FindName("BtnSetTicketStatus")
@@ -169,7 +182,7 @@ function Initialize-QOTicketsUI {
     $filterIncludeDeleted = $Window.FindName("FilterIncludeDeleted")
     $btnFilterSelectAll = $Window.FindName("BtnFilterSelectAllStatuses")
     $btnFilterClearAll = $Window.FindName("BtnFilterClearAllStatuses")
-
+    
     if (-not $grid)       { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
@@ -219,7 +232,7 @@ function Initialize-QOTicketsUI {
         }
     } catch { }
 
-     try {
+  try {
         if ($script:TicketsRestoreHandler) {
             $btnRestore.Remove_Click($script:TicketsRestoreHandler)
         }
@@ -251,6 +264,30 @@ function Initialize-QOTicketsUI {
     try {
         if ($script:TicketsFilterClearAllHandler) {
             $btnFilterClearAll.Remove_Click($script:TicketsFilterClearAllHandler)
+        }
+    } catch { }
+
+    $script:TicketFilterStatusBoxes = @{
+        "New" = $filterStatusNew
+        "In Progress" = $filterStatusInProgress
+        "Waiting on User" = $filterStatusWaitingOnUser
+        "No Longer Required" = $filterStatusNoLongerRequired
+        "Completed" = $filterStatusCompleted
+    }
+    $script:TicketFilterIncludeDeleted = $filterIncludeDeleted
+
+    foreach ($box in $script:TicketFilterStatusBoxes.Values) {
+        $box.IsChecked = $true
+    }
+    $filterIncludeDeleted.IsChecked = $false
+
+    try {
+        $statusList = & $getStatusesCmd
+        if ($statusList) {
+            $statusSelector.ItemsSource = @($statusList)
+            if (-not $statusSelector.SelectedItem -and $statusSelector.Items.Count -gt 0) {
+                $statusSelector.SelectedIndex = 0
+            }
         }
     } catch { }
 
@@ -353,7 +390,6 @@ function Initialize-QOTicketsUI {
             if ($confirm -ne "Yes") { return }
 
             $null = & $removeCmd -Id $ids
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
         }
         catch { }
@@ -382,7 +418,7 @@ function Initialize-QOTicketsUI {
     }.GetNewClosure()
     $btnSetStatus.Add_Click($script:TicketsStatusHandler)
 
-    $script:TicketsRestoreHandler = {
+  $script:TicketsRestoreHandler = {
         try {
             $selectedItems = @($grid.SelectedItems)
             if ($selectedItems.Count -eq 0) { return }
@@ -395,8 +431,7 @@ function Initialize-QOTicketsUI {
             if ($ids.Count -eq 0) { return }
 
             $null = & $restoreCmd -Id $ids
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         }
         catch { }
     }.GetNewClosure()
@@ -418,8 +453,7 @@ function Initialize-QOTicketsUI {
             if ($ids.Count -eq 0) { return }
 
             $null = & $setStatusCmd -Id $ids -Status $statusValue
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         }
         catch { }
     }.GetNewClosure()
@@ -427,8 +461,7 @@ function Initialize-QOTicketsUI {
 
     $script:TicketsFilterChangeHandler = {
         try {
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         } catch { }
     }.GetNewClosure()
 
@@ -444,8 +477,7 @@ function Initialize-QOTicketsUI {
             foreach ($box in $script:TicketFilterStatusBoxes.Values) {
                 $box.IsChecked = $true
             }
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         } catch { }
     }.GetNewClosure()
     $btnFilterSelectAll.Add_Click($script:TicketsFilterSelectAllHandler)
@@ -455,15 +487,12 @@ function Initialize-QOTicketsUI {
             foreach ($box in $script:TicketFilterStatusBoxes.Values) {
                 $box.IsChecked = $false
             }
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         } catch { }
     }.GetNewClosure()
     $btnFilterClearAll.Add_Click($script:TicketsFilterClearAllHandler)
 
-    $initialFilterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-    & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $initialFilterState.Statuses -IncludeDeleted:$initialFilterState.IncludeDeleted
-}
+    Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
