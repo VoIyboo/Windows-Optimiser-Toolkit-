@@ -31,6 +31,9 @@ $script:TicketFilterActiveDot = $null
 $script:TicketFilterPopup = $null
 $script:TicketsAutoRefreshTimer = $null
 $script:TicketsAutoRefreshInProgress = $false
+$script:TicketsFileWatcher = $null
+$script:TicketsFileWatcherEvents = @()
+$script:TicketsFileRefreshTimer = $null
 
 function Write-QOTicketsUILog {
     param(
@@ -314,6 +317,27 @@ function Initialize-QOTicketsUI {
         if ($script:TicketsAutoRefreshTimer) {
             $script:TicketsAutoRefreshTimer.Stop()
             $script:TicketsAutoRefreshTimer = $null
+        }
+    } catch { }
+        try {
+        if ($script:TicketsFileRefreshTimer) {
+            $script:TicketsFileRefreshTimer.Stop()
+            $script:TicketsFileRefreshTimer = $null
+        }
+    } catch { }
+    try {
+        foreach ($evt in @($script:TicketsFileWatcherEvents)) {
+            if ($evt) {
+                Unregister-Event -SubscriptionId $evt.Id -ErrorAction SilentlyContinue
+            }
+        }
+        $script:TicketsFileWatcherEvents = @()
+    } catch { }
+    try {
+        if ($script:TicketsFileWatcher) {
+            $script:TicketsFileWatcher.EnableRaisingEvents = $false
+            $script:TicketsFileWatcher.Dispose()
+            $script:TicketsFileWatcher = $null
         }
     } catch { }
 
