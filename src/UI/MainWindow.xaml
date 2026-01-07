@@ -527,7 +527,7 @@
                                        VerticalAlignment="Center" />
                         </Button>
 
-                        <Button x:Name="BtnRestoreTicket"
+                        <Button x:Name="BtnRestoreTicketToolbar"
                                 Width="28"
                                 Height="28"
                                 Margin="0,0,8,0"
