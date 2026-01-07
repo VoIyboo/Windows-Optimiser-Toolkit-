@@ -122,6 +122,13 @@ function Update-QOTicketFilterIndicator {
     $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
 }
 
+    $includeDeleted = $false
+    try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
+
+    $indicatorActive = (-not $allSelected) -or $includeDeleted
+    $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
+}
+
     $allSelected = $true
     foreach ($box in $StatusBoxes.Values) {
         if (-not $box.IsChecked) {
@@ -204,7 +211,7 @@ function Initialize-QOTicketsUI {
     $filterPopupPanel = $Window.FindName("TicketFilterPopupPanel")
     $filterActiveDot = $Window.FindName("TicketFilterActiveDot")
     $statusSelector = $Window.FindName("TicketStatusSelector")
-    $btnSetStatus = $Window.FindName("BtnSetTicketStatus")
+    $btnSetStatus = $Window.FindName("BtnSetTicketStatus")    
     $filterStatusNew = $Window.FindName("TicketFilterStatusNew")
     $filterStatusInProgress = $Window.FindName("TicketFilterStatusInProgress")
     $filterStatusWaitingOnUser = $Window.FindName("TicketFilterStatusWaitingOnUser")
@@ -213,7 +220,7 @@ function Initialize-QOTicketsUI {
     $filterIncludeDeleted = $Window.FindName("TicketFilterIncludeDeleted")
     $btnFilterSelectAll = $Window.FindName("BtnTicketFilterSelectAllStatuses")
     $btnFilterClearAll = $Window.FindName("BtnTicketFilterClearAllStatuses")
-
+    
     if (-not $grid)       { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
@@ -448,6 +455,7 @@ function Initialize-QOTicketsUI {
     $script:TicketsFilterChangeHandler = {
         try {
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
+            Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
         } catch { }
     }.GetNewClosure()
 
@@ -464,6 +472,7 @@ function Initialize-QOTicketsUI {
                 $box.IsChecked = $true
             }
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
+            Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
         } catch { }
     }.GetNewClosure()
     $btnFilterSelectAll.Add_Click($script:TicketsFilterSelectAllHandler)
@@ -474,6 +483,7 @@ function Initialize-QOTicketsUI {
                 $box.IsChecked = $false
             }
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
+            Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
         } catch { }
     }.GetNewClosure()
     $btnFilterClearAll.Add_Click($script:TicketsFilterClearAllHandler)
