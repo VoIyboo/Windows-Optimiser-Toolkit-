@@ -410,13 +410,43 @@ function Add-QOTicketFromEmail {
     $msgId    = ""
     $received = $null
 
-    try { if ($Email.PSObject.Properties.Name -contains "Subject")   { $subject  = [string]$Email.Subject } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "From")      { $from     = [string]$Email.From } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "To")        { $to       = $Email.To } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "Body")      { $body     = [string]$Email.Body } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "Snippet")   { if (-not $body) { $body = [string]$Email.Snippet } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "MessageId") { $msgId    = [string]$Email.MessageId } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "Received")  { $received = $Email.Received } } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "Subject") {
+            $subject = [string]$Email.Subject
+        }
+    } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "From") {
+            $from = [string]$Email.From
+        }
+    } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "To") {
+            $to = $Email.To
+        }
+    } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "Body") {
+            $body = [string]$Email.Body
+        }
+    } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "Snippet") {
+            if (-not $body) {
+                $body = [string]$Email.Snippet
+            }
+        }
+    } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "MessageId") {
+            $msgId = [string]$Email.MessageId
+        }
+    } catch { }
+    try {
+        if ($Email.PSObject.Properties.Name -contains "Received") {
+            $received = $Email.Received
+        }
+    } catch { }
 
     $subject = ($subject + "").Trim()
     $from    = ($from + "").Trim()
