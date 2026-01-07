@@ -24,6 +24,8 @@ $script:TicketsFilterSelectAllHandler = $null
 $script:TicketsFilterClearAllHandler = $null
 $script:TicketsFilterToggleHandler = $null
 $script:TicketsFilterPopupKeyHandler = $null
+$script:TicketsToggleDetailsHandler = $null
+$script:TicketsSelectionChangedHandler = $null
 
 $script:TicketFilterStatusBoxes = $null
 $script:TicketFilterIncludeDeleted = $null
@@ -133,6 +135,58 @@ function Update-QOTicketFilterIndicator {
     $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
 }
 
+function Set-QOTicketDetailsVisibility {
+    param(
+        [AllowNull()][System.Windows.UIElement]$DetailsPanel,
+        [AllowNull()][System.Windows.Controls.TextBlock]$Chevron,
+        [bool]$IsOpen
+    )
+
+    if ($DetailsPanel) {
+        $DetailsPanel.Visibility = if ($IsOpen) { "Visible" } else { "Collapsed" }
+    }
+    if ($Chevron) {
+        $Chevron.Text = if ($IsOpen) { "" } else { "" }
+    }
+}
+
+function Update-QOTicketDetailsView {
+    param(
+        [AllowNull()]$Ticket,
+        [AllowNull()][System.Windows.UIElement]$DetailsPanel,
+        [AllowNull()][System.Windows.Controls.TextBlock]$BodyText,
+        [AllowNull()][System.Windows.Controls.TextBox]$ReplyText,
+        [AllowNull()][System.Windows.Controls.Button]$ReplyButton,
+        [AllowNull()][System.Windows.Controls.TextBlock]$Chevron
+    )
+
+    if (-not $Ticket) {
+        if ($BodyText) { $BodyText.Text = "Select a ticket to view details." }
+        if ($ReplyText) { $ReplyText.Text = "" }
+        if ($ReplyButton) { $ReplyButton.IsEnabled = $false }
+        Set-QOTicketDetailsVisibility -DetailsPanel $DetailsPanel -Chevron $Chevron -IsOpen:$false
+        return
+    }
+
+    $body = ""
+    try {
+        if ($Ticket.PSObject.Properties.Name -contains "EmailBody") {
+            $body = [string]$Ticket.EmailBody
+        } elseif ($Ticket.PSObject.Properties.Name -contains "Body") {
+            $body = [string]$Ticket.Body
+        }
+    } catch { }
+
+    if ([string]::IsNullOrWhiteSpace($body)) {
+        $body = "No email body found for this ticket."
+    }
+
+    if ($BodyText) { $BodyText.Text = $body }
+    if ($ReplyButton) { $ReplyButton.IsEnabled = $true }
+    Set-QOTicketDetailsVisibility -DetailsPanel $DetailsPanel -Chevron $Chevron -IsOpen:$true
+}
+
+
 function Invoke-QOTicketsEmailSyncAndRefresh {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
@@ -207,6 +261,12 @@ function Initialize-QOTicketsUI {
     $filterPopup = $Window.FindName("TicketFilterPopup")
     $filterPopupPanel = $Window.FindName("TicketFilterPopupPanel")
     $filterActiveDot = $Window.FindName("TicketFilterActiveDot")
+    $btnToggleDetails = $Window.FindName("BtnToggleTicketDetails")
+    $detailsPanel = $Window.FindName("TicketDetailsPanel")
+    $detailsChevron = $Window.FindName("TicketDetailsChevron")
+    $ticketBodyText = $Window.FindName("TicketEmailBodyText")
+    $ticketReplyText = $Window.FindName("TicketReplyText")
+    $btnSendReply = $Window.FindName("BtnSendTicketReply")
     $statusSelector = $Window.FindName("TicketStatusSelector")
     $btnSetStatus = $Window.FindName("BtnSetTicketStatus")    
     $filterStatusNew = $Window.FindName("TicketFilterStatusNew")
@@ -227,6 +287,12 @@ function Initialize-QOTicketsUI {
     if (-not $filterPopup) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterPopup") | Out-Null; return }
     if (-not $filterPopupPanel) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterPopupPanel") | Out-Null; return }
     if (-not $filterActiveDot) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterActiveDot") | Out-Null; return }
+    if (-not $btnToggleDetails) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnToggleTicketDetails") | Out-Null; return }
+    if (-not $detailsPanel) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketDetailsPanel") | Out-Null; return }
+    if (-not $detailsChevron) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketDetailsChevron") | Out-Null; return }
+    if (-not $ticketBodyText) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketEmailBodyText") | Out-Null; return }
+    if (-not $ticketReplyText) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketReplyText") | Out-Null; return }
+    if (-not $btnSendReply) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnSendTicketReply") | Out-Null; return }
     if (-not $statusSelector) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketStatusSelector") | Out-Null; return }
     if (-not $btnSetStatus)   { [System.Windows.MessageBox]::Show("Missing XAML control: BtnSetTicketStatus") | Out-Null; return }
     if (-not $filterStatusNew) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterStatusNew") | Out-Null; return }
@@ -313,6 +379,18 @@ function Initialize-QOTicketsUI {
             $filterPopupPanel.RemoveHandler([System.Windows.UIElement]::PreviewKeyDownEvent, $script:TicketsFilterPopupKeyHandler)
         }
     } catch { }
+
+    try {
+        if ($script:TicketsToggleDetailsHandler) {
+            $btnToggleDetails.Remove_Click($script:TicketsToggleDetailsHandler)
+        }
+    } catch { }
+    try {
+        if ($script:TicketsSelectionChangedHandler) {
+            $grid.RemoveHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
+        }
+    } catch { }
+    
     try {
         if ($script:TicketsAutoRefreshTimer) {
             $script:TicketsAutoRefreshTimer.Stop()
@@ -356,6 +434,7 @@ function Initialize-QOTicketsUI {
     }
     $filterIncludeDeleted.IsChecked = $false
     Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
+    Update-QOTicketDetailsView -Ticket $null -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
 
     try {
         $statusList = & $getStatusesCmd
@@ -385,6 +464,27 @@ function Initialize-QOTicketsUI {
         & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
     }.GetNewClosure()
     $btnRefresh.Add_Click($script:TicketsRefreshHandler)
+
+    $script:TicketsToggleDetailsHandler = {
+        try {
+            $isOpen = ($detailsPanel.Visibility -eq "Visible")
+            if ($isOpen) {
+                Set-QOTicketDetailsVisibility -DetailsPanel $detailsPanel -Chevron $detailsChevron -IsOpen:$false
+            } else {
+                Update-QOTicketDetailsView -Ticket $grid.SelectedItem -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
+            }
+        } catch { }
+    }.GetNewClosure()
+    $btnToggleDetails.Add_Click($script:TicketsToggleDetailsHandler)
+
+    $script:TicketsSelectionChangedHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
+        param($sender, $args)
+        try {
+            Update-QOTicketDetailsView -Ticket $grid.SelectedItem -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
+        } catch { }
+    }.GetNewClosure()
+    $grid.AddHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
+    
 
     $script:TicketsNewHandler = {
         try {
