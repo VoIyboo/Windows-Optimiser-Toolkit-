@@ -477,19 +477,13 @@
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
 
-                        <!-- Expand/Collapse details -->
-                        <Button x:Name="BtnToggleTicketDetails"
-                                Width="28"
-                                Height="28"
-                                Margin="0,0,8,0"
-                                ToolTip="Show details">
-                            <TextBlock x:Name="TicketDetailsChevron"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Text="&#xE70D;"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Button>
+                        <TextBlock x:Name="TicketDetailsChevron"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="14"
+                                   Text="&#xE70D;"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   Foreground="{StaticResource TextSubtle}" />
 
                         <Button x:Name="BtnRefreshTickets"
                                 Width="28"
