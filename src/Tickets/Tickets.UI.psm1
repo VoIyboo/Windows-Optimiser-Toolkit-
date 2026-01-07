@@ -423,3 +423,4 @@ function Initialize-QOTicketsUI {
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
+
