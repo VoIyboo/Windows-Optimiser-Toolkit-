@@ -192,7 +192,7 @@ function Initialize-QOTicketsUI {
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
-    $btnRestore = $Window.FindName("BtnRestoreTicket")
+    $btnRestore = $Window.FindName("BtnRestoreTicketToolbar")
     $btnFilterToggle = $Window.FindName("BtnTicketFilter")
     $filterPopup = $Window.FindName("TicketFilterPopup")
     $filterPopupPanel = $Window.FindName("TicketFilterPopupPanel")
@@ -212,7 +212,7 @@ function Initialize-QOTicketsUI {
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
-    if (-not $btnRestore) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRestoreTicket") | Out-Null; return }
+    if (-not $btnRestore) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRestoreTicketToolbar") | Out-Null; return }
     if (-not $btnFilterToggle) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketFilter") | Out-Null; return }
     if (-not $filterPopup) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterPopup") | Out-Null; return }
     if (-not $filterPopupPanel) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketFilterPopupPanel") | Out-Null; return }
