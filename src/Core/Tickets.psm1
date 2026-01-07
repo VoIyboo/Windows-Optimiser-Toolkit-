@@ -205,7 +205,7 @@ function Get-QOTickets {
             if ($ticket.Status -eq "Open") {
                 $ticket.Status = "In Progress"
             }
-            
+
             if ($script:ValidTicketStatuses -notcontains $ticket.Status) {
                 $ticket.Status = "New"
             }
@@ -302,6 +302,35 @@ function Restore-QOTickets {
     Save-QOTickets -Database $db
 }
 
+function Set-QOTicketsStatus {
+    param(
+        [Parameter(Mandatory)][string[]]$Id,
+        [Parameter(Mandatory)][string]$Status
+    )
+
+    $statusValue = [string]$Status
+    if ($statusValue -eq "Open") { $statusValue = "In Progress" }
+
+    if ($script:ValidTicketStatuses -notcontains $statusValue) {
+        throw "Invalid status '$Status'. Allowed: $($script:ValidTicketStatuses -join ', ')."
+    }
+
+    $db = Get-QOTickets
+    $ids = @($Id | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ids.Count -eq 0) {
+        return
+    }
+
+    foreach ($ticket in @($db.Tickets)) {
+        if ($null -eq $ticket) { continue }
+        if ($ids -contains $ticket.Id) {
+            $ticket.Status = $statusValue
+        }
+    }
+
+    Save-QOTickets -Database $db
+}
+
 function Get-QOTicketStatuses {
     return @($script:ValidTicketStatuses)
 }
@@ -385,7 +414,7 @@ function Add-QOTicketFromEmail {
     try { if ($Email.PSObject.Properties.Name -contains "From")      { $from     = [string]$Email.From } } catch { }
     try { if ($Email.PSObject.Properties.Name -contains "To")        { $to       = $Email.To } } catch { }
     try { if ($Email.PSObject.Properties.Name -contains "Body")      { $body     = [string]$Email.Body } } catch { }
-    try { if ($Email.PSObject.Properties.Name -contains "Snippet")   { if (-not $body) { $body = [string]$Email.Snippet } } } catch { }
+    try { if ($Email.PSObject.Properties.Name -contains "Snippet")   { if (-not $body) { $body = [string]$Email.Snippet } } catch { }
     try { if ($Email.PSObject.Properties.Name -contains "MessageId") { $msgId    = [string]$Email.MessageId } } catch { }
     try { if ($Email.PSObject.Properties.Name -contains "Received")  { $received = $Email.Received } } catch { }
 
@@ -433,10 +462,6 @@ function Add-QOTicketFromEmail {
     Save-QOTickets -Database $db
 
     return $ticket
-}
-
-function Get-QOTicketStatuses {
-    return @($script:ValidTicketStatuses)
 }
 
 # =====================================================================
