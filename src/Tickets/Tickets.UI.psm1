@@ -26,7 +26,6 @@ $script:TicketsFilterClearAllHandler = $null
 $script:TicketFilterStatusBoxes = $null
 $script:TicketFilterIncludeDeleted = $null
 
-
 function Write-QOTicketsUILog {
     param(
         [Parameter(Mandatory)][string]$Message,
@@ -97,8 +96,6 @@ function Get-QOTicketFilterState {
     }
 }
 
-
-
 function Invoke-QOTicketsEmailSyncAndRefresh {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
@@ -128,8 +125,7 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
         Write-QOTicketsUILog ("Tickets: Email sync failed: " + $_.Exception.Message) "ERROR"
     }
 
-    $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
-    Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+    Invoke-QOTicketsGridRefresh -Grid $Grid -GetTicketsCmd $GetTicketsCmd -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
 }
 
 function Invoke-QOTicketsGridRefresh {
@@ -156,20 +152,18 @@ function Initialize-QOTicketsUI {
     $removeCmd     = Get-Command Remove-QOTicket -ErrorAction Stop
     $setStatusCmd  = Get-Command Set-QOTicketsStatus -ErrorAction Stop
     $getStatusesCmd = Get-Command Get-QOTicketStatuses -ErrorAction Stop
-    $restoreCmd    = Get-Command Restore-QOTickets -ErrorAction Stopp
-    
+    $restoreCmd    = Get-Command Restore-QOTickets -ErrorAction Stop
+
     $syncCmd = $null
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
 
     # Capture UI local function commands
-    $refreshGridCmd = Get-Command Refresh-QOTicketsGrid -ErrorAction Stop
     $emailSyncAndRefreshCmd = Get-Command Invoke-QOTicketsEmailSyncAndRefresh -ErrorAction Stop
 
     # Capture stable local references
     $grid       = $Window.FindName("TicketsGrid")
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
-    $btnDelete  = $Window.FindName("BtnDeleteTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
     $btnRestore = $Window.FindName("BtnRestoreTicket")
     $statusSelector = $Window.FindName("TicketStatusSelector")
@@ -182,7 +176,7 @@ function Initialize-QOTicketsUI {
     $filterIncludeDeleted = $Window.FindName("FilterIncludeDeleted")
     $btnFilterSelectAll = $Window.FindName("BtnFilterSelectAllStatuses")
     $btnFilterClearAll = $Window.FindName("BtnFilterClearAllStatuses")
-    
+
     if (-not $grid)       { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsGrid") | Out-Null; return }
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
@@ -227,12 +221,6 @@ function Initialize-QOTicketsUI {
     } catch { }
 
     try {
-        if ($script:TicketsStatusHandler) {
-            $btnSetStatus.Remove_Click($script:TicketsStatusHandler)
-        }
-    } catch { }
-
-  try {
         if ($script:TicketsRestoreHandler) {
             $btnRestore.Remove_Click($script:TicketsRestoreHandler)
         }
@@ -291,49 +279,13 @@ function Initialize-QOTicketsUI {
         }
     } catch { }
 
-    $script:TicketFilterStatusBoxes = @{
-        "New" = $filterStatusNew
-        "In Progress" = $filterStatusInProgress
-        "Waiting on User" = $filterStatusWaitingOnUser
-        "No Longer Required" = $filterStatusNoLongerRequired
-        "Completed" = $filterStatusCompleted
-    }
-    $script:TicketFilterIncludeDeleted = $filterIncludeDeleted
-
-    foreach ($box in $script:TicketFilterStatusBoxes.Values) {
-        $box.IsChecked = $true
-    }
-    $filterIncludeDeleted.IsChecked = $false
-
-    try {
-        $statusList = & $getStatusesCmd
-        if ($statusList) {
-            $statusSelector.ItemsSource = @($statusList)
-            if (-not $statusSelector.SelectedItem -and $statusSelector.Items.Count -gt 0) {
-                $statusSelector.SelectedIndex = 0
-            }
-        }
-    } catch { }
-
-
-    try {
-        $statusList = & $getStatusesCmd
-        if ($statusList) {
-            $statusSelector.ItemsSource = @($statusList)
-            if (-not $statusSelector.SelectedItem -and $statusSelector.Items.Count -gt 0) {
-                $statusSelector.SelectedIndex = 0
-            }
-        }
-    } catch { }
-
     $script:TicketsLoadedHandler = [System.Windows.RoutedEventHandler]{
         try {
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             if (-not $script:TicketsEmailSyncRan) {
                 $script:TicketsEmailSyncRan = $true
                 & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             } else {
-                & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+                Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             }
         } catch { }
     }.GetNewClosure()
@@ -350,8 +302,7 @@ function Initialize-QOTicketsUI {
             $ticket = & $newTicketCmd -Title "New ticket"
             $null   = & $addTicketCmd -Ticket $ticket
 
-            $filterState = Get-QOTicketFilterState -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
 
             $grid.SelectedItem = $ticket
             $grid.ScrollIntoView($ticket)
@@ -385,40 +336,16 @@ function Initialize-QOTicketsUI {
                 "Delete this ticket?"
             }
             $confirm = [System.Windows.MessageBox]::Show($confirmText,"Confirm","YesNo","Warning")
-
-            
             if ($confirm -ne "Yes") { return }
 
             $null = & $removeCmd -Id $ids
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         }
         catch { }
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
 
- $script:TicketsStatusHandler = {
-        try {
-            $selectedItems = @($grid.SelectedItems)
-            if ($selectedItems.Count -eq 0) { return }
-
-            $statusValue = [string]$statusSelector.SelectedItem
-            if ([string]::IsNullOrWhiteSpace($statusValue)) { return }
-
-            $ids = @(
-                $selectedItems |
-                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Id") } |
-                    ForEach-Object { $_.Id }
-            )
-            if ($ids.Count -eq 0) { return }
-
-            $null = & $setStatusCmd -Id $ids -Status $statusValue
-            & $refreshGridCmd -Grid $grid -GetTicketsCmd $getTicketsCmd
-        }
-        catch { }
-    }.GetNewClosure()
-    $btnSetStatus.Add_Click($script:TicketsStatusHandler)
-
-  $script:TicketsRestoreHandler = {
+    $script:TicketsRestoreHandler = {
         try {
             $selectedItems = @($grid.SelectedItems)
             if ($selectedItems.Count -eq 0) { return }
