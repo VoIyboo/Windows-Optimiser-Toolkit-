@@ -527,6 +527,18 @@
                                        VerticalAlignment="Center" />
                         </Button>
 
+                        <Button x:Name="BtnRestoreTicket"
+                                Width="28"
+                                Height="28"
+                                Margin="0,0,8,0"
+                                ToolTip="Restore deleted ticket">
+                            <TextBlock FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Text="&#xE1A5;"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Button>
+
                         <ComboBox x:Name="TicketStatusSelector"
                                   Width="160"
                                   Height="28"
@@ -548,13 +560,52 @@
 
             <Grid Margin="0">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />    
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
+                <!-- Filters -->
+                <Border Grid.Row="0"
+                        Background="#0B1220"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="8"
+                        Margin="0,0,0,8">
+                    <DockPanel LastChildFill="False">
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                            <TextBlock Text="Status:"
+                                       Foreground="{StaticResource TextSubtle}"
+                                       Margin="0,0,6,0"
+                                       VerticalAlignment="Center" />
+                            <CheckBox x:Name="FilterStatusNew" Content="New" />
+                            <CheckBox x:Name="FilterStatusInProgress" Content="In Progress" />
+                            <CheckBox x:Name="FilterStatusWaitingOnUser" Content="Waiting on User" />
+                            <CheckBox x:Name="FilterStatusNoLongerRequired" Content="No Longer Required" />
+                            <CheckBox x:Name="FilterStatusCompleted" Content="Completed" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <CheckBox x:Name="FilterIncludeDeleted"
+                                      Content="Include deleted"
+                                      Margin="12,2,6,2" />
+                            <Button x:Name="BtnFilterSelectAllStatuses"
+                                    Content="Select all"
+                                    Width="80"
+                                    Height="26"
+                                    Margin="0,0,6,0" />
+                            <Button x:Name="BtnFilterClearAllStatuses"
+                                    Content="Clear"
+                                    Width="60"
+                                    Height="26" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
                 <!-- Main grid -->
                 <DataGrid x:Name="TicketsGrid"
-                          Grid.Row="0"
+                          Grid.Row="1"
                           Margin="0"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
@@ -576,7 +627,7 @@
 
                 <!-- Collapsible details drawer -->
                 <Border x:Name="TicketDetailsPanel"
-                        Grid.Row="1"
+                        Grid.Row="2"
                         Visibility="Collapsed"
                         Background="#0B1220"
                         BorderBrush="{StaticResource BorderBrush}"
