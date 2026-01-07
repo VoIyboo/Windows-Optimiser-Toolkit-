@@ -29,6 +29,8 @@ $script:TicketFilterStatusBoxes = $null
 $script:TicketFilterIncludeDeleted = $null
 $script:TicketFilterActiveDot = $null
 $script:TicketFilterPopup = $null
+$script:TicketsAutoRefreshTimer = $null
+$script:TicketsAutoRefreshInProgress = $false
 
 function Write-QOTicketsUILog {
     param(
@@ -308,6 +310,12 @@ function Initialize-QOTicketsUI {
             $filterPopupPanel.RemoveHandler([System.Windows.UIElement]::PreviewKeyDownEvent, $script:TicketsFilterPopupKeyHandler)
         }
     } catch { }
+    try {
+        if ($script:TicketsAutoRefreshTimer) {
+            $script:TicketsAutoRefreshTimer.Stop()
+            $script:TicketsAutoRefreshTimer = $null
+        }
+    } catch { }
 
 
     $script:TicketFilterStatusBoxes = @{
@@ -500,6 +508,23 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
     $filterPopupPanel.AddHandler([System.Windows.UIElement]::PreviewKeyDownEvent, $script:TicketsFilterPopupKeyHandler)
+
+    if ($syncCmd) {
+        $script:TicketsAutoRefreshTimer = [System.Windows.Threading.DispatcherTimer]::new()
+        $script:TicketsAutoRefreshTimer.Interval = [TimeSpan]::FromSeconds(60)
+        $script:TicketsAutoRefreshTimer.Add_Tick({
+            if ($script:TicketsAutoRefreshInProgress) { return }
+            $script:TicketsAutoRefreshInProgress = $true
+            try {
+                if (-not $grid.IsLoaded) { return }
+                & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
+            } catch { }
+            finally {
+                $script:TicketsAutoRefreshInProgress = $false
+            }
+        }.GetNewClosure())
+        $script:TicketsAutoRefreshTimer.Start()
+    }
 
     Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
 }
