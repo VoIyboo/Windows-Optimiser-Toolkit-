@@ -560,7 +560,7 @@
                                      Margin="0,4,4,0"
                                      Visibility="Collapsed" />
                         </Grid>
-
+                        
                         <Popup x:Name="TicketFilterPopup"
                                Placement="Bottom"
                                PlacementTarget="{Binding ElementName=BtnTicketFilter}"
@@ -598,6 +598,7 @@
                                 </StackPanel>
                             </Border>
                         </Popup>
+
 
 
                         <Button x:Name="BtnRestoreTicket"
