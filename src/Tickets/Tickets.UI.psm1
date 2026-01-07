@@ -461,6 +461,13 @@ function Initialize-QOTicketsUI {
 
             $statusValue = [string]$statusSelector.SelectedItem
             if ([string]::IsNullOrWhiteSpace($statusValue)) { return }
+            foreach ($item in $selectedItems) {
+                if ($null -eq $item) { continue }
+                if ($item.PSObject.Properties.Name -contains "Status") {
+                    $item.Status = $statusValue
+                }
+            }
+            $grid.Items.Refresh()
 
             $ids = @(
                 $selectedItems |
