@@ -85,6 +85,9 @@ function Initialize-QOTTweaksAndCleaningUI {
             return
         }
 
+        $tabs = $Window.FindName("MainTabControl")
+        $tabCleaning = $Window.FindName("TabCleaning")
+
         $actions = @(
             @{ Name = "CbCleanTempFiles";       Label = "Clear temporary files";                 Command = "Invoke-QCleanTemp" },
             @{ Name = "CbEmptyRecycleBin";      Label = "Empty Recycle Bin";                      Command = "Invoke-QCleanRecycleBin" },
@@ -111,6 +114,9 @@ function Initialize-QOTTweaksAndCleaningUI {
 
         $runButton.Add_Click({
             try {
+                if ($tabs -and $tabCleaning -and $tabs.SelectedItem -ne $tabCleaning) {
+                    return
+                }
                 $selected = @()
                 foreach ($action in $actions) {
                     $control = Get-QOTNamedElement -Root $Window -Name $action.Name
