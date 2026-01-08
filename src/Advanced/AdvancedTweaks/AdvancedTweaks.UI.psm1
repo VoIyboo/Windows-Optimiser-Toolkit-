@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 Import-Module "$PSScriptRoot\AdvancedTweaks.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\..\Core\Actions\ActionRegistry.psm1" -Force -ErrorAction SilentlyContinue
 
 function Invoke-QOTAdvancedAction {
     param(
@@ -41,9 +42,6 @@ function Initialize-QOTAdvancedTweaksUI {
             return
         }
 
-        $tabs = $Window.FindName("MainTabControl")
-        $tabAdvanced = $Window.FindName("TabAdvanced")
-
         $actions = @(
             @{ Name = "CbAdvAdobeNetworkBlock"; Label = "Adobe network block"; Command = "Invoke-QAdvancedAdobeNetworkBlock" },
             @{ Name = "CbAdvBlockRazerInstalls"; Label = "Block Razer software installs"; Command = "Invoke-QAdvancedBlockRazerInstalls" },
@@ -61,36 +59,26 @@ function Initialize-QOTAdvancedTweaksUI {
             @{ Name = "CbAdvDisplayPerformance"; Label = "Set display for performance"; Command = "Invoke-QAdvancedDisplayPerformance" }
         )
 
-        $runButton.Add_Click({
-            try {
-                if ($tabs -and $tabAdvanced -and $tabs.SelectedItem -ne $tabAdvanced) {
-                    return
-                }
+        Register-QOTActionGroup -Name "Advanced" -GetItems {
+            param([System.Windows.Window]$Window)
 
-                $selected = @()
-                foreach ($action in $actions) {
-                    $control = $Window.FindName($action.Name)
-                    if (-not $control) { continue }
-                    if ($control.IsChecked -eq $true) {
-                        $selected += $action
+            $items = @()
+            foreach ($action in $actions) {
+                $actionRef = $action
+                $items += @{
+                    Label = $actionRef.Label
+                    IsSelected = {
+                        param($window)
+                        $control = $window.FindName($actionRef.Name)
+                        $control -and $control.IsChecked -eq $true
                     }
+                    Execute = { param($window) Invoke-QOTAdvancedAction -Name $actionRef.Command -Label $actionRef.Label | Out-Null }
                 }
 
-                if ($selected.Count -eq 0) {
-                    try { Write-QLog "Advanced: no actions selected." "INFO" } catch { }
-                    return
-                }
+            return $items
+        }
 
-                foreach ($action in $selected) {
-                    Invoke-QOTAdvancedAction -Name $action.Command -Label $action.Label | Out-Null
-                }
-            }
-            catch {
-                try { Write-QLog ("Advanced run failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
-            }
-        })
-
-        try { Write-QLog "Advanced UI initialised (RunButton wiring)." "DEBUG" } catch { }
+        try { Write-QLog "Advanced UI initialised (action registry)." "DEBUG" } catch { }
     }
     catch {
         try { Write-QLog ("Advanced UI initialisation error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
