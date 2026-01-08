@@ -113,7 +113,8 @@ function Initialize-QOTTweaksAndCleaningUI {
             try {
                 $selected = @()
                 foreach ($action in $actions) {
-                    $control = $Window.FindName($action.Name)
+                    $control = Get-QOTNamedElement -Root $Window -Name $action.Name
+                    if (-not $control) { continue }
                     if ($control.IsChecked -ne $true) {
                         $control.IsChecked = $true
                     }
