@@ -73,18 +73,22 @@ function Start-QOTMainWindow {
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
     Remove-Item Function:\New-QOTSettingsView   -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTAppsUI  -ErrorAction SilentlyContinue
+    Remove-Item Function:\Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue
 
     Get-Module -Name "Tickets.UI"   -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "Settings.UI"  -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "Apps.UI"      -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module -Name "TweaksAndCleaning.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
 
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" }            | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" }     | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" }                  | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\TweaksAndCleaning\TweaksAndCleaning.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
 
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")               -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "TweaksAndCleaning\TweaksAndCleaning.UI.psm1") -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Load MainWindow XAML
@@ -138,6 +142,20 @@ function Start-QOTMainWindow {
     }
     catch {
         try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+
+    # ------------------------------------------------------------
+    # Initialise Tweaks & Cleaning UI
+    # ------------------------------------------------------------
+    try {
+        if (-not (Get-Command Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue)) {
+            throw "Initialize-QOTTweaksAndCleaningUI not found. TweaksAndCleaning.UI.psm1 did not load or export correctly."
+        }
+
+        Initialize-QOTTweaksAndCleaningUI -Window $window
+    }
+    catch {
+        try { Write-QLog ("Tweaks/Cleaning UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
     }
 
     # ------------------------------------------------------------
