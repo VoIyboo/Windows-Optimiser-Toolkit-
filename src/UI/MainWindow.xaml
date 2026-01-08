@@ -477,13 +477,19 @@
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
 
-                        <TextBlock x:Name="TicketDetailsChevron"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="14"
-                                   Text="&#xE70D;"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   Foreground="{StaticResource TextSubtle}" />
+                        <Button x:Name="BtnToggleTicketDetails"
+                                Width="28"
+                                Height="28"
+                                Margin="0,0,8,0"
+                                ToolTip="Toggle ticket details">
+                            <TextBlock x:Name="TicketDetailsChevron"
+                                       FontFamily="Segoe MDL2 Assets"
+                                       FontSize="14"
+                                       Text="&#xE70D;"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSubtle}" />
+                        </Button>
 
                         <Button x:Name="BtnRefreshTickets"
                                 Width="28"
