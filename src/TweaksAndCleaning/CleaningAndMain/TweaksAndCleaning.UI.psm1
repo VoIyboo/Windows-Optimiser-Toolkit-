@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 Import-Module "$PSScriptRoot\..\..\Core\Config\Config.psm1"   -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\..\Core\Actions\ActionRegistry.psm1" -Force -ErrorAction SilentlyContinue
 
 Import-Module "$PSScriptRoot\Cleaning.psm1"                          -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction Stop
@@ -85,9 +86,6 @@ function Initialize-QOTTweaksAndCleaningUI {
             return
         }
 
-        $tabs = $Window.FindName("MainTabControl")
-        $tabCleaning = $Window.FindName("TabCleaning")
-
         $actions = @(
             @{ Name = "CbCleanTempFiles";       Label = "Clear temporary files";                 Command = "Invoke-QCleanTemp" },
             @{ Name = "CbEmptyRecycleBin";      Label = "Empty Recycle Bin";                      Command = "Invoke-QCleanRecycleBin" },
@@ -111,37 +109,30 @@ function Initialize-QOTTweaksAndCleaningUI {
             @{ Name = "CbLimitFeedbackPrompts";    Label = "Reduce feedback and survey prompts";   Command = "Invoke-QTweakFeedbackHub" },
             @{ Name = "CbDisableOnlineTips";       Label = "Disable online tips and suggestions";  Command = "Invoke-QTweakOnlineTips" }
         )
+        
+        Register-QOTActionGroup -Name "Tweaks & Cleaning" -GetItems {
+            param([System.Windows.Window]$Window)
 
-        $runButton.Add_Click({
-            try {
-                if ($tabs -and $tabCleaning -and $tabs.SelectedItem -ne $tabCleaning) {
-                    return
-                }
-                $selected = @()
-                foreach ($action in $actions) {
-                    $control = Get-QOTNamedElement -Root $Window -Name $action.Name
-                    if (-not $control) { continue }
-                    if ($control.IsChecked -ne $true) {
-                        $control.IsChecked = $true
+            $items = @()
+            foreach ($action in $actions) {
+                $actionRef = $action
+                $items += @{
+                    Label = $actionRef.Label
+                    IsSelected = {
+                        param($window)
+                        $control = Get-QOTNamedElement -Root $window -Name $actionRef.Name
+                        $control -and $control.IsChecked -eq $true
                     }
-                    $selected += $action
+                    Execute = { param($window) Invoke-QOTAction -Name $actionRef.Command -Label $actionRef.Label | Out-Null }
                 }
 
-                if ($selected.Count -eq 0) {
-                    try { Write-QLog "Tweaks/Cleaning: no actions selected." "INFO" } catch { }
-                    return
-                }
-
-                foreach ($action in $selected) {
-                    Invoke-QOTAction -Name $action.Command -Label $action.Label | Out-Null
-                }
             }
-            catch {
-                try { Write-QLog ("Tweaks/Cleaning run failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
-            }
-        })
+            return $items
+        }
 
-        try { Write-QLog "Tweaks & Cleaning UI initialised (RunButton wiring)." "DEBUG" } catch { }
+        try { Write-QLog "Tweaks & Cleaning UI initialised (action registry)." "DEBUG" } catch { }
+
+}
     }
     catch {
         try { Write-QLog ("Tweaks/Cleaning UI initialisation error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
