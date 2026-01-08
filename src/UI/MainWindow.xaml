@@ -435,11 +435,47 @@
 
                 <!-- Advanced -->
                 <TabItem x:Name="TabAdvanced" Header="Advanced">
-                    <Grid Margin="5,10,5,5">
-                        <GroupBox Header="Advanced features (placeholder)" Margin="0">
-                            <TextBlock Text="Advanced cleaning and network / services tools will appear here."
-                                       Foreground="{StaticResource TextSubtle}"
-                                       TextWrapping="Wrap" />
+                    <Grid Margin="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <GroupBox Header="Advanced tweaks" Grid.Column="0">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="App &amp; browser controls"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbAdvAdobeNetworkBlock" Content="Adobe network block" />
+                                    <CheckBox x:Name="CbAdvBlockRazerInstalls" Content="Block Razer software installs" />
+                                    <CheckBox x:Name="CbAdvBraveDebloat" Content="Brave debloat" />
+                                    <CheckBox x:Name="CbAdvEdgeDebloat" Content="Edge debloat" />
+                                    <CheckBox x:Name="CbAdvDisableEdge" Content="Disable Edge" />
+                                    <CheckBox x:Name="CbAdvEdgeUninstallable" Content="Make Edge uninstallable via Settings" />
+
+                                    <Separator />
+
+                                    <TextBlock Text="System behavior"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbAdvDisableBackgroundApps" Content="Disable background apps" />
+                                    <CheckBox x:Name="CbAdvDisableFullscreenOptimizations" Content="Disable fullscreen optimizations" />
+                                    <CheckBox x:Name="CbAdvDisableNotificationTray" Content="Disable notification tray/calendar" />
+                                    <CheckBox x:Name="CbAdvDisplayPerformance" Content="Set display for performance" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </GroupBox>
+
+                        <GroupBox Header="Network &amp; security" Grid.Column="1">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="Connectivity controls"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <CheckBox x:Name="CbAdvDisableIPv6" Content="Disable IPv6" />
+                                    <CheckBox x:Name="CbAdvDisableTeredo" Content="Disable Teredo" />
+                                    <CheckBox x:Name="CbAdvDisableCopilot" Content="Disable Microsoft Copilot" />
+                                    <CheckBox x:Name="CbAdvDisableStorageSense" Content="Disable Storage Sense" />
+                                </StackPanel>
+                            </ScrollViewer>
                         </GroupBox>
                     </Grid>
                 </TabItem>
