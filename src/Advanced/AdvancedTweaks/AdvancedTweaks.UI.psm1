@@ -74,7 +74,7 @@ function Initialize-QOTAdvancedTweaksUI {
                     }
                     Execute = { param($window) Invoke-QOTAdvancedAction -Name $actionRef.Command -Label $actionRef.Label | Out-Null }
                 }
-
+            }
             return $items
         }
 
