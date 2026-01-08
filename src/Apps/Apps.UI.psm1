@@ -79,6 +79,7 @@ function Initialize-QOTAppsUI {
                         Execute = { param($window) Invoke-QOTInstallCommonAppItem -App $appRef }
                     }
                 }
+            }
 
             return $items
         }
