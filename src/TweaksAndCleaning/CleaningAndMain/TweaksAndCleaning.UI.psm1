@@ -114,10 +114,10 @@ function Initialize-QOTTweaksAndCleaningUI {
                 $selected = @()
                 foreach ($action in $actions) {
                     $control = $Window.FindName($action.Name)
-                    if (-not $control) { continue }
-                    if ($control.IsChecked -eq $true) {
-                        $selected += $action
+                    if ($control.IsChecked -ne $true) {
+                        $control.IsChecked = $true
                     }
+                    $selected += $action
                 }
 
                 if ($selected.Count -eq 0) {
