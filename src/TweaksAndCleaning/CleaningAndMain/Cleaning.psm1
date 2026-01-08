@@ -32,9 +32,66 @@ function Invoke-QCleanTemp {
 }
 
 # ------------------------------
+# Public: Empty Recycle Bin
+# ------------------------------
+function Invoke-QCleanRecycleBin {
+    Write-QLog "Cleaning: Recycle Bin (placeholder)"
+}
+
+# ------------------------------
+# Public: Thumbnail cache
+# ------------------------------
+function Invoke-QCleanThumbnailCache {
+    Write-QLog "Cleaning: Thumbnail cache (placeholder)"
+}
+
+# ------------------------------
+# Public: Error logs / crash dumps
+# ------------------------------
+function Invoke-QCleanErrorLogs {
+    Write-QLog "Cleaning: Error logs and crash dumps (placeholder)"
+}
+
+# ------------------------------
+# Public: Setup / upgrade leftovers
+# ------------------------------
+function Invoke-QCleanSetupLeftovers {
+    Write-QLog "Cleaning: Setup/upgrade leftovers (placeholder)"
+}
+
+# ------------------------------
+# Public: Microsoft Store cache
+# ------------------------------
+function Invoke-QCleanStoreCache {
+    Write-QLog "Cleaning: Microsoft Store cache (placeholder)"
+}
+
+# ------------------------------
+# Public: Edge cache cleanup (light)
+# ------------------------------
+function Invoke-QCleanEdgeCache {
+    Write-QLog "Cleaning: Edge cache cleanup (placeholder)"
+}
+
+# ------------------------------
+# Public: Chrome/Chromium cache cleanup (light)
+# ------------------------------
+function Invoke-QCleanChromeCache {
+    Write-QLog "Cleaning: Chrome/Chromium cache cleanup (placeholder)"
+}
+
+
+# ------------------------------
 # Export functions
 # ------------------------------
 Export-ModuleMember -Function `
     Invoke-QCleanWindowsUpdateCache, `
     Invoke-QCleanDOCache, `
-    Invoke-QCleanTemp
+    Invoke-QCleanTemp, `
+    Invoke-QCleanRecycleBin, `
+    Invoke-QCleanThumbnailCache, `
+    Invoke-QCleanErrorLogs, `
+    Invoke-QCleanSetupLeftovers, `
+    Invoke-QCleanStoreCache, `
+    Invoke-QCleanEdgeCache, `
+    Invoke-QCleanChromeCache
