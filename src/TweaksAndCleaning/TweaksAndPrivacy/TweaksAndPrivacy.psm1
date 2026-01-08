@@ -20,6 +20,18 @@ function Invoke-QTweakSuggestedApps {
     Write-QLog "Tweaks: Disable suggested apps / promos (placeholder)"
 }
 
+function Invoke-QTweakTipsInStart {
+    Write-QLog "Tweaks: Disable tips and suggestions in Start (placeholder)"
+}
+
+function Invoke-QTweakBingSearch {
+    Write-QLog "Tweaks: Disable Bing/web results in Start search (placeholder)"
+}
+
+function Invoke-QTweakClassicContextMenu {
+    Write-QLog "Tweaks: Use classic context menu (placeholder)"
+}
+
 # ------------------------------
 # Widgets / News & Interests
 # ------------------------------
@@ -113,6 +125,9 @@ function Invoke-QDisableAppReinstall {
 Export-ModuleMember -Function `
     Invoke-QTweakStartMenuRecommendations, `
     Invoke-QTweakSuggestedApps, `
+    Invoke-QTweakTipsInStart, `
+    Invoke-QTweakBingSearch, `
+    Invoke-QTweakClassicContextMenu, `
     Invoke-QTweakWidgets, `
     Invoke-QTweakNewsAndInterests, `
     Invoke-QTweakBackgroundApps, `
