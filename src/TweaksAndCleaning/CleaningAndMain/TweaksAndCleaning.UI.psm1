@@ -31,6 +31,47 @@ function Invoke-QOTAction {
     }
 }
 
+function Get-QOTNamedElement {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)]
+        [string]$Name
+    )
+
+    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) {
+        return $null
+    }
+
+    try {
+        $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
+        $q.Enqueue($Root) | Out-Null
+
+        while ($q.Count -gt 0) {
+            $cur = $q.Dequeue()
+            if ($cur -is [System.Windows.FrameworkElement]) {
+                if ($cur.Name -eq $Name) {
+                    return $cur
+                }
+            }
+
+            $count = 0
+            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
+            for ($i = 0; $i -lt $count; $i++) {
+                try {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                } catch { }
+            }
+        }
+    }
+    catch { }
+
+    return $null
+}
+
+
+
 function Initialize-QOTTweaksAndCleaningUI {
     param(
         [Parameter(Mandatory)]
