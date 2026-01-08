@@ -19,6 +19,8 @@ function Initialize-QOTAppsUI {
         $BtnScanApps     = $Window.FindName("BtnScanApps")
         $BtnUninstallSel = $Window.FindName("BtnUninstallSelected")
         $RunButton       = $Window.FindName("RunButton")
+        $Tabs            = $Window.FindName("MainTabControl")
+        $TabApps         = $Window.FindName("TabApps")
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return }
@@ -43,6 +45,9 @@ function Initialize-QOTAppsUI {
 
         # Wire Run button
         $RunButton.Add_Click({
+            if ($Tabs -and $TabApps -and $Tabs.SelectedItem -ne $TabApps) {
+                return
+            }
             try { Commit-QOTGridEdits -Grid $AppsGrid } catch { }
             try { Commit-QOTGridEdits -Grid $InstallGrid } catch { }
 
