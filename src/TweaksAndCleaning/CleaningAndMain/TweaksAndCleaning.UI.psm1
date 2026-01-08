@@ -3,11 +3,11 @@
 
 $ErrorActionPreference = "Stop"
 
-Import-Module "$PSScriptRoot\..\Core\Config\Config.psm1"   -Force -ErrorAction Stop
-Import-Module "$PSScriptRoot\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\..\Core\Config\Config.psm1"   -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
 
-Import-Module "$PSScriptRoot\CleaningAndMain\Cleaning.psm1"         -Force -ErrorAction Stop
-Import-Module "$PSScriptRoot\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Cleaning.psm1"                          -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction Stop
 
 function Invoke-QOTAction {
     param(
