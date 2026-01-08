@@ -131,8 +131,6 @@ function Initialize-QOTTweaksAndCleaningUI {
         }
 
         try { Write-QLog "Tweaks & Cleaning UI initialised (action registry)." "DEBUG" } catch { }
-
-}
     }
     catch {
         try { Write-QLog ("Tweaks/Cleaning UI initialisation error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
