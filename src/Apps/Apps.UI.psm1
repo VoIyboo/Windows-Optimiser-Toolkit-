@@ -3,6 +3,9 @@
 
 $ErrorActionPreference = "Stop"
 
+Import-Module "$PSScriptRoot\\..\\Core\\Actions\\ActionRegistry.psm1" -Force -ErrorAction SilentlyContinue
+
+
 # Keep worker alive so async scan reliably completes
 $script:QOT_InstalledAppsWorker = $null
 
@@ -19,8 +22,6 @@ function Initialize-QOTAppsUI {
         $BtnScanApps     = $Window.FindName("BtnScanApps")
         $BtnUninstallSel = $Window.FindName("BtnUninstallSelected")
         $RunButton       = $Window.FindName("RunButton")
-        $Tabs            = $Window.FindName("MainTabControl")
-        $TabApps         = $Window.FindName("TabApps")
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return }
@@ -43,17 +44,44 @@ function Initialize-QOTAppsUI {
         # Auto scan installed apps on load (async)
         Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid
 
-        # Wire Run button
-        $RunButton.Add_Click({
-            if ($Tabs -and $TabApps -and $Tabs.SelectedItem -ne $TabApps) {
-                return
-            }
-            try { Commit-QOTGridEdits -Grid $AppsGrid } catch { }
-            try { Commit-QOTGridEdits -Grid $InstallGrid } catch { }
+        Register-QOTActionGroup -Name "Apps" -GetItems {
+            param([System.Windows.Window]$Window)
 
-            try { Invoke-QOTUninstallSelectedApps -Grid $AppsGrid } catch { try { Write-QLog ("Uninstall failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
-            try { Invoke-QOTInstallSelectedCommonApps -Grid $InstallGrid } catch { try { Write-QLog ("Install failed: {0}" -f $_.Exception.Message) "ERROR" } catch { } }
-        })
+            $items = @()
+            $appsGrid = $Window.FindName("AppsGrid")
+            $installGrid = $Window.FindName("InstallGrid")
+
+            if ($appsGrid) { try { Commit-QOTGridEdits -Grid $appsGrid } catch { } }
+            if ($installGrid) { try { Commit-QOTGridEdits -Grid $installGrid } catch { } }
+
+            if ($appsGrid) {
+                foreach ($app in @($appsGrid.ItemsSource)) {
+                    $appRef = $app
+                    if (-not $appRef) { continue }
+                    $items += @{
+                        Label = "Uninstall: $($appRef.Name)"
+                        IsSelected = { param($window) $appRef.IsSelected -eq $true }
+                        Execute = { param($window) Invoke-QOTUninstallAppItem -App $appRef }
+                    }
+                }
+            }
+
+            if ($installGrid) {
+                foreach ($app in @($installGrid.ItemsSource)) {
+                    $appRef = $app
+                    if (-not $appRef) { continue }
+                    $items += @{
+                        Label = "Install: $($appRef.Name)"
+                        IsSelected = {
+                            param($window)
+                            $appRef.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($appRef.WingetId) -and $appRef.IsInstallable -ne $false
+                        }
+                        Execute = { param($window) Invoke-QOTInstallCommonAppItem -App $appRef }
+                    }
+                }
+
+            return $items
+        }
 
         try { Write-QLog "Apps tab UI initialised (Window based wiring)." "DEBUG" } catch { }
     }
@@ -241,6 +269,51 @@ function Initialize-QOTCommonAppsCatalogue {
 
     try { Write-QLog ("Common apps catalogue loaded ({0} items)." -f $Global:QOT_CommonAppsCollection.Count) "DEBUG" } catch { }
 }
+
+function Invoke-QOTInstallCommonAppItem {
+    param(
+        [Parameter(Mandatory)][object]$App
+    )
+
+    if (-not $App) { return }
+
+    if (-not (Get-Command Install-QOTCommonApp -ErrorAction SilentlyContinue)) {
+        throw "Install-QOTCommonApp not found. Check Apps\\InstallCommonApps.psm1 is imported."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($App.WingetId)) {
+        return
+    }
+
+    Install-QOTCommonApp -Name $App.Name -WingetId $App.WingetId
+    $App.IsSelected = $false
+}
+
+function Invoke-QOTUninstallAppItem {
+    param(
+        [Parameter(Mandatory)][object]$App
+    )
+
+    if (-not $App) { return }
+
+    $name = $App.Name
+    $cmd  = $App.UninstallString
+
+    if ([string]::IsNullOrWhiteSpace($cmd)) {
+        try { Write-QLog ("Skipping uninstall for '{0}' because UninstallString is empty." -f $name) "WARN" } catch { }
+        return
+    }
+
+    try {
+        try { Write-QLog ("Uninstalling: {0}" -f $name) "DEBUG" } catch { }
+        Start-QOTProcessFromCommand -Command $cmd -Wait
+        $App.IsSelected = $false
+    }
+    catch {
+        try { Write-QLog ("Failed uninstall '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
+    }
+}
+
 
 function Invoke-QOTInstallSelectedCommonApps {
     param(
