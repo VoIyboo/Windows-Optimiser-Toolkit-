@@ -60,6 +60,7 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1")  -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Settings.psm1")         -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Tickets.psm1")          -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Actions\ActionRegistry.psm1") -Force -ErrorAction Stop
 
     # ------------------------------------------------------------
     # Apps modules (data + engine)
@@ -112,6 +113,10 @@ function Start-QOTMainWindow {
 
     if (-not $window) {
         throw "Failed to load MainWindow from XAML"
+    }
+
+    if (Get-Command Clear-QOTActionGroups -ErrorAction SilentlyContinue) {
+        Clear-QOTActionGroups
     }
 
     # ------------------------------------------------------------
@@ -174,6 +179,23 @@ function Start-QOTMainWindow {
     }
     catch {
         try { Write-QLog ("Advanced UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+
+    # ------------------------------------------------------------
+    # Wire Run button (global action registry)
+    # ------------------------------------------------------------
+    $runButton = $window.FindName("RunButton")
+    if ($runButton) {
+        $runButton.Add_Click({
+            try {
+                if (Get-Command Invoke-QOTRegisteredActions -ErrorAction SilentlyContinue) {
+                    Invoke-QOTRegisteredActions -Window $window
+                }
+            }
+            catch {
+                try { Write-QLog ("Run selected actions failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+            }
+        })
     }
 
 
