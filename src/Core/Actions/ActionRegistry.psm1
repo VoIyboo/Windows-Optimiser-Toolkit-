@@ -44,7 +44,7 @@ function Get-QOTActionGroups {
 
 function Invoke-QOTRegisteredActions {
     param(
-        [Parameter(Mandatory)][System.Windows.Window]$Window
+        [Parameter(Mandatory)]$Window
     )
 
     $selectedItems = New-Object System.Collections.Generic.List[object]
