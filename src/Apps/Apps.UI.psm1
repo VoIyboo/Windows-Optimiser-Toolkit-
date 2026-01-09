@@ -28,9 +28,15 @@ function Initialize-QOTAppsUI {
         if (-not $RunButton)   { try { Write-QLog "Apps UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }; return }
 
         # Optional buttons: hide them if present (since RunButton is the main action)
-        if ($BtnScanApps)     { $BtnScanApps.Visibility     = 'Collapsed' }
-        if ($BtnUninstallSel) { $BtnUninstallSel.Visibility = 'Collapsed' }
+        if ($BtnScanApps) {
+            $BtnScanApps.Visibility = 'Visible'
+            $BtnScanApps.Add_Click({ Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid })
+        }
 
+        if ($BtnUninstallSel) {
+            $BtnUninstallSel.Visibility = 'Visible'
+            $BtnUninstallSel.Add_Click({ Invoke-QOTUninstallSelectedApps -Grid $AppsGrid -Rescan })
+        }
         Initialize-QOTAppsCollections
 
         $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
@@ -124,55 +130,56 @@ function Initialize-QOTAppsGridsColumns {
     $AppsGrid.AutoGenerateColumns = $false
     $AppsGrid.CanUserAddRows      = $false
     $AppsGrid.IsReadOnly          = $false
-    $AppsGrid.Columns.Clear()
 
-    $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
-        Header  = ""
-        Binding = (New-Object System.Windows.Data.Binding "IsSelected")
-        Width   = 40
-        IsReadOnly = $false
-    }))
+    if ($AppsGrid.Columns.Count -eq 0) {
+        $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
+            Header  = ""
+            Binding = (New-Object System.Windows.Data.Binding "IsSelected")
+            Width   = 40
+            IsReadOnly = $false
+        }))
 
-    $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Name"
-        Binding    = (New-Object System.Windows.Data.Binding "Name")
-        Width      = "*"
-        IsReadOnly = $true
-    }))
+        $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "Name"
+            Binding    = (New-Object System.Windows.Data.Binding "Name")
+            Width      = "*"
+            IsReadOnly = $true
+        }))
 
-    $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Publisher"
-        Binding    = (New-Object System.Windows.Data.Binding "Publisher")
-        Width      = 220
-        IsReadOnly = $true
-    }))
+        $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "Publisher"
+            Binding    = (New-Object System.Windows.Data.Binding "Publisher")
+            Width      = 220
+            IsReadOnly = $true
+        }))
+    }
 
     # Common Apps grid
     $InstallGrid.AutoGenerateColumns = $false
     $InstallGrid.CanUserAddRows      = $false
     $InstallGrid.IsReadOnly          = $false
-    $InstallGrid.Columns.Clear()
+    if ($InstallGrid.Columns.Count -eq 0) {
+        $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
+            Header  = ""
+            Binding = (New-Object System.Windows.Data.Binding "IsSelected")
+            Width   = 34
+            IsReadOnly = $false
+        }))
 
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
-        Header  = ""
-        Binding = (New-Object System.Windows.Data.Binding "IsSelected")
-        Width   = 34
-        IsReadOnly = $false
-    }))
+        $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "App"
+            Binding    = (New-Object System.Windows.Data.Binding "Name")
+            Width      = "*"
+            IsReadOnly = $true
+        }))
 
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "App"
-        Binding    = (New-Object System.Windows.Data.Binding "Name")
-        Width      = "*"
-        IsReadOnly = $true
-    }))
-
-    $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
-        Header     = "Status"
-        Binding    = (New-Object System.Windows.Data.Binding "Status")
-        Width      = 120
-        IsReadOnly = $true
-    }))
+        $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "Status"
+            Binding    = (New-Object System.Windows.Data.Binding "Status")
+            Width      = 120
+            IsReadOnly = $true
+        }))
+    }
 }
 
 function Start-QOTInstalledAppsScanAsync {
