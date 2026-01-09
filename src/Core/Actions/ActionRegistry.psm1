@@ -125,6 +125,13 @@ function Invoke-QOTRegisteredActions {
                 if ($check -is [scriptblock]) {
                     try {
                         $isSelected = Invoke-QOTScriptBlockSafely -Script $check -Window $Window -Context ("Selection check for '{0}'" -f $item.Label)
+                        try {
+                            $isSelected = [System.Management.Automation.LanguagePrimitives]::IsTrue($isSelected)
+                        }
+                        catch {
+                            $isSelected = $false
+                            try { Write-QLog ("Selection check result for '{0}' could not be evaluated: {1}" -f $item.Label, $_.Exception.Message) "WARN" } catch { }
+                        }
                     }
                     catch {
                         try { Write-QLog ("Selection check failed for '{0}': {1}" -f $item.Label, $_.Exception.Message) "WARN" } catch { }
