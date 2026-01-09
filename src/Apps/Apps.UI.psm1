@@ -16,6 +16,9 @@ function Initialize-QOTAppsUI {
     )
 
     try {
+        # Ensure Apps data modules are available even when UI is loaded standalone
+        Import-Module (Join-Path $PSScriptRoot "InstalledApps.psm1")     -Force -ErrorAction SilentlyContinue
+        Import-Module (Join-Path $PSScriptRoot "InstallCommonApps.psm1") -Force -ErrorAction SilentlyContinue
         # Find controls from XAML
         $AppsGrid        = $Window.FindName("AppsGrid")
         $InstallGrid     = $Window.FindName("InstallGrid")
@@ -177,6 +180,9 @@ function Start-QOTInstalledAppsScanAsync {
     )
 
     try {
+        if (-not (Get-Command Get-QOTInstalledApps -ErrorAction SilentlyContinue)) {
+            Import-Module (Join-Path $PSScriptRoot "InstalledApps.psm1") -Force -ErrorAction SilentlyContinue
+        }
         if (-not (Get-Command Get-QOTInstalledApps -ErrorAction SilentlyContinue)) {
             try { Write-QLog "Get-QOTInstalledApps not found. Check Apps\InstalledApps.psm1 was imported." "ERROR" } catch { }
             return
