@@ -172,7 +172,8 @@ function Initialize-QOTAppsGridsColumns {
 
 function Start-QOTInstalledAppsScanAsync {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid,
+        [switch]$ForceScan
     )
 
     try {
@@ -182,6 +183,20 @@ function Start-QOTInstalledAppsScanAsync {
         }
 
         $dispatcher = $AppsGrid.Dispatcher
+
+        if (-not $ForceScan -and $Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0) {
+            $cachedResults = @($Global:QOT_InstalledAppsCache)
+            $dispatcher.Invoke([action]{
+                $Global:QOT_InstalledAppsCollection.Clear()
+                foreach ($app in $cachedResults) {
+                    Ensure-QOTInstalledAppForGrid -App $app
+                    $Global:QOT_InstalledAppsCollection.Add($app)
+                }
+            })
+
+            try { Write-QLog ("Installed apps loaded from cache ({0} items)." -f $cachedResults.Count) "DEBUG" } catch { }
+            return
+        }
 
         $script:QOT_InstalledAppsWorker = New-Object System.ComponentModel.BackgroundWorker
         $script:QOT_InstalledAppsWorker.WorkerReportsProgress = $false
@@ -202,6 +217,7 @@ function Start-QOTInstalledAppsScanAsync {
                 }
 
                 $results = @($e.Result)
+                $Global:QOT_InstalledAppsCache = $results
 
                 $dispatcher.Invoke([action]{
                     $Global:QOT_InstalledAppsCollection.Clear()
@@ -377,7 +393,7 @@ function Invoke-QOTUninstallSelectedApps {
     }
 
     if ($Rescan -and $didUninstall) {
-        Start-QOTInstalledAppsScanAsync -AppsGrid $Grid
+        Start-QOTInstalledAppsScanAsync -AppsGrid $Grid -ForceScan
     }
 }
 
