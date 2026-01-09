@@ -130,7 +130,13 @@ function Invoke-QOTRegisteredActions {
                         try { Write-QLog ("Selection check failed for '{0}': {1}" -f $item.Label, $_.Exception.Message) "WARN" } catch { }
                     }
                 } else {
-                    $isSelected = [bool]$check
+                    try {
+                        $isSelected = [System.Management.Automation.LanguagePrimitives]::IsTrue($check)
+                    }
+                    catch {
+                        $isSelected = $false
+                        try { Write-QLog ("Selection value for '{0}' could not be evaluated: {1}" -f $item.Label, $_.Exception.Message) "WARN" } catch { }
+                    }
                 }
             }
 
