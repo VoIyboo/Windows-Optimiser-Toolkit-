@@ -50,10 +50,21 @@ function Invoke-QOTScriptBlockSafely {
     )
 
     try {
-        return & $Script $Window
+        $paramCount = 0
+        try {
+            if ($Script.Ast -and $Script.Ast.ParamBlock) {
+                $paramCount = $Script.Ast.ParamBlock.Parameters.Count
+            }
+        } catch { $paramCount = 0 }
+
+        if ($paramCount -gt 0 -and $null -ne $Window) {
+            return & $Script $Window
+        }
+
+        return & $Script
     }
     catch {
-        if ($_.Exception -and $_.Exception.Message -match "Argument types do not match") {
+        if ($_.Exception -and $_.Exception.Message -match "Argument types do not match|Cannot process argument transformation|A positional parameter cannot be found") {
             try {
                 return & $Script
             }
