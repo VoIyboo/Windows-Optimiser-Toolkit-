@@ -121,7 +121,14 @@ function Invoke-QOTRegisteredActions {
 
             $isSelected = $false
             if ($null -ne $item.PSObject.Properties["IsSelected"]) {
-                $check = $item.IsSelected
+                $check = $null
+                try {
+                    $check = $item.IsSelected
+                }
+                catch {
+                    try { Write-QLog ("Selection value for '{0}' could not be read: {1}" -f $item.Label, $_.Exception.Message) "WARN" } catch { }
+                    $check = $null
+                }
                 if ($check -is [scriptblock]) {
                     try {
                         $isSelected = Invoke-QOTScriptBlockSafely -Script $check -Window $Window -Context ("Selection check for '{0}'" -f $item.Label)
@@ -181,8 +188,10 @@ function Invoke-QOTRegisteredActions {
 
     foreach ($entry in $selectedItems) {
         $item = $entry.Item
-        $label = $item.Label
-        $executor = $item.Execute
+        $label = $null
+        $executor = $null
+        try { $label = $item.Label } catch { $label = "Unknown action" }
+        try { $executor = $item.Execute } catch { $executor = $null }
         if ($executor -is [scriptblock]) {
             try {
                 Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label)
