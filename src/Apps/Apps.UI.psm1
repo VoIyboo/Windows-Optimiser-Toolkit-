@@ -184,8 +184,8 @@ function Start-QOTInstalledAppsScanAsync {
 
         $dispatcher = $AppsGrid.Dispatcher
 
-        if (-not $ForceScan -and (Get-Command Get-QOTInstalledAppsCached -ErrorAction SilentlyContinue)) {
-            $cachedResults = @(Get-QOTInstalledAppsCached)
+        if (-not $ForceScan -and $Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0) {
+            $cachedResults = @($Global:QOT_InstalledAppsCache)
             $dispatcher.Invoke([action]{
                 $Global:QOT_InstalledAppsCollection.Clear()
                 foreach ($app in $cachedResults) {
