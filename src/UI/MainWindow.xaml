@@ -319,24 +319,8 @@
                                   Grid.Column="0"
                                   Margin="0,0,8,0">
                             <Grid Margin="4">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-
-                                <StackPanel Grid.Row="0"
-                                            Orientation="Horizontal"
-                                            HorizontalAlignment="Right"
-                                            Margin="0,0,0,6">
-                                    <Button x:Name="BtnScanApps" Content="Scan apps" Width="110" />
-                                    <Button x:Name="BtnUninstallSelected"
-                                            Content="Uninstall selected"
-                                            Width="130"
-                                            Margin="6,0,0,0" />
-                                </StackPanel>
 
                                 <DataGrid x:Name="AppsGrid"
-                                          Grid.Row="1"
                                           Margin="0,4,0,0"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
