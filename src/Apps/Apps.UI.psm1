@@ -24,9 +24,9 @@ function Initialize-QOTAppsUI {
         $InstallGrid     = $Window.FindName("InstallGrid")
         $RunButton       = $Window.FindName("RunButton")
 
-        if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return }
-        if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return }
-        if (-not $RunButton)   { try { Write-QLog "Apps UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }; return }
+        if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return $false }
+        if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return $false }
+        if (-not $RunButton)   { try { Write-QLog "Apps UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }; return $false }
 
         Initialize-QOTAppsCollections
 
@@ -84,9 +84,11 @@ function Initialize-QOTAppsUI {
         }).GetNewClosure()
 
         try { Write-QLog "Apps tab UI initialised (Window based wiring)." "DEBUG" } catch { }
+        return $true
     }
     catch {
         try { Write-QLog ("Apps UI initialisation error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+        return $true
     }
 }
 
