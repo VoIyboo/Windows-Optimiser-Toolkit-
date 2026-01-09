@@ -240,6 +240,20 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
+    # Initialise Tickets UI
+    # ------------------------------------------------------------
+    try {
+        if (-not (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue)) {
+            throw "Initialize-QOTicketsUI not found. Tickets\Tickets.UI.psm1 did not load or export correctly."
+        }
+
+        $script:TicketsUIInitialised = [bool](Initialize-QOTicketsUI -Window $window)
+    }
+    catch {
+        try { Write-QLog ("Tickets UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+
+    # ------------------------------------------------------------
     # Initialise Tweaks & Cleaning UI
     # ------------------------------------------------------------
     try {
