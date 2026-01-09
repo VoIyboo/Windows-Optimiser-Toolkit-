@@ -4,6 +4,8 @@
 $ErrorActionPreference = "Stop"
 
 Import-Module "$PSScriptRoot\AdvancedTweaks.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\AdvancedCleaning\AdvancedCleaning.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\..\NetworkAndServices\NetworkAndServices.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\..\Core\Actions\ActionRegistry.psm1" -Force -ErrorAction SilentlyContinue
 
@@ -56,7 +58,13 @@ function Initialize-QOTAdvancedTweaksUI {
             @{ Name = "CbAdvDisableCopilot"; Label = "Disable Microsoft Copilot"; Command = "Invoke-QAdvancedDisableCopilot" },
             @{ Name = "CbAdvDisableStorageSense"; Label = "Disable Storage Sense"; Command = "Invoke-QAdvancedDisableStorageSense" },
             @{ Name = "CbAdvDisableNotificationTray"; Label = "Disable notification tray/calendar"; Command = "Invoke-QAdvancedDisableNotificationTray" },
-            @{ Name = "CbAdvDisplayPerformance"; Label = "Set display for performance"; Command = "Invoke-QAdvancedDisplayPerformance" }
+            @{ Name = "CbAdvDisplayPerformance"; Label = "Set display for performance"; Command = "Invoke-QAdvancedDisplayPerformance" },
+            @{ Name = "CbAdvRemoveOldProfiles"; Label = "Remove old profiles"; Command = "Invoke-QRemoveOldProfiles" },
+            @{ Name = "CbAdvAggressiveRestoreCleanup"; Label = "Aggressive restore/log cleanup"; Command = "Invoke-QAggressiveRestoreCleanup" },
+            @{ Name = "CbAdvDeepCacheCleanup"; Label = "Deep cache/component store cleanup"; Command = "Invoke-QAdvancedDeepCache" },
+            @{ Name = "CbAdvNetworkReset"; Label = "Network reset"; Command = "Invoke-QNetworkReset" },
+            @{ Name = "CbAdvRepairNetworkAdapter"; Label = "Repair network adapter"; Command = "Invoke-QRepairAdapter" },
+            @{ Name = "CbAdvServiceTuning"; Label = "Service tuning"; Command = "Invoke-QServiceTune" }
         )
 
         $actionsSnapshot = $actions
