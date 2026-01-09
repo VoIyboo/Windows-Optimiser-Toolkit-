@@ -76,13 +76,11 @@ function Initialize-QOTAdvancedTweaksUI {
                         param($window)
                         $control = $window.FindName($actionName)
                         $control -and $control.IsChecked -eq $true
-                    }
                     }).GetNewClosure()
                     Execute = ({ param($window) Invoke-QOTAdvancedAction -Name $actionCommand -Label $actionLabel | Out-Null }).GetNewClosure()
                 }
             }
             return $items
-        }
         }).GetNewClosure()
         
         try { Write-QLog "Advanced UI initialised (action registry)." "DEBUG" } catch { }
