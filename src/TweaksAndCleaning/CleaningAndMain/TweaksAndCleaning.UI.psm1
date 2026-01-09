@@ -110,25 +110,29 @@ function Initialize-QOTTweaksAndCleaningUI {
             @{ Name = "CbDisableOnlineTips";       Label = "Disable online tips and suggestions";  Command = "Invoke-QTweakOnlineTips" }
         )
         
-        Register-QOTActionGroup -Name "Tweaks & Cleaning" -GetItems {
-            param([System.Windows.Window]$Window)
+        $actionsSnapshot = $actions
+
+        Register-QOTActionGroup -Name "Tweaks & Cleaning" -GetItems ({
+            param($Window)
 
             $items = @()
-            foreach ($action in $actions) {
-                $actionRef = $action
-                $items += @{
-                    Label = $actionRef.Label
-                    IsSelected = {
-                        param($window)
-                        $control = Get-QOTNamedElement -Root $window -Name $actionRef.Name
-                        $control -and $control.IsChecked -eq $true
-                    }
-                    Execute = { param($window) Invoke-QOTAction -Name $actionRef.Command -Label $actionRef.Label | Out-Null }
-                }
+            foreach ($action in $actionsSnapshot) {
+                $actionName = $action.Name
+                $actionLabel = $action.Label
+                $actionCommand = $action.Command
 
+                $items += [pscustomobject]@{
+                    Label = $actionLabel
+                    IsSelected = ({
+                        param($window)
+                        $control = Get-QOTNamedElement -Root $window -Name $actionName
+                        $control -and $control.IsChecked -eq $true
+                    }).GetNewClosure()
+                    Execute = ({ param($window) Invoke-QOTAction -Name $actionCommand -Label $actionLabel | Out-Null }).GetNewClosure()
+                }
             }
             return $items
-        }
+        }).GetNewClosure()
 
         try { Write-QLog "Tweaks & Cleaning UI initialised (action registry)." "DEBUG" } catch { }
     }
