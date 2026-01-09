@@ -193,7 +193,22 @@ function Start-QOTMainWindow {
                 }
             }
             catch {
-                try { Write-QLog ("Run selected actions failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+                $ex = $_.Exception
+                try { Write-QLog ("Run selected actions failed: {0}" -f $ex.Message) "ERROR" } catch { }
+                try { Write-QLog ("Exception Type: {0}" -f $ex.GetType().FullName) "ERROR" } catch { }
+                if ($ex.InnerException) {
+                    try { Write-QLog ("Inner Type: {0}" -f $ex.InnerException.GetType().FullName) "ERROR" } catch { }
+                    try { Write-QLog ("Inner Msg : {0}" -f $ex.InnerException.Message) "ERROR" } catch { }
+                }
+                if ($_.InvocationInfo) {
+                    try { Write-QLog ("Script: {0}" -f $_.InvocationInfo.ScriptName) "ERROR" } catch { }
+                    try { Write-QLog ("Line  : {0}" -f $_.InvocationInfo.ScriptLineNumber) "ERROR" } catch { }
+                    try { Write-QLog ("Code  : {0}" -f $_.InvocationInfo.Line.Trim()) "ERROR" } catch { }
+                }
+                if ($ex.StackTrace) {
+                    try { Write-QLog "StackTrace:" "ERROR" } catch { }
+                    try { Write-QLog $ex.StackTrace "ERROR" } catch { }
+                }
             }
         })
     }
