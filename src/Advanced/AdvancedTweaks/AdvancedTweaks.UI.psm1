@@ -59,25 +59,32 @@ function Initialize-QOTAdvancedTweaksUI {
             @{ Name = "CbAdvDisplayPerformance"; Label = "Set display for performance"; Command = "Invoke-QAdvancedDisplayPerformance" }
         )
 
-        Register-QOTActionGroup -Name "Advanced" -GetItems {
-            param([System.Windows.Window]$Window)
+        $actionsSnapshot = $actions
+
+        Register-QOTActionGroup -Name "Advanced" -GetItems ({
+            param($Window)
 
             $items = @()
-            foreach ($action in $actions) {
-                $actionRef = $action
-                $items += @{
-                    Label = $actionRef.Label
-                    IsSelected = {
+            foreach ($action in $actionsSnapshot) {
+                $actionName = $action.Name
+                $actionLabel = $action.Label
+                $actionCommand = $action.Command
+
+                $items += [pscustomobject]@{
+                    Label = $actionLabel
+                    IsSelected = ({
                         param($window)
-                        $control = $window.FindName($actionRef.Name)
+                        $control = $window.FindName($actionName)
                         $control -and $control.IsChecked -eq $true
                     }
-                    Execute = { param($window) Invoke-QOTAdvancedAction -Name $actionRef.Command -Label $actionRef.Label | Out-Null }
+                    }).GetNewClosure()
+                    Execute = ({ param($window) Invoke-QOTAdvancedAction -Name $actionCommand -Label $actionLabel | Out-Null }).GetNewClosure()
                 }
             }
             return $items
         }
-
+        }).GetNewClosure()
+        
         try { Write-QLog "Advanced UI initialised (action registry)." "DEBUG" } catch { }
     }
     catch {
