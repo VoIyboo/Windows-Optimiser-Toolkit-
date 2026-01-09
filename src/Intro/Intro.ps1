@@ -97,6 +97,19 @@ try {
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
+    Set-FoxSplash 75 "Scanning installed apps..."
+    Refresh-FoxSplash
+    try {
+        if (Get-Command Get-QOTInstalledAppsCached -ErrorAction SilentlyContinue) {
+            $null = Get-QOTInstalledAppsCached
+            try { Write-QLog "Installed apps scan completed during intro." "DEBUG" } catch { }
+        } else {
+            try { Write-QLog "Installed apps scan skipped; Get-QOTInstalledAppsCached not available." "WARN" } catch { }
+        }
+    } catch {
+        try { Write-QLog ("Installed apps scan during intro failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+
     Set-FoxSplash 85 "Preparing UI..."
     Refresh-FoxSplash
 
