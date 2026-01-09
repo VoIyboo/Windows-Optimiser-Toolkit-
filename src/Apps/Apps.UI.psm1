@@ -44,8 +44,8 @@ function Initialize-QOTAppsUI {
         # Auto scan installed apps on load (async)
         Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid
 
-        Register-QOTActionGroup -Name "Apps" -GetItems {
-            param([System.Windows.Window]$Window)
+        Register-QOTActionGroup -Name "Apps" -GetItems ({
+            param($Window)
 
             $items = @()
             $appsGrid = $Window.FindName("AppsGrid")
@@ -58,10 +58,10 @@ function Initialize-QOTAppsUI {
                 foreach ($app in @($appsGrid.ItemsSource)) {
                     $appRef = $app
                     if (-not $appRef) { continue }
-                    $items += @{
+                    $items += [pscustomobject]@{
                         Label = "Uninstall: $($appRef.Name)"
-                        IsSelected = { param($window) $appRef.IsSelected -eq $true }
-                        Execute = { param($window) Invoke-QOTUninstallAppItem -App $appRef }
+                        IsSelected = ({ param($window) $appRef.IsSelected -eq $true }).GetNewClosure()
+                        Execute = ({ param($window) Invoke-QOTUninstallAppItem -App $appRef }).GetNewClosure()
                     }
                 }
             }
@@ -70,19 +70,21 @@ function Initialize-QOTAppsUI {
                 foreach ($app in @($installGrid.ItemsSource)) {
                     $appRef = $app
                     if (-not $appRef) { continue }
-                    $items += @{
+                    $items += [pscustomobject]@{
                         Label = "Install: $($appRef.Name)"
-                        IsSelected = {
+                        IsSelected = ({
                             param($window)
                             $appRef.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($appRef.WingetId) -and $appRef.IsInstallable -ne $false
                         }
-                        Execute = { param($window) Invoke-QOTInstallCommonAppItem -App $appRef }
+                        }).GetNewClosure()
+                        Execute = ({ param($window) Invoke-QOTInstallCommonAppItem -App $appRef }).GetNewClosure()
                     }
                 }
             }
 
             return $items
         }
+        }).GetNewClosure()
 
         try { Write-QLog "Apps tab UI initialised (Window based wiring)." "DEBUG" } catch { }
     }
