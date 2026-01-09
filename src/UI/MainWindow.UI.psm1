@@ -366,7 +366,8 @@ function Start-QOTMainWindow {
                 try { Write-QLog ("Apps UI failed to load after ContentRendered: {0}" -f $_.Exception.ToString()) "ERROR" } catch { }
             }
         })
-    }}
+    }
+    }
 
     # ------------------------------------------------------------
     # System summary refresh
