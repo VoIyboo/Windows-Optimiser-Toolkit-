@@ -137,6 +137,15 @@ function Invoke-QOTRegisteredActions {
         return
     }
 
+    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
+    if ($selectedItems -is [System.Collections.IEnumerable]) {
+        $firstSelected = $selectedItems | Select-Object -First 1
+        if ($firstSelected) {
+            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
+            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
+        }
+    }
+
     foreach ($entry in $selectedItems) {
         $item = $entry.Item
         $label = $item.Label
