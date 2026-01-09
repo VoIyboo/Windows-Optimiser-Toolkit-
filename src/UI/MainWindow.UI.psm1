@@ -367,7 +367,6 @@ function Start-QOTMainWindow {
             }
         })
     }
-    }
 
     # ------------------------------------------------------------
     # System summary refresh
