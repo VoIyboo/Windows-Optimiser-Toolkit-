@@ -76,7 +76,6 @@ function Initialize-QOTAppsUI {
                         IsSelected = ({
                             param($window)
                             $appRef.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($appRef.WingetId) -and $appRef.IsInstallable -ne $false
-                        }
                         }).GetNewClosure()
                         Execute = ({ param($window) Invoke-QOTInstallCommonAppItem -App $appRef }).GetNewClosure()
                     }
@@ -84,7 +83,6 @@ function Initialize-QOTAppsUI {
             }
 
             return $items
-        }
         }).GetNewClosure()
 
         try { Write-QLog "Apps tab UI initialised (Window based wiring)." "DEBUG" } catch { }
