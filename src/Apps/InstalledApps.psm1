@@ -137,6 +137,59 @@ function Get-QOTInstalledApps {
         }
     }
 
+        # ----------------------------------------------------------------
+    # Appx (Store) packages
+    # ----------------------------------------------------------------
+    $appxPackages = @()
+    try {
+        $appxPackages = @(Get-AppxPackage -AllUsers -ErrorAction Stop)
+    }
+    catch {
+        try { $appxPackages = @(Get-AppxPackage -ErrorAction SilentlyContinue) } catch { $appxPackages = @() }
+        try { Write-QLog ("Get-AppxPackage -AllUsers failed, falling back to current user: {0}" -f $_.Exception.Message) "WARN" } catch { }
+    }
+
+    foreach ($appx in $appxPackages) {
+        if (-not $appx) { continue }
+
+        $name = $appx.Name
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+        $publisher = $appx.PublisherDisplayName
+        if ([string]::IsNullOrWhiteSpace($publisher)) {
+            $publisher = $appx.Publisher
+        }
+
+        $version = $null
+        try { $version = $appx.Version.ToString() } catch { $version = $null }
+
+        $isSystem = $false
+        try {
+            if ($appx.IsFramework -or $appx.IsResourcePackage) { $isSystem = $true }
+        } catch { }
+
+        $fullName = $appx.PackageFullName
+        $uninstall = $null
+        if (-not [string]::IsNullOrWhiteSpace($fullName)) {
+            $escaped = $fullName.Replace("'", "''")
+            $uninstall = "powershell -NoProfile -ExecutionPolicy Bypass -Command `"Remove-AppxPackage -Package '$escaped'`""
+        }
+
+        $results.Add([pscustomobject]@{
+            IsSelected      = $false
+            Name            = $name
+            Version         = $version
+            Publisher       = $publisher
+            SizeMB          = $null
+            InstallDate     = $null
+            IsSystem        = $isSystem
+            IsWhitelisted   = $false
+            UninstallString = $uninstall
+            RegistryKeyPath = "APPX:$fullName"
+            LastUsed        = $null
+        })
+    }
+
     $results |
         Sort-Object Name, Publisher, Version -Unique |
         Sort-Object Name
