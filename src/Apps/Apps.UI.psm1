@@ -19,24 +19,12 @@ function Initialize-QOTAppsUI {
         # Find controls from XAML
         $AppsGrid        = $Window.FindName("AppsGrid")
         $InstallGrid     = $Window.FindName("InstallGrid")
-        $BtnScanApps     = $Window.FindName("BtnScanApps")
-        $BtnUninstallSel = $Window.FindName("BtnUninstallSelected")
         $RunButton       = $Window.FindName("RunButton")
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return }
         if (-not $RunButton)   { try { Write-QLog "Apps UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }; return }
 
-        # Optional buttons: hide them if present (since RunButton is the main action)
-        if ($BtnScanApps) {
-            $BtnScanApps.Visibility = 'Visible'
-            $BtnScanApps.Add_Click({ Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid })
-        }
-
-        if ($BtnUninstallSel) {
-            $BtnUninstallSel.Visibility = 'Visible'
-            $BtnUninstallSel.Add_Click({ Invoke-QOTUninstallSelectedApps -Grid $AppsGrid -Rescan })
-        }
         Initialize-QOTAppsCollections
 
         $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
