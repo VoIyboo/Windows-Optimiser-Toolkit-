@@ -55,14 +55,15 @@ function Initialize-QOTAppsUI {
             if ($installGrid) { try { Commit-QOTGridEdits -Grid $installGrid } catch { } }
 
             if ($appsGrid) {
-                foreach ($app in @($appsGrid.ItemsSource)) {
-                    $appRef = $app
-                    if (-not $appRef) { continue }
-                    $items += [pscustomobject]@{
-                        Label = "Uninstall: $($appRef.Name)"
-                        IsSelected = ({ param($window) $appRef.IsSelected -eq $true }).GetNewClosure()
-                        Execute = ({ param($window) Invoke-QOTUninstallAppItem -App $appRef }).GetNewClosure()
+                $appsGridRef = $appsGrid
+                $items += @{
+                    Label = "Uninstall selected apps"
+                    IsSelected = {
+                        param($window)
+                        $apps = @($appsGridRef.ItemsSource)
+                        (@($apps | Where-Object { $_.IsSelected -eq $true }).Count -gt 0)
                     }
+                    Execute = { param($window) Invoke-QOTUninstallSelectedApps -Grid $appsGridRef -Rescan }
                 }
             }
 
@@ -123,7 +124,7 @@ function Initialize-QOTAppsGridsColumns {
     # Installed Apps grid
     $AppsGrid.AutoGenerateColumns = $false
     $AppsGrid.CanUserAddRows      = $false
-    $AppsGrid.IsReadOnly          = $true
+    $AppsGrid.IsReadOnly          = $false
     $AppsGrid.Columns.Clear()
 
     $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
@@ -150,7 +151,7 @@ function Initialize-QOTAppsGridsColumns {
     # Common Apps grid
     $InstallGrid.AutoGenerateColumns = $false
     $InstallGrid.CanUserAddRows      = $false
-    $InstallGrid.IsReadOnly          = $true
+    $InstallGrid.IsReadOnly          = $false
     $InstallGrid.Columns.Clear()
 
     $InstallGrid.Columns.Add((New-Object System.Windows.Controls.DataGridCheckBoxColumn -Property @{
@@ -348,11 +349,13 @@ function Invoke-QOTInstallSelectedCommonApps {
 
 function Invoke-QOTUninstallSelectedApps {
     param(
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
+        [switch]$Rescan
     )
 
     $items = @($Grid.ItemsSource)
     $selected = @($items | Where-Object { $_.IsSelected -eq $true })
+    $didUninstall = $false
 
     if ($selected.Count -eq 0) {
         try { Write-QLog "Uninstall skipped. No installed apps selected." "DEBUG" } catch { }
@@ -371,11 +374,16 @@ function Invoke-QOTUninstallSelectedApps {
         try {
             try { Write-QLog ("Uninstalling: {0}" -f $name) "DEBUG" } catch { }
             Start-QOTProcessFromCommand -Command $cmd -Wait
+            $didUninstall = $true
             $app.IsSelected = $false
         }
         catch {
             try { Write-QLog ("Failed uninstall '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
         }
+    }
+
+    if ($Rescan -and $didUninstall) {
+        Start-QOTInstalledAppsScanAsync -AppsGrid $Grid
     }
 }
 
