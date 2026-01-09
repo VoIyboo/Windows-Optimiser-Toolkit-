@@ -79,6 +79,7 @@ function Initialize-QOTAdvancedTweaksUI {
                 $actionCommand = $action.Command
 
                 $items += [pscustomobject]@{
+                    Id = $actionCommand
                     Label = $actionLabel
                     IsSelected = ({
                         param($window)
