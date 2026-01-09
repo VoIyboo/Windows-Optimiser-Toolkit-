@@ -56,14 +56,14 @@ function Initialize-QOTAppsUI {
 
             if ($appsGrid) {
                 $appsGridRef = $appsGrid
-                $items += @{
+                $items += [pscustomobject]@{
                     Label = "Uninstall selected apps"
-                    IsSelected = {
+                    IsSelected = ({
                         param($window)
                         $apps = @($appsGridRef.ItemsSource)
                         (@($apps | Where-Object { $_.IsSelected -eq $true }).Count -gt 0)
-                    }
-                    Execute = { param($window) Invoke-QOTUninstallSelectedApps -Grid $appsGridRef -Rescan }
+                    }).GetNewClosure()
+                    Execute = ({ param($window) Invoke-QOTUninstallSelectedApps -Grid $appsGridRef -Rescan }).GetNewClosure()
                 }
             }
 
@@ -72,6 +72,7 @@ function Initialize-QOTAppsUI {
                     $appRef = $app
                     if (-not $appRef) { continue }
                     $items += [pscustomobject]@{
+                        Id = if ($appRef.WingetId) { "InstallApp:$($appRef.WingetId)" } else { "InstallApp:$($appRef.Name)" }
                         Label = "Install: $($appRef.Name)"
                         IsSelected = ({
                             param($window)
