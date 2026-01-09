@@ -92,8 +92,21 @@ function Invoke-QOTRegisteredActions {
             continue
         }
 
+        if ($items.Count -gt 0) {
+            $firstItemType = $null
+            try { $firstItemType = $items[0].GetType().FullName } catch { $firstItemType = "unknown" }
+            try {
+                Write-QLog ("Action group '{0}' returned {1} items (collection type: {2}, first item type: {3})." -f $group.Name, $items.Count, $items.GetType().FullName, $firstItemType) "DEBUG"
+            } catch { }
+        }
+
         foreach ($item in $items) {
             if (-not $item) { continue }
+
+
+            if ($item -is [hashtable]) {
+                $item = [pscustomobject]$item
+            }
 
             $isSelected = $false
             if ($null -ne $item.PSObject.Properties["IsSelected"]) {
