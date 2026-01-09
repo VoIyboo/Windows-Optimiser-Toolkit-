@@ -42,6 +42,37 @@ function Get-QOTActionGroups {
     return @($script:QOT_ActionGroups)
 }
 
+function Invoke-QOTScriptBlockSafely {
+    param(
+        [Parameter(Mandatory)][scriptblock]$Script,
+        [object]$Window,
+        [string]$Context
+    )
+
+    try {
+        return & $Script $Window
+    }
+    catch {
+        if ($_.Exception -and $_.Exception.Message -match "Argument types do not match") {
+            try {
+                return & $Script
+            }
+            catch {
+                if ($Context) {
+                    try { Write-QLog ("{0} failed without Window param: {1}" -f $Context, $_.Exception.Message) "ERROR" } catch { }
+                }
+                throw
+            }
+        }
+
+        if ($Context) {
+            try { Write-QLog ("{0} failed: {1}" -f $Context, $_.Exception.Message) "ERROR" } catch { }
+        }
+        throw
+    }
+}
+
+
 function Invoke-QOTRegisteredActions {
     param(
         [Parameter(Mandatory)]$Window
@@ -52,7 +83,9 @@ function Invoke-QOTRegisteredActions {
     foreach ($group in (Get-QOTActionGroups)) {
         $items = @()
         try {
-            $items = @(& $group.GetItems $Window)
+            if ($group.GetItems -is [scriptblock]) {
+                $items = @(Invoke-QOTScriptBlockSafely -Script $group.GetItems -Window $Window -Context ("Action group '{0}'" -f $group.Name))
+            }
         }
         catch {
             try { Write-QLog ("Action group '{0}' failed to enumerate: {1}" -f $group.Name, $_.Exception.Message) "ERROR" } catch { }
@@ -67,7 +100,7 @@ function Invoke-QOTRegisteredActions {
                 $check = $item.IsSelected
                 if ($check -is [scriptblock]) {
                     try {
-                        $isSelected = & $check $Window
+                        $isSelected = Invoke-QOTScriptBlockSafely -Script $check -Window $Window -Context ("Selection check for '{0}'" -f $item.Label)
                     }
                     catch {
                         try { Write-QLog ("Selection check failed for '{0}': {1}" -f $item.Label, $_.Exception.Message) "WARN" } catch { }
@@ -97,7 +130,7 @@ function Invoke-QOTRegisteredActions {
         $executor = $item.Execute
         if ($executor -is [scriptblock]) {
             try {
-                & $executor $Window
+                Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label)
             }
             catch {
                 try { Write-QLog ("Action failed ({0}): {1}" -f $label, $_.Exception.Message) "ERROR" } catch { }
