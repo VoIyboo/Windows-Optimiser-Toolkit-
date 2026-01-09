@@ -5,6 +5,85 @@ $ErrorActionPreference = "Stop"
 
 # One time init for Tickets UI
 $script:TicketsUIInitialised = $false
+$script:MainWindow = $null
+$script:SummaryTextBlock = $null
+$script:SummaryTimer = $null
+
+function Get-QOTDriveSummary {
+    $drives = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
+    if (-not $drives) { return "n/a" }
+
+    $segments = foreach ($drive in $drives) {
+        if (-not $drive.Size -or $drive.Size -eq 0) { continue }
+        $totalGB = [math]::Round($drive.Size / 1GB, 1)
+        $freeGB = [math]::Round($drive.FreeSpace / 1GB, 1)
+        $freePct = [math]::Round(($drive.FreeSpace / $drive.Size) * 100, 0)
+        "{0}: {1}/{2} GB free ({3}% free)" -f $drive.DeviceID, $freeGB, $totalGB, $freePct
+    }
+
+    if (-not $segments) { return "n/a" }
+    return ($segments -join ", ")
+}
+
+function Get-QOTCpuSummary {
+    $cpus = Get-CimInstance -ClassName Win32_Processor -ErrorAction SilentlyContinue
+    if (-not $cpus) { return "n/a" }
+    $avg = ($cpus | Measure-Object -Property LoadPercentage -Average).Average
+    if ($null -eq $avg) { return "n/a" }
+    return ("{0}%" -f [math]::Round($avg, 0))
+}
+
+function Get-QOTRamSummary {
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
+    if (-not $os -or -not $os.TotalVisibleMemorySize) { return "n/a" }
+    $totalGB = [math]::Round($os.TotalVisibleMemorySize / 1MB, 1)
+    $freeGB = [math]::Round($os.FreePhysicalMemory / 1MB, 1)
+    $freePct = if ($totalGB -gt 0) { [math]::Round(($freeGB / $totalGB) * 100, 0) } else { 0 }
+    return ("{0}/{1} GB free ({2}% free)" -f $freeGB, $totalGB, $freePct)
+}
+
+function Get-QOTNetworkSummary {
+    $adapters = Get-CimInstance -ClassName Win32_PerfFormattedData_Tcpip_NetworkInterface -ErrorAction SilentlyContinue
+    if (-not $adapters) { return "n/a" }
+    $bytesPerSec = ($adapters | Measure-Object -Property BytesTotalPersec -Sum).Sum
+    if ($null -eq $bytesPerSec) { return "n/a" }
+    $mbps = [math]::Round(($bytesPerSec * 8) / 1MB, 1)
+    return ("{0} Mbps" -f $mbps)
+}
+
+function Get-QOTGpuSummary {
+    $gpus = Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty Name -Unique
+    if (-not $gpus) { return $null }
+    return ($gpus -join ", ")
+}
+
+function Get-QOTSystemSummaryText {
+    $parts = New-Object System.Collections.Generic.List[string]
+
+    $parts.Add(("Drives: {0}" -f (Get-QOTDriveSummary)))
+    $parts.Add(("CPU: {0}" -f (Get-QOTCpuSummary)))
+    $parts.Add(("RAM: {0}" -f (Get-QOTRamSummary)))
+    $parts.Add(("Network: {0}" -f (Get-QOTNetworkSummary)))
+
+    $gpuSummary = Get-QOTGpuSummary
+    if (-not [string]::IsNullOrWhiteSpace($gpuSummary)) {
+        $parts.Add(("GPU: {0}" -f $gpuSummary))
+    }
+
+    return ($parts -join " | ")
+}
+
+function Set-QOTSummary {
+    param(
+        [string]$Text
+    )
+
+    if (-not $script:SummaryTextBlock) { return }
+    if ([string]::IsNullOrWhiteSpace($Text)) { return }
+    $script:SummaryTextBlock.Text = $Text
+}
+
 
 function Get-QOTNamedElementsMap {
     param(
