@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 
 # One time init for Tickets UI
 $script:TicketsUIInitialised = $false
+$script:AppsUIInitialised = $false
 $script:MainWindow = $null
 $script:SummaryTextBlock = $null
 $script:SummaryTimer = $null
@@ -221,6 +222,9 @@ function Start-QOTMainWindow {
         }
     } catch { }
 
+    $tabs    = $window.FindName("MainTabControl")
+    $tabApps = $window.FindName("TabApps")
+
     # ------------------------------------------------------------
     # Initialise Apps UI
     # ------------------------------------------------------------
@@ -229,7 +233,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
-        Initialize-QOTAppsUI -Window $window
+        $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window)
     }
     catch {
         try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
@@ -327,7 +331,6 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
-    $tabs        = $window.FindName("MainTabControl")
     $btnSettings = $window.FindName("BtnSettings")
     $tabSettings = $window.FindName("TabSettings")
     $tabTickets  = $window.FindName("TabTickets")
@@ -339,38 +342,31 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
-    # Initialise Tickets UI after window render, forcing Tickets tab to build
+    # Initialise Apps UI after window render, forcing Apps tab to build (tab content is lazy-loaded)
     # ------------------------------------------------------------
-    if ($tabs -and $tabTickets -and (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue)) {
-
+    if (-not $script:AppsUIInitialised -and $tabs -and $tabApps -and (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
         $window.Add_ContentRendered({
             try {
-                if ($script:TicketsUIInitialised) { return }
+                if ($script:AppsUIInitialised) { return }
 
-                # Force create Tickets tab visual tree once
                 $prev = $tabs.SelectedItem
-                $tabs.SelectedItem = $tabTickets
+                $tabs.SelectedItem = $tabApps
 
-                # Let WPF breathe so the visual tree is created
                 $window.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
 
-                Initialize-QOTicketsUI -Window $window
-                $script:TicketsUIInitialised = $true
+                if (Initialize-QOTAppsUI -Window $window) {
+                    $script:AppsUIInitialised = $true
+                }
 
-                # Switch back if we want
                 if ($prev) { $tabs.SelectedItem = $prev }
 
-                try { Write-QLog "Tickets UI initialised after ContentRendered" "DEBUG" } catch { }
+                try { Write-QLog "Apps UI initialised after ContentRendered" "DEBUG" } catch { }
             }
             catch {
-                try { Write-QLog ("Tickets UI failed to load: {0}" -f $_.Exception.ToString()) "ERROR" } catch { }
-                try {
-                    Add-Type -AssemblyName PresentationFramework | Out-Null
-                    [System.Windows.MessageBox]::Show("Tickets UI failed to load.`r`n$($_.Exception.Message)","QOT") | Out-Null
-                } catch { }
+                try { Write-QLog ("Apps UI failed to load after ContentRendered: {0}" -f $_.Exception.ToString()) "ERROR" } catch { }
             }
         })
-    }
+    }}
 
     # ------------------------------------------------------------
     # System summary refresh
