@@ -194,6 +194,9 @@ function Start-QOTMainWindow {
         throw "Failed to load MainWindow from XAML"
     }
 
+    $script:MainWindow = $window
+    $script:SummaryTextBlock = $window.FindName("SummaryText")
+
     if (Get-Command Clear-QOTActionGroups -ErrorAction SilentlyContinue) {
         Clear-QOTActionGroups
     }
@@ -370,10 +373,23 @@ function Start-QOTMainWindow {
     }
 
     # ------------------------------------------------------------
+    # System summary refresh
+    # ------------------------------------------------------------
+    if ($script:SummaryTextBlock) {
+        Set-QOTSummary -Text (Get-QOTSystemSummaryText)
+        $script:SummaryTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $script:SummaryTimer.Interval = [TimeSpan]::FromSeconds(5)
+        $script:SummaryTimer.Add_Tick({
+            Set-QOTSummary -Text (Get-QOTSystemSummaryText)
+        })
+        $script:SummaryTimer.Start()
+    }
+
+    # ------------------------------------------------------------
     # Close splash + show main window
     # ------------------------------------------------------------
     try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
     $window.ShowDialog() | Out-Null
 }
 
-Export-ModuleMember -Function Start-QOTMainWindow
+Export-ModuleMember -Function Start-QOTMainWindow, Set-QOTSummary
