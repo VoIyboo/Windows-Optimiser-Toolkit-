@@ -195,4 +195,18 @@ function Get-QOTInstalledApps {
         Sort-Object Name
 }
 
-Export-ModuleMember -Function Get-QOTInstalledApps
+function Get-QOTInstalledAppsCached {
+    param(
+        [switch]$ForceRefresh
+    )
+
+    if (-not $ForceRefresh -and $Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0) {
+        return @($Global:QOT_InstalledAppsCache)
+    }
+
+    $results = @(Get-QOTInstalledApps)
+    $Global:QOT_InstalledAppsCache = $results
+    return $results
+}
+
+Export-ModuleMember -Function Get-QOTInstalledApps, Get-QOTInstalledAppsCached
