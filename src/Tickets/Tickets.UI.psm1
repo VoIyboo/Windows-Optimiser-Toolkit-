@@ -102,6 +102,10 @@ function Get-QOTicketFilterState {
         )
     }
 
+    if ($StatusBoxes -and $statuses.Count -eq 0) {
+        $statuses = @($StatusBoxes.Keys)
+    }
+
     $includeDeleted = $false
     try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
 
