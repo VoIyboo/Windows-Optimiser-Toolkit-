@@ -128,8 +128,9 @@ function Initialize-QOTicketStorage {
     $settings = Ensure-QOSettingProperty $settings "LocalTicketBackupPath" ""
     $settings = Ensure-QOSettingProperty $settings "TicketsColumnLayout" @()
 
-    $stableStorePath  = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Tickets.json"
-    $stableBackupPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Tickets\Backups"
+    $appDataRoot = Get-QOAppDataRoot
+    $stableStorePath  = Join-Path $appDataRoot "StudioVoly\QuinnToolkit\Tickets\Tickets.json"
+    $stableBackupPath = Join-Path $appDataRoot "StudioVoly\QuinnToolkit\Tickets\Backups"
 
     $currentPath = [string]$settings.TicketStorePath
     $needReset   = $false
