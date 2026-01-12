@@ -209,7 +209,7 @@ function Start-QOTMainWindow {
         $map = Get-QOTNamedElementsMap -Root $window
         $wanted = @(
             "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton",
-            "SettingsHost","BtnSettings","MainTabControl","TabSettings",
+            "SettingsHost","BtnSettings","BtnHelp","MainTabControl","TabSettings","TabInformation",
             "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
         )
 
@@ -346,7 +346,9 @@ function Start-QOTMainWindow {
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
     $btnSettings = $window.FindName("BtnSettings")
+    $btnHelp     = $window.FindName("BtnHelp")
     $tabSettings = $window.FindName("TabSettings")
+    $tabInfo     = $window.FindName("TabInformation")
     $tabTickets  = $window.FindName("TabTickets")
 
     if ($btnSettings -and $tabs -and $tabSettings) {
@@ -355,6 +357,17 @@ function Start-QOTMainWindow {
         })
     }
 
+    if ($btnHelp -and $tabs) {
+        $btnHelp.Add_Click({
+            $tabInfo = $window.FindName("TabInformation")
+            if ($tabInfo) {
+                if ($tabInfo.Visibility -ne [System.Windows.Visibility]::Visible) {
+                    $tabInfo.Visibility = [System.Windows.Visibility]::Visible
+                }
+                $tabs.SelectedItem = $tabInfo
+            }
+        })
+    }
     # ------------------------------------------------------------
     # Initialise Apps UI after window render, forcing Apps tab to build (tab content is lazy-loaded)
     # ------------------------------------------------------------
