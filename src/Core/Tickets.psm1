@@ -422,7 +422,7 @@ function Get-QOTicketsFiltered {
         $statuses = @($script:ValidTicketStatuses)
     }
     if ($statuses.Count -eq 0) {
-        return @()
+        $statuses = @($script:ValidTicketStatuses)
     }
 
     $includeDeleted = [bool]$IncludeDeleted
