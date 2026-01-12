@@ -382,6 +382,8 @@ function Get-QOTicketsFiltered {
         [bool]$IncludeDeleted
     )
 
+    $db = Get-QOTickets
+    
     $statuses = $null
     if ($null -ne $Status) {
         $statuses = @(
