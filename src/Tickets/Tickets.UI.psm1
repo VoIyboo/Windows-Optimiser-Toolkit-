@@ -395,7 +395,7 @@ function Initialize-QOTicketsUI {
 
     try {
         if ($script:TicketsRowEditHandler) {
-            $grid.RemoveHandler([System.Windows.Controls.DataGrid]::RowEditEndingEvent, $script:TicketsRowEditHandler)
+            $grid.remove_RowEditEnding($script:TicketsRowEditHandler)
         }
     } catch { }
     
@@ -493,7 +493,7 @@ function Initialize-QOTicketsUI {
     }.GetNewClosure()
     $grid.AddHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
 
-    $script:TicketsRowEditHandler = [System.Windows.Controls.DataGridRowEditEndingEventHandler]{
+    $script:TicketsRowEditHandler = {
         param($sender, $args)
         try {
             if ($args.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) { return }
@@ -505,7 +505,7 @@ function Initialize-QOTicketsUI {
             $null = & $updateTicketCmd -Ticket $ticket
         } catch { }
     }.GetNewClosure()
-    $grid.AddHandler([System.Windows.Controls.DataGrid]::RowEditEndingEvent, $script:TicketsRowEditHandler)
+    $grid.add_RowEditEnding($script:TicketsRowEditHandler)
     
 
     $script:TicketsNewHandler = {
