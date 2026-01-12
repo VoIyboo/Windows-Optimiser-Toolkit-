@@ -346,7 +346,6 @@ function Start-QOTMainWindow {
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
     $btnSettings = $window.FindName("BtnSettings")
-    $btnHelp     = $window.FindName("BtnHelp")
     $tabSettings = $window.FindName("TabSettings")
     $tabTickets  = $window.FindName("TabTickets")
 
@@ -356,15 +355,6 @@ function Start-QOTMainWindow {
         })
     }
 
-    if ($btnHelp -and $tabs) {
-        $btnHelp.Add_Click({
-            if (-not $script:InformationTab -or -not $tabs.Items.Contains($script:InformationTab)) {
-                $script:InformationTab = New-QOTInformationTab -Window $window
-                [void]$tabs.Items.Add($script:InformationTab)
-            }
-            $tabs.SelectedItem = $script:InformationTab
-        })
-    }
     # ------------------------------------------------------------
     # Initialise Apps UI after window render, forcing Apps tab to build (tab content is lazy-loaded)
     # ------------------------------------------------------------
