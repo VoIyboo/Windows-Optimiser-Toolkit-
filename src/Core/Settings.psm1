@@ -51,6 +51,14 @@ function New-QODefaultSettings {
                 # When pinned, store as yyyy-MM-dd (date only, no time).
                 EmailSyncStartDatePinned  = $null
             }
+            StatusFilters = [pscustomobject]@{
+                New             = $true
+                InProgress      = $true
+                WaitingOnUser   = $true
+                NoLongerRequired = $true
+                Completed       = $true
+                IncludeDeleted  = $false
+            }
         }
     }
 
@@ -92,6 +100,11 @@ function Get-QOSettings {
             $settings.Tickets | Add-Member -NotePropertyName EmailIntegration -NotePropertyValue $defaults.Tickets.EmailIntegration -Force
         }
 
+        if (-not $settings.Tickets.StatusFilters) {
+            $settings.Tickets | Add-Member -NotePropertyName StatusFilters -NotePropertyValue $defaults.Tickets.StatusFilters -Force
+        }
+
+
         if ($null -eq $settings.Tickets.EmailIntegration.MonitoredAddresses) {
             $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName MonitoredAddresses -NotePropertyValue @() -Force
         }
@@ -99,6 +112,13 @@ function Get-QOSettings {
         if ($null -eq $settings.Tickets.EmailIntegration.EmailSyncStartDatePinned) {
             $settings.Tickets.EmailIntegration | Add-Member -NotePropertyName EmailSyncStartDatePinned -NotePropertyValue $null -Force
         }
+
+        foreach ($prop in $defaults.Tickets.StatusFilters.PSObject.Properties.Name) {
+            if ($settings.Tickets.StatusFilters.PSObject.Properties.Name -notcontains $prop) {
+                $settings.Tickets.StatusFilters | Add-Member -NotePropertyName $prop -NotePropertyValue $defaults.Tickets.StatusFilters.$prop -Force
+            }
+        }
+
 
         return $settings
     }
