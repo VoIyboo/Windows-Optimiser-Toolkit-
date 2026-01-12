@@ -78,6 +78,9 @@ function Get-QOTicketsForGrid {
             $items = & $GetTicketsCmd
         }
         if ($null -eq $items) { return @() }
+        if ($items.PSObject.Properties.Name -contains "Tickets") {
+            return @($items.Tickets)
+        }
         return @($items)
     }
     catch {
