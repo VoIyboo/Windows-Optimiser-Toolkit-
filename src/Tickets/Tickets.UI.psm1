@@ -27,6 +27,7 @@ $script:TicketsFilterPopupKeyHandler = $null
 $script:TicketsToggleDetailsHandler = $null
 $script:TicketsSelectionChangedHandler = $null
 $script:TicketsRowEditHandler = $null
+$script:TicketsSendReplyHandler = $null
 
 $script:TicketFilterStatusBoxes = $null
 $script:TicketFilterIncludeDeleted = $null
@@ -402,6 +403,12 @@ function Initialize-QOTicketsUI {
             $grid.remove_RowEditEnding($script:TicketsRowEditHandler)
         }
     } catch { }
+
+    try {
+        if ($script:TicketsSendReplyHandler) {
+            $btnSendReply.Remove_Click($script:TicketsSendReplyHandler)
+        }
+    } catch { }
     
     try {
         if ($script:TicketsAutoRefreshTimer) {
@@ -510,7 +517,52 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
     $grid.add_RowEditEnding($script:TicketsRowEditHandler)
-    
+
+    $script:TicketsSendReplyHandler = {
+        try {
+            $ticket = $grid.SelectedItem
+            if (-not $ticket) { return }
+
+            $replyText = ([string]$ticketReplyText.Text).Trim()
+            if (-not $replyText) {
+                [System.Windows.MessageBox]::Show(
+                    "Enter a reply before sending.",
+                    "Reply required",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Information
+                ) | Out-Null
+                return
+            }
+
+            $replyEntry = [pscustomobject]@{
+                Body      = $replyText
+                CreatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            }
+
+            $existingReplies = @()
+            try {
+                if ($ticket.PSObject.Properties.Name -contains "Replies") {
+                    $existingReplies = @($ticket.Replies)
+                }
+            } catch { $existingReplies = @() }
+
+            $ticket.Replies = @($existingReplies) + @($replyEntry)
+
+            $null = & $updateTicketCmd -Ticket $ticket
+            $ticketReplyText.Text = ""
+            Write-QOTicketsUILog "Ticket reply saved to local history."
+
+            [System.Windows.MessageBox]::Show(
+                "Reply saved to ticket history (email sending not wired yet).",
+                "Reply saved",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Information
+            ) | Out-Null
+        } catch {
+            Write-QOTicketsUILog ("Ticket reply failed: " + $_.Exception.Message) "ERROR"
+        }
+    }.GetNewClosure()
+    $btnSendReply.Add_Click($script:TicketsSendReplyHandler)
 
     $script:TicketsNewHandler = {
         try {
