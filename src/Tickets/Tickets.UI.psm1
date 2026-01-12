@@ -26,6 +26,7 @@ $script:TicketsFilterToggleHandler = $null
 $script:TicketsFilterPopupKeyHandler = $null
 $script:TicketsToggleDetailsHandler = $null
 $script:TicketsSelectionChangedHandler = $null
+$script:TicketsRowEditHandler = $null
 
 $script:TicketFilterStatusBoxes = $null
 $script:TicketFilterIncludeDeleted = $null
@@ -240,6 +241,7 @@ function Initialize-QOTicketsUI {
     $getTicketsCmd = Get-Command Get-QOTicketsFiltered -ErrorAction Stop
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
     $addTicketCmd  = Get-Command Add-QOTicket  -ErrorAction Stop
+    $updateTicketCmd = Get-Command Update-QOTicket -ErrorAction Stop
     $removeCmd     = Get-Command Remove-QOTicket -ErrorAction Stop
     $setStatusCmd  = Get-Command Set-QOTicketsStatus -ErrorAction Stop
     $getStatusesCmd = Get-Command Get-QOTicketStatuses -ErrorAction Stop
@@ -390,6 +392,12 @@ function Initialize-QOTicketsUI {
             $grid.RemoveHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
         }
     } catch { }
+
+    try {
+        if ($script:TicketsRowEditHandler) {
+            $grid.RemoveHandler([System.Windows.Controls.DataGrid]::RowEditEndingEvent, $script:TicketsRowEditHandler)
+        }
+    } catch { }
     
     try {
         if ($script:TicketsAutoRefreshTimer) {
@@ -484,6 +492,20 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
     $grid.AddHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
+
+    $script:TicketsRowEditHandler = [System.Windows.Controls.DataGridRowEditEndingEventHandler]{
+        param($sender, $args)
+        try {
+            if ($args.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) { return }
+
+            $grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row, $true)
+            $ticket = $args.Row.Item
+            if ($null -eq $ticket) { return }
+
+            $null = & $updateTicketCmd -Ticket $ticket
+        } catch { }
+    }.GetNewClosure()
+    $grid.AddHandler([System.Windows.Controls.DataGrid]::RowEditEndingEvent, $script:TicketsRowEditHandler)
     
 
     $script:TicketsNewHandler = {
