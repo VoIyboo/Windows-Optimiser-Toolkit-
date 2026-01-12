@@ -350,12 +350,18 @@ function Initialize-QOTicketsUI {
 
     try {
         if ($script:TicketsFilterChangeHandler) {
-            $filterStatusNew.Remove_Click($script:TicketsFilterChangeHandler)
-            $filterStatusInProgress.Remove_Click($script:TicketsFilterChangeHandler)
-            $filterStatusWaitingOnUser.Remove_Click($script:TicketsFilterChangeHandler)
-            $filterStatusNoLongerRequired.Remove_Click($script:TicketsFilterChangeHandler)
-            $filterStatusCompleted.Remove_Click($script:TicketsFilterChangeHandler)
-            $filterIncludeDeleted.Remove_Click($script:TicketsFilterChangeHandler)
+            $filterStatusNew.Remove_Checked($script:TicketsFilterChangeHandler)
+            $filterStatusNew.Remove_Unchecked($script:TicketsFilterChangeHandler)
+            $filterStatusInProgress.Remove_Checked($script:TicketsFilterChangeHandler)
+            $filterStatusInProgress.Remove_Unchecked($script:TicketsFilterChangeHandler)
+            $filterStatusWaitingOnUser.Remove_Checked($script:TicketsFilterChangeHandler)
+            $filterStatusWaitingOnUser.Remove_Unchecked($script:TicketsFilterChangeHandler)
+            $filterStatusNoLongerRequired.Remove_Checked($script:TicketsFilterChangeHandler)
+            $filterStatusNoLongerRequired.Remove_Unchecked($script:TicketsFilterChangeHandler)
+            $filterStatusCompleted.Remove_Checked($script:TicketsFilterChangeHandler)
+            $filterStatusCompleted.Remove_Unchecked($script:TicketsFilterChangeHandler)
+            $filterIncludeDeleted.Remove_Checked($script:TicketsFilterChangeHandler)
+            $filterIncludeDeleted.Remove_Unchecked($script:TicketsFilterChangeHandler)
         }
     } catch { }
 
@@ -664,12 +670,18 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
 
-    $filterStatusNew.Add_Click($script:TicketsFilterChangeHandler)
-    $filterStatusInProgress.Add_Click($script:TicketsFilterChangeHandler)
-    $filterStatusWaitingOnUser.Add_Click($script:TicketsFilterChangeHandler)
-    $filterStatusNoLongerRequired.Add_Click($script:TicketsFilterChangeHandler)
-    $filterStatusCompleted.Add_Click($script:TicketsFilterChangeHandler)
-    $filterIncludeDeleted.Add_Click($script:TicketsFilterChangeHandler)
+    $filterStatusNew.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusNew.Add_Unchecked($script:TicketsFilterChangeHandler)
+    $filterStatusInProgress.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusInProgress.Add_Unchecked($script:TicketsFilterChangeHandler)
+    $filterStatusWaitingOnUser.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusWaitingOnUser.Add_Unchecked($script:TicketsFilterChangeHandler)
+    $filterStatusNoLongerRequired.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusNoLongerRequired.Add_Unchecked($script:TicketsFilterChangeHandler)
+    $filterStatusCompleted.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusCompleted.Add_Unchecked($script:TicketsFilterChangeHandler)
+    $filterIncludeDeleted.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterIncludeDeleted.Add_Unchecked($script:TicketsFilterChangeHandler)
 
     $script:TicketsFilterSelectAllHandler = {
         try {
