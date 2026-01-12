@@ -88,12 +88,13 @@ function New-QODefaultSettings {
 }
 
 function Get-QOSettings {
-    if (-not (Test-Path -LiteralPath $script:SettingsPath)) {
+    $path = Get-QOSettingsPath
+    if (-not (Test-Path -LiteralPath $path)) {
         return New-QODefaultSettings
     }
 
     try {
-        $json = Get-Content -LiteralPath $script:SettingsPath -Raw -ErrorAction Stop
+        $json = Get-Content -LiteralPath $path -Raw -ErrorAction Stop
         if ([string]::IsNullOrWhiteSpace($json)) {
             return New-QODefaultSettings
         }
@@ -143,8 +144,8 @@ function Get-QOSettings {
     catch {
         # Backup corrupted file then recreate
         try {
-            $backupName = "{0}.bak_{1}" -f $script:SettingsPath, (Get-Date -Format "yyyyMMddHHmmss")
-            Copy-Item -LiteralPath $script:SettingsPath -Destination $backupName -ErrorAction SilentlyContinue
+            $backupName = "{0}.bak_{1}" -f $path, (Get-Date -Format "yyyyMMddHHmmss")
+            Copy-Item -LiteralPath $path -Destination $backupName -ErrorAction SilentlyContinue
         } catch { }
 
         return New-QODefaultSettings
