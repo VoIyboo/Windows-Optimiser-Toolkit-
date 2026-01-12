@@ -38,6 +38,14 @@ $script:TicketsAutoRefreshInProgress = $false
 $script:TicketsFileWatcher = $null
 $script:TicketsFileWatcherEvents = @()
 $script:TicketsFileRefreshTimer = $null
+$script:TicketFilterStatusKeyMap = @{
+    "New" = "New"
+    "In Progress" = "InProgress"
+    "Waiting on User" = "WaitingOnUser"
+    "No Longer Required" = "NoLongerRequired"
+    "Completed" = "Completed"
+}
+
 
 function Write-QOTicketsUILog {
     param(
@@ -61,7 +69,11 @@ function Get-QOTicketsForGrid {
     )
 
     try {
-        $items = & $GetTicketsCmd -Status $Statuses -IncludeDeleted:$IncludeDeleted
+        if ($GetTicketsCmd.Parameters.Keys -contains "Status") {
+            $items = & $GetTicketsCmd -Status $Statuses -IncludeDeleted:$IncludeDeleted
+        } else {
+            $items = & $GetTicketsCmd
+        }
         if ($null -eq $items) { return @() }
         return @($items)
     }
@@ -136,6 +148,132 @@ function Update-QOTicketFilterIndicator {
     $indicatorActive = (-not $allSelected) -or $includeDeleted
     $Indicator.Visibility = if ($indicatorActive) { "Visible" } else { "Collapsed" }
 }
+
+function Get-QOTicketFilterSettings {
+    $settings = Get-QOSettings
+    if (-not $settings.Tickets) {
+        $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    if (-not $settings.Tickets.StatusFilters) {
+        $settings.Tickets | Add-Member -NotePropertyName StatusFilters -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    return $settings.Tickets.StatusFilters
+}
+
+function Save-QOTicketFilterSettings {
+    param(
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
+    )
+
+    $settings = Get-QOSettings
+    if (-not $settings.Tickets) {
+        $settings | Add-Member -NotePropertyName Tickets -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    if (-not $settings.Tickets.StatusFilters) {
+        $settings.Tickets | Add-Member -NotePropertyName StatusFilters -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+
+    foreach ($status in $StatusBoxes.Keys) {
+        $settingKey = $script:TicketFilterStatusKeyMap[$status]
+        if (-not $settingKey) { continue }
+        $isChecked = $false
+        try { $isChecked = ($StatusBoxes[$status].IsChecked -eq $true) } catch { }
+        if ($settings.Tickets.StatusFilters.PSObject.Properties.Name -notcontains $settingKey) {
+            $settings.Tickets.StatusFilters | Add-Member -NotePropertyName $settingKey -NotePropertyValue $isChecked -Force
+        } else {
+            $settings.Tickets.StatusFilters.$settingKey = $isChecked
+        }
+    }
+
+    $includeDeleted = $false
+    try { $includeDeleted = ($IncludeDeletedBox.IsChecked -eq $true) } catch { }
+    if ($settings.Tickets.StatusFilters.PSObject.Properties.Name -notcontains "IncludeDeleted") {
+        $settings.Tickets.StatusFilters | Add-Member -NotePropertyName IncludeDeleted -NotePropertyValue $includeDeleted -Force
+    } else {
+        $settings.Tickets.StatusFilters.IncludeDeleted = $includeDeleted
+    }
+
+    Save-QOSettings -Settings $settings
+}
+
+function Set-QOTicketFilterFromSettings {
+    param(
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
+    )
+
+    $filters = Get-QOTicketFilterSettings
+
+    foreach ($status in $StatusBoxes.Keys) {
+        $settingKey = $script:TicketFilterStatusKeyMap[$status]
+        if (-not $settingKey) { continue }
+        $value = $true
+        try {
+            if ($filters.PSObject.Properties.Name -contains $settingKey) {
+                $value = [bool]$filters.$settingKey
+            }
+        } catch { }
+        $StatusBoxes[$status].IsChecked = $value
+    }
+
+    $includeDeleted = $false
+    try {
+        if ($filters.PSObject.Properties.Name -contains "IncludeDeleted") {
+            $includeDeleted = [bool]$filters.IncludeDeleted
+        }
+    } catch { }
+    if ($IncludeDeletedBox) {
+        $IncludeDeletedBox.IsChecked = $includeDeleted
+    }
+}
+
+function Set-QOTicketsGridFilter {
+    param(
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
+        [AllowNull()][hashtable]$StatusBoxes,
+        [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
+    )
+
+    $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($Grid.ItemsSource)
+    if (-not $view) { return }
+
+    $view.Filter = {
+        param($item)
+        if (-not $item) { return $false }
+
+        $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
+        if (-not $filterState.Statuses -or $filterState.Statuses.Count -eq 0) {
+            return $false
+        }
+
+        $statusValue = $null
+        try {
+            if ($item.PSObject.Properties.Name -contains "Status") {
+                $statusValue = [string]$item.Status
+            }
+        } catch { }
+
+        if (-not $statusValue) { return $false }
+
+        $isDeleted = $false
+        try {
+            if ($item.PSObject.Properties.Name -contains "IsDeleted") {
+                $isDeleted = [bool]$item.IsDeleted
+            } elseif ($item.PSObject.Properties.Name -contains "Folder") {
+                $isDeleted = ([string]$item.Folder -eq "Deleted")
+            }
+        } catch { }
+
+        if (-not $filterState.IncludeDeleted -and $isDeleted) {
+            return $false
+        }
+
+        return ($filterState.Statuses -contains $statusValue)
+    }.GetNewClosure()
+}
+
+
 
 function Set-QOTicketDetailsVisibility {
     param(
@@ -231,6 +369,11 @@ function Invoke-QOTicketsGridRefresh {
 
     $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
     Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd -Statuses $filterState.Statuses -IncludeDeleted:$filterState.IncludeDeleted
+    Set-QOTicketsGridFilter -Grid $Grid -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
+    $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($Grid.ItemsSource)
+    if ($view) {
+        $view.Refresh()
+    }
 }
 
 function Initialize-QOTicketsUI {
@@ -239,7 +382,7 @@ function Initialize-QOTicketsUI {
     Add-Type -AssemblyName PresentationFramework | Out-Null
 
     # Capture core commands now
-    $getTicketsCmd = Get-Command Get-QOTicketsFiltered -ErrorAction Stop
+    $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
     $addTicketCmd  = Get-Command Add-QOTicket  -ErrorAction Stop
     $updateTicketCmd = Get-Command Update-QOTicket -ErrorAction Stop
@@ -456,10 +599,7 @@ function Initialize-QOTicketsUI {
     }
     $script:TicketFilterIncludeDeleted = $filterIncludeDeleted
 
-    foreach ($box in $script:TicketFilterStatusBoxes.Values) {
-        $box.IsChecked = $true
-    }
-    $filterIncludeDeleted.IsChecked = $false
+    Set-QOTicketFilterFromSettings -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $filterIncludeDeleted
     Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
     Update-QOTicketDetailsView -Ticket $null -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
 
@@ -671,6 +811,7 @@ function Initialize-QOTicketsUI {
 
     $script:TicketsFilterChangeHandler = {
         try {
+            Save-QOTicketFilterSettings -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
         } catch { }
@@ -700,6 +841,7 @@ function Initialize-QOTicketsUI {
             foreach ($box in $script:TicketFilterStatusBoxes.Values) {
                 $box.IsChecked = $true
             }
+            Save-QOTicketFilterSettings -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
         } catch { }
@@ -711,6 +853,7 @@ function Initialize-QOTicketsUI {
             foreach ($box in $script:TicketFilterStatusBoxes.Values) {
                 $box.IsChecked = $false
             }
+            Save-QOTicketFilterSettings -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
             Update-QOTicketFilterIndicator -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted -Indicator $script:TicketFilterActiveDot
         } catch { }
