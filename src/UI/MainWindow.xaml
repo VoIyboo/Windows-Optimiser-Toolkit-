@@ -192,24 +192,44 @@
                 BorderThickness="0,0,0,1">
             <DockPanel>
 
-                <!-- Settings button (top right) -->
-                <Button x:Name="BtnSettings"
-                        DockPanel.Dock="Right"
-                        Width="36"
-                        Height="36"
-                        Margin="0,0,6,0"
-                        VerticalAlignment="Top"
-                        Background="Transparent"
-                        BorderBrush="{StaticResource BorderBrush}"
-                        ToolTip="Settings">
-                    <TextBlock x:Name="BtnSettingsIcon"
-                               FontFamily="Segoe MDL2 Assets"
-                               FontSize="16"
-                               Foreground="{StaticResource TextSubtle}"
-                               Text="&#xE713;"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-                </Button>
+                <!-- Help + Settings buttons (top right) -->
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            Margin="0,0,6,0">
+                    <Button x:Name="BtnHelp"
+                            Width="36"
+                            Height="36"
+                            Margin="0,0,6,0"
+                            VerticalAlignment="Top"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            ToolTip="Help">
+                        <TextBlock x:Name="BtnHelpIcon"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Foreground="{StaticResource TextSubtle}"
+                                   Text="&#xE897;"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+
+                    <Button x:Name="BtnSettings"
+                            Width="36"
+                            Height="36"
+                            Margin="0"
+                            VerticalAlignment="Top"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            ToolTip="Settings">
+                        <TextBlock x:Name="BtnSettingsIcon"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Foreground="{StaticResource TextSubtle}"
+                                   Text="&#xE713;"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Button>
+                </StackPanel>
 
                 <!-- App title -->
                 <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
@@ -477,6 +497,65 @@
                         </GroupBox>
                     </Grid>
                 </TabItem>
+
+                <!-- Information (HELP TAB, BUTTON ONLY) -->
+                <TabItem x:Name="TabInformation"
+                         Header="Information"
+                         Visibility="Collapsed">
+                    <Grid Margin="5,10,5,5">
+                        <GroupBox Header="About Quinn Optimiser Toolkit" Margin="0">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel Margin="4">
+                                    <TextBlock Text="What is Quinn Optimiser Toolkit"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <TextBlock Text="Quinn Optimiser Toolkit is a modular Windows optimisation and IT utility suite designed to streamline cleanup, performance tuning, and app management for technicians."
+                                               TextWrapping="Wrap"
+                                               Foreground="White"
+                                               Margin="0,0,0,10" />
+
+                                    <TextBlock Text="Tabs overview"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <TextBlock Text="• Tweaks &amp; Cleaning: run safe housekeeping tasks, remove clutter, and apply recommended Windows optimisations."
+                                               TextWrapping="Wrap"
+                                               Foreground="White" />
+                                    <TextBlock Text="• Apps: scan, install, and remove applications when onboarding or tidying devices."
+                                               TextWrapping="Wrap"
+                                               Foreground="White" />
+                                    <TextBlock Text="• Advanced: power-user options that can change system behaviour; review carefully before running."
+                                               TextWrapping="Wrap"
+                                               Foreground="White" />
+                                    <TextBlock Text="• Tickets: manage service tickets, status changes, and quick actions for day-to-day support work."
+                                               TextWrapping="Wrap"
+                                               Foreground="White"
+                                               Margin="0,0,0,10" />
+
+                                    <TextBlock Text="Tips"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <TextBlock Text="• Right click tickets to update status quickly."
+                                               TextWrapping="Wrap"
+                                               Foreground="White" />
+                                    <TextBlock Text="• Filters are remembered between sessions."
+                                               TextWrapping="Wrap"
+                                               Foreground="White" />
+                                    <TextBlock Text="• Changes apply immediately unless stated otherwise."
+                                               TextWrapping="Wrap"
+                                               Foreground="White"
+                                               Margin="0,0,0,10" />
+
+                                    <TextBlock Text="Version info"
+                                               Style="{StaticResource SectionHeading}" />
+                                    <TextBlock Text="App: Quinn Optimiser Toolkit"
+                                               Foreground="White" />
+                                    <TextBlock Text="Version: V2.7 (stable UI base)"
+                                               Foreground="White" />
+                                    <TextBlock Text="Build date: Not set"
+                                               Foreground="White" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </GroupBox>
+                    </Grid>
+                </TabItem>
+
 
                 <!-- Settings (HIDDEN TAB, GEAR ONLY) -->
                 <TabItem x:Name="TabSettings"
