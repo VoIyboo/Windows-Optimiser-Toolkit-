@@ -382,15 +382,18 @@ function Get-QOTicketsFiltered {
         [bool]$IncludeDeleted
     )
 
-    $db = Get-QOTickets
-    $statuses = @(
-        $Status |
-            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
-            ForEach-Object { [string]$_ }
-    )
-
-    if ($statuses.Count -eq 0) {
+    $statuses = $null
+    if ($null -ne $Status) {
+        $statuses = @(
+            $Status |
+                Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+                ForEach-Object { [string]$_ }
+        )
+    } else {
         $statuses = @($script:ValidTicketStatuses)
+    }
+    if ($statuses.Count -eq 0) {
+        return @()
     }
 
     $includeDeleted = [bool]$IncludeDeleted
