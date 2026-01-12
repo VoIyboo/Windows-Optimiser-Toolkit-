@@ -338,7 +338,7 @@ function Get-QOTicketStatuses {
 function Get-QOTicketsFiltered {
     param(
         [string[]]$Status,
-        [switch]$IncludeDeleted
+        [bool]$IncludeDeleted
     )
 
     $db = Get-QOTickets
@@ -349,10 +349,14 @@ function Get-QOTicketsFiltered {
     )
 
     if ($statuses.Count -eq 0) {
-        $statuses = @($script:ValidTicketStatuses)
+        if (-not $PSBoundParameters.ContainsKey("Status")) {
+            $statuses = @($script:ValidTicketStatuses)
+        } else {
+            return @()
+        }
     }
 
-    $includeDeleted = $IncludeDeleted.IsPresent
+    $includeDeleted = [bool]$IncludeDeleted
 
     return @(
         $db.Tickets |
