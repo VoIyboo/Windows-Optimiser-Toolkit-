@@ -412,7 +412,12 @@ function Initialize-QOTicketsUI {
     Add-Type -AssemblyName PresentationFramework | Out-Null
 
     # Capture core commands now
-    $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
+    $getTicketsCmd = $null
+    try {
+        $getTicketsCmd = Get-Command Get-QOTicketsFiltered -ErrorAction Stop
+    } catch {
+        $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
+    }
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
     $addTicketCmd  = Get-Command Add-QOTicket  -ErrorAction Stop
     $updateTicketCmd = Get-Command Update-QOTicket -ErrorAction Stop
