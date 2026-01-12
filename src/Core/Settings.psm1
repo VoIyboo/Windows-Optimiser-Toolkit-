@@ -4,10 +4,28 @@
 
 $ErrorActionPreference = "Stop"
 
-# Always save to THIS path
-$script:SettingsPath = Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\settings.json"
+# Always save to THIS path (resolved lazily)
+$script:SettingsPath = $null
+
+function Get-QOAppDataRoot {
+    $candidates = @(
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData),
+        $env:LOCALAPPDATA,
+        $env:APPDATA,
+        $env:USERPROFILE
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+
+    if ($candidates.Count -gt 0) {
+        return [string]$candidates[0]
+    }
+
+    return [System.IO.Path]::GetTempPath()
+}
 
 function Get-QOSettingsPath {
+    if (-not $script:SettingsPath) {
+        $script:SettingsPath = Join-Path (Get-QOAppDataRoot) "StudioVoly\QuinnToolkit\settings.json"
+    }
     return $script:SettingsPath
 }
 
@@ -290,6 +308,7 @@ function Get-QOMonitoredAddresses {
 }
 
 Export-ModuleMember -Function `
+    Get-QOAppDataRoot, `
     Get-QOSettings, `
     Save-QOSettings, `
     Set-QOSetting, `
