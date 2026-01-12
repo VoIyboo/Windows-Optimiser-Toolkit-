@@ -677,11 +677,23 @@ function Initialize-QOTicketsUI {
     }.GetNewClosure()
 
     $filterStatusNew.Add_Click($script:TicketsFilterChangeHandler)
+    $filterStatusNew.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusNew.Add_Unchecked($script:TicketsFilterChangeHandler)
     $filterStatusInProgress.Add_Click($script:TicketsFilterChangeHandler)
+    $filterStatusInProgress.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusInProgress.Add_Unchecked($script:TicketsFilterChangeHandler)
     $filterStatusWaitingOnUser.Add_Click($script:TicketsFilterChangeHandler)
+    $filterStatusWaitingOnUser.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusWaitingOnUser.Add_Unchecked($script:TicketsFilterChangeHandler)
     $filterStatusNoLongerRequired.Add_Click($script:TicketsFilterChangeHandler)
+    $filterStatusNoLongerRequired.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusNoLongerRequired.Add_Unchecked($script:TicketsFilterChangeHandler)
     $filterStatusCompleted.Add_Click($script:TicketsFilterChangeHandler)
+    $filterStatusCompleted.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterStatusCompleted.Add_Unchecked($script:TicketsFilterChangeHandler)
     $filterIncludeDeleted.Add_Click($script:TicketsFilterChangeHandler)
+    $filterIncludeDeleted.Add_Checked($script:TicketsFilterChangeHandler)
+    $filterIncludeDeleted.Add_Unchecked($script:TicketsFilterChangeHandler)
 
     $script:TicketsFilterSelectAllHandler = {
         try {
