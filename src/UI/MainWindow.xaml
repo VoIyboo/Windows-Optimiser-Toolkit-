@@ -664,6 +664,7 @@
                           Margin="0"
                           AutoGenerateColumns="False"
                           HeadersVisibility="Column"
+                          SelectionMode="Extended"
                           IsReadOnly="False"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
