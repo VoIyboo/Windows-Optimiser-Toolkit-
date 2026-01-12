@@ -79,9 +79,13 @@ function Get-QOTicketsForGrid {
         }
         if ($null -eq $items) { return @() }
         if ($items.PSObject.Properties.Name -contains "Tickets") {
-            return @($items.Tickets)
+            $tickets = @($items.Tickets)
+            Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (Tickets property)." -f $tickets.Count)
+            return $tickets
         }
-        return @($items)
+        $list = @($items)
+        Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (direct)." -f $list.Count)
+        return $list
     }
     catch {
         return @()
@@ -100,6 +104,11 @@ function Refresh-QOTicketsGrid {
         $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -Statuses $Statuses -IncludeDeleted:$IncludeDeleted)
         $Grid.ItemsSource = $items
         $Grid.Items.Refresh()
+        $sourceType = $null
+        try { $sourceType = $Grid.ItemsSource.GetType().FullName } catch { }
+        $gridCount = 0
+        try { $gridCount = $Grid.Items.Count } catch { }
+        Write-QOTicketsUILog ("Tickets: ItemsSource set. Type={0}; Items={1}; GridCount={2}" -f $sourceType, $items.Count, $gridCount)
     }
     catch {
         [System.Windows.MessageBox]::Show("Load tickets failed.`r`n$($_.Exception.Message)") | Out-Null
@@ -244,14 +253,17 @@ function Set-QOTicketsGridFilter {
     $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($Grid.ItemsSource)
     if (-not $view) { return }
 
+    $currentState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
+    if (-not $currentState.Statuses -or $currentState.Statuses.Count -eq 0) {
+        Write-QOTicketsUILog "Tickets: No statuses selected in filter; showing all statuses."
+    }
+
     $view.Filter = {
         param($item)
         if (-not $item) { return $false }
 
         $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
-        if (-not $filterState.Statuses -or $filterState.Statuses.Count -eq 0) {
-            return $false
-        }
+        $filterAllStatuses = (-not $filterState.Statuses -or $filterState.Statuses.Count -eq 0)
 
         $statusValue = $null
         try {
@@ -274,7 +286,7 @@ function Set-QOTicketsGridFilter {
         if (-not $filterState.IncludeDeleted -and $isDeleted) {
             return $false
         }
-
+        if ($filterAllStatuses) { return $true }
         return ($filterState.Statuses -contains $statusValue)
     }.GetNewClosure()
 }
@@ -887,10 +899,12 @@ function Initialize-QOTicketsUI {
     $script:TicketsStatusHandler = {
         try {
             $selectedItems = @($grid.SelectedItems)
+            Write-QOTicketsUILog ("Tickets: Status apply invoked. Selected={0}" -f $selectedItems.Count)
             if ($selectedItems.Count -eq 0) { return }
 
             $statusValue = [string]$statusSelector.SelectedItem
             if ([string]::IsNullOrWhiteSpace($statusValue)) { return }
+            Write-QOTicketsUILog ("Tickets: Applying status '{0}'." -f $statusValue)
             foreach ($item in $selectedItems) {
                 if ($null -eq $item) { continue }
                 if ($item.PSObject.Properties.Name -contains "Status") {
@@ -906,7 +920,9 @@ function Initialize-QOTicketsUI {
             )
             if ($ids.Count -eq 0) { return }
 
+            Write-QOTicketsUILog ("Tickets: Persisting status for {0} tickets." -f $ids.Count)
             $null = & $setStatusCmd -Id $ids -Status $statusValue
+            Write-QOTicketsUILog "Tickets: Status persisted. Refreshing grid."
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
         }
         catch { }
