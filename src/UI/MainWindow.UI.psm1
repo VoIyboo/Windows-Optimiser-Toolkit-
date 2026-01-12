@@ -9,32 +9,6 @@ $script:AppsUIInitialised = $false
 $script:MainWindow = $null
 $script:SummaryTextBlock = $null
 $script:SummaryTimer = $null
-$script:InformationTab = $null
-
-function New-QOTInformationTab {
-    param(
-        [Parameter(Mandatory)]
-        [System.Windows.Window]$Window
-    )
-
-    $xamlPath = Join-Path $PSScriptRoot "InformationTabContent.xaml"
-    if (-not (Test-Path -LiteralPath $xamlPath)) {
-        throw "InformationTabContent.xaml not found at $xamlPath"
-    }
-
-    $xamlContent = Get-Content -LiteralPath $xamlPath -Raw
-    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xamlContent)
-    $content = [System.Windows.Markup.XamlReader]::Load($reader)
-    if (-not $content) {
-        throw "Failed to load Information tab content."
-    }
-
-    $tab = New-Object System.Windows.Controls.TabItem
-    $tab.Header = "Information"
-    $tab.Content = $content
-
-    return $tab
-}
 
 function Get-QOTDriveSummary {
     $drives = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
