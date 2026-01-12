@@ -390,11 +390,7 @@ function Get-QOTicketsFiltered {
     )
 
     if ($statuses.Count -eq 0) {
-        if (-not $PSBoundParameters.ContainsKey("Status")) {
-            $statuses = @($script:ValidTicketStatuses)
-        } else {
-            return @()
-        }
+        $statuses = @($script:ValidTicketStatuses)
     }
 
     $includeDeleted = [bool]$IncludeDeleted
