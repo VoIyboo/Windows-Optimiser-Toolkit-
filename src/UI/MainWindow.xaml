@@ -490,7 +490,7 @@
                 </TabItem>
 
 <!-- Tickets -->
-<TabItem x:Name="TabTickets" Header="Tickets">
+<TabItem x:Name="TabTickets" Header="Tickets" Visibility="Collapsed">
     <Grid Margin="4">
         <GroupBox Margin="0">
 
