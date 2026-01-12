@@ -9,6 +9,32 @@ $script:AppsUIInitialised = $false
 $script:MainWindow = $null
 $script:SummaryTextBlock = $null
 $script:SummaryTimer = $null
+$script:InformationTab = $null
+
+function New-QOTInformationTab {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Window]$Window
+    )
+
+    $xamlPath = Join-Path $PSScriptRoot "InformationTabContent.xaml"
+    if (-not (Test-Path -LiteralPath $xamlPath)) {
+        throw "InformationTabContent.xaml not found at $xamlPath"
+    }
+
+    $xamlContent = Get-Content -LiteralPath $xamlPath -Raw
+    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xamlContent)
+    $content = [System.Windows.Markup.XamlReader]::Load($reader)
+    if (-not $content) {
+        throw "Failed to load Information tab content."
+    }
+
+    $tab = New-Object System.Windows.Controls.TabItem
+    $tab.Header = "Information"
+    $tab.Content = $content
+
+    return $tab
+}
 
 function Get-QOTDriveSummary {
     $drives = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
@@ -209,7 +235,7 @@ function Start-QOTMainWindow {
         $map = Get-QOTNamedElementsMap -Root $window
         $wanted = @(
             "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton",
-            "SettingsHost","BtnSettings","BtnHelp","MainTabControl","TabSettings","TabInformation",
+            "SettingsHost","BtnSettings","BtnHelp","MainTabControl","TabSettings",
             "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
         )
 
@@ -348,7 +374,6 @@ function Start-QOTMainWindow {
     $btnSettings = $window.FindName("BtnSettings")
     $btnHelp     = $window.FindName("BtnHelp")
     $tabSettings = $window.FindName("TabSettings")
-    $tabInfo     = $window.FindName("TabInformation")
     $tabTickets  = $window.FindName("TabTickets")
 
     if ($btnSettings -and $tabs -and $tabSettings) {
@@ -359,13 +384,11 @@ function Start-QOTMainWindow {
 
     if ($btnHelp -and $tabs) {
         $btnHelp.Add_Click({
-            $tabInfo = $window.FindName("TabInformation")
-            if ($tabInfo) {
-                if ($tabInfo.Visibility -ne [System.Windows.Visibility]::Visible) {
-                    $tabInfo.Visibility = [System.Windows.Visibility]::Visible
-                }
-                $tabs.SelectedItem = $tabInfo
+            if (-not $script:InformationTab -or -not $tabs.Items.Contains($script:InformationTab)) {
+                $script:InformationTab = New-QOTInformationTab -Window $window
+                [void]$tabs.Items.Add($script:InformationTab)
             }
+            $tabs.SelectedItem = $script:InformationTab
         })
     }
     # ------------------------------------------------------------
