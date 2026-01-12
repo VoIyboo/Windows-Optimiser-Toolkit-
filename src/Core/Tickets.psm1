@@ -262,6 +262,40 @@ function Add-QOTicket {
     return $Ticket
 }
 
+function Update-QOTicket {
+    param([Parameter(Mandatory)]$Ticket)
+
+    $db = Get-QOTickets
+
+    $ticketId = $null
+    try { $ticketId = [string]$Ticket.Id } catch { }
+    if ([string]::IsNullOrWhiteSpace($ticketId)) {
+        return $false
+    }
+
+    $updated = $false
+    foreach ($existing in @($db.Tickets)) {
+        if ($null -eq $existing) { continue }
+        if ($existing.Id -ne $ticketId) { continue }
+
+        foreach ($prop in $Ticket.PSObject.Properties) {
+            if ($prop.Name -eq "Id") { continue }
+            $existing | Add-Member -NotePropertyName $prop.Name -NotePropertyValue $prop.Value -Force
+        }
+
+        $updated = $true
+        break
+    }
+
+    if ($updated) {
+        Save-QOTickets -Database $db
+    }
+
+    return $updated
+}
+
+
+
 function Remove-QOTicket {
     param([Parameter(Mandatory)][string[]]$Id)
 
@@ -534,6 +568,7 @@ $exports = @(
     "Save-QOTickets",
     "New-QOTicket",
     "Add-QOTicket",
+    "Update-QOTicket",
     "Remove-QOTicket",
     "Restore-QOTickets",
     "Set-QOTicketsStatus",
