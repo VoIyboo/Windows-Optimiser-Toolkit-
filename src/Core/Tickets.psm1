@@ -186,13 +186,20 @@ function Get-QOTickets {
         foreach ($ticket in $db.Tickets) {
             if ($null -eq $ticket) { continue }
 
-            if (-not ($ticket.PSObject.Properties.Name -contains "Folder")) {
-                $ticket | Add-Member -NotePropertyName Folder -NotePropertyValue "Active" -Force
-            }
-
             if (-not ($ticket.PSObject.Properties.Name -contains "DeletedAt")) {
                 $ticket | Add-Member -NotePropertyName DeletedAt -NotePropertyValue $null -Force
             }
+
+            if (-not ($ticket.PSObject.Properties.Name -contains "Folder")) {
+                $folderValue = if ($ticket.DeletedAt) { "Deleted" } else { "Active" }
+                $ticket | Add-Member -NotePropertyName Folder -NotePropertyValue $folderValue -Force
+            } elseif ($ticket.DeletedAt -and $ticket.Folder -ne "Deleted") {
+                $ticket.Folder = "Deleted"
+            } elseif (-not $ticket.DeletedAt -and $ticket.Folder -eq "Deleted") {
+                $ticket.DeletedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            }
+
+
 
             if (-not ($ticket.PSObject.Properties.Name -contains "Status")) {
                 $ticket | Add-Member -NotePropertyName Status -NotePropertyValue "New" -Force
