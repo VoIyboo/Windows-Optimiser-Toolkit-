@@ -690,10 +690,14 @@ function Initialize-QOTicketsUI {
         try {
             $point = $args.GetPosition($grid)
             $hit = $grid.InputHitTest($point)
-            if (-not $hit) { return }
+            if (-not $hit) { $args.Handled = $true; return }
+
+            $cell = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridCell])
+            if (-not $cell) { $args.Handled = $true; return }
+            if ($cell.Column -and $cell.Column.Header -ne "Status") { $args.Handled = $true; return }
 
             $row = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridRow])
-            if (-not $row) { return }
+            if (-not $row) { $args.Handled = $true; return }
 
             if (-not $row.IsSelected) {
                 $grid.SelectedItems.Clear()
@@ -701,9 +705,6 @@ function Initialize-QOTicketsUI {
                 $grid.SelectedItem = $row.Item
             }
 
-            $cell = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridCell])
-            if (-not $cell) { return }
-            if ($cell.Column -and $cell.Column.Header -ne "Status") { return }
 
             $script:TicketsStatusContextMenu.PlacementTarget = $cell
             $script:TicketsStatusContextMenu.IsOpen = $true
