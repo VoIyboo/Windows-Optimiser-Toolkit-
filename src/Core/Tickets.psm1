@@ -6,6 +6,9 @@ $ErrorActionPreference = "Stop"
 # Import Settings
 Import-Module (Join-Path $PSScriptRoot "Settings.psm1") -Force -ErrorAction Stop
 
+# Import logging (optional)
+Import-Module (Join-Path $PSScriptRoot "Logging\Logging.psm1") -Force -ErrorAction SilentlyContinue
+
 # Import Outlook ticket sync (optional)
 try {
     $outlookMod = Join-Path $PSScriptRoot "..\Tickets\Tickets.Email.Outlook.psm1"
@@ -29,6 +32,18 @@ $script:ValidTicketStatuses = @(
     "No Longer Required",
     "Completed"
 )
+
+function Write-QOTicketsCoreLog {
+    param(
+        [Parameter(Mandatory)][string]$Message,
+        [string]$Level = "INFO"
+    )
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog $Message $Level
+        }
+    } catch { }
+}
 
 # =====================================================================
 # Helpers
@@ -174,6 +189,11 @@ function Get-QOTickets {
     Initialize-QOTicketStorage
 
     try {
+        $ticketPath = $script:TicketStorePath
+        $pathExists = $false
+        try { $pathExists = Test-Path -LiteralPath $ticketPath } catch { }
+        Write-QOTicketsCoreLog ("Tickets: Loading from {0} (exists={1})" -f $ticketPath, $pathExists)
+        
         $db = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
         if (-not $db) { return (New-QODefaultTicketDatabase) }
 
@@ -217,10 +237,14 @@ function Get-QOTickets {
                 $ticket.Status = "New"
             }
         }
-
+        $ticketCount = 0
+        try { $ticketCount = @($db.Tickets).Count } catch { }
+        Write-QOTicketsCoreLog ("Tickets: Loaded {0} tickets." -f $ticketCount)
+        
         return $db
     }
     catch {
+        Write-QOTicketsCoreLog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
         return (New-QODefaultTicketDatabase)
     }
 }
@@ -236,6 +260,9 @@ function Save-QOTickets {
 
     $Database | ConvertTo-Json -Depth 25 |
         Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
+    $savedCount = 0
+    try { $savedCount = @($Database.Tickets).Count } catch { }
+    Write-QOTicketsCoreLog ("Tickets: Saved {0} tickets to {1}." -f $savedCount, $script:TicketStorePath)
 }
 
 # =====================================================================
