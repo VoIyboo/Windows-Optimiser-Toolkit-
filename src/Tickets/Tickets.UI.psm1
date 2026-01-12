@@ -28,6 +28,9 @@ $script:TicketsToggleDetailsHandler = $null
 $script:TicketsSelectionChangedHandler = $null
 $script:TicketsRowEditHandler = $null
 $script:TicketsSendReplyHandler = $null
+$script:TicketsStatusContextMenuHandler = $null
+$script:TicketsStatusMenuItemHandler = $null
+$script:TicketsStatusContextMenu = $null
 
 $script:TicketFilterStatusBoxes = $null
 $script:TicketFilterIncludeDeleted = $null
@@ -326,6 +329,18 @@ function Update-QOTicketDetailsView {
     Set-QOTicketDetailsVisibility -DetailsPanel $DetailsPanel -Chevron $Chevron -IsOpen:$true
 }
 
+function Get-QOParentVisual {
+    param(
+        [AllowNull()]$Element,
+        [Parameter(Mandatory)][Type]$Type
+    )
+
+    $current = $Element
+    while ($current -and -not $Type.IsInstanceOfType($current)) {
+        $current = [System.Windows.Media.VisualTreeHelper]::GetParent($current)
+    }
+    return $current
+}
 
 function Invoke-QOTicketsEmailSyncAndRefresh {
     param(
@@ -560,6 +575,12 @@ function Initialize-QOTicketsUI {
             $btnSendReply.Remove_Click($script:TicketsSendReplyHandler)
         }
     } catch { }
+    try {
+        if ($script:TicketsStatusContextMenuHandler) {
+            $grid.RemoveHandler([System.Windows.UIElement]::PreviewMouseRightButtonDownEvent, $script:TicketsStatusContextMenuHandler)
+        }
+    } catch { }
+
     
     try {
         if ($script:TicketsAutoRefreshTimer) {
@@ -612,6 +633,85 @@ function Initialize-QOTicketsUI {
             }
         }
     } catch { }
+
+    $grid.SelectionMode = [System.Windows.Controls.DataGridSelectionMode]::Extended
+
+    if ($grid.ContextMenu) {
+        $grid.ContextMenu = $null
+    }
+    $script:TicketsStatusContextMenu = New-Object System.Windows.Controls.ContextMenu
+    $statusMenuItems = @()
+    if ($statusList) {
+        $statusMenuItems = @($statusList)
+    } else {
+        $statusMenuItems = @("New", "In Progress", "Waiting on User", "No Longer Required", "Completed")
+    }
+    foreach ($status in $statusMenuItems) {
+        $menuItem = New-Object System.Windows.Controls.MenuItem
+        $menuItem.Header = $status
+        $menuItem.Tag = $status
+        $script:TicketsStatusContextMenu.Items.Add($menuItem) | Out-Null
+    }
+    $grid.ContextMenu = $script:TicketsStatusContextMenu
+
+    $script:TicketsStatusMenuItemHandler = {
+        param($sender, $args)
+        try {
+            $statusValue = [string]$sender.Tag
+            if ([string]::IsNullOrWhiteSpace($statusValue)) { return }
+            $selectedItems = @($grid.SelectedItems)
+            if ($selectedItems.Count -eq 0) { return }
+
+            foreach ($item in $selectedItems) {
+                if ($null -eq $item) { continue }
+                if ($item.PSObject.Properties.Name -contains "Status") {
+                    $item.Status = $statusValue
+                }
+            }
+            $grid.Items.Refresh()
+
+            $ids = @(
+                $selectedItems |
+                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Id") } |
+                    ForEach-Object { $_.Id }
+            )
+            if ($ids.Count -eq 0) { return }
+
+            $null = & $setStatusCmd -Id $ids -Status $statusValue
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -StatusBoxes $script:TicketFilterStatusBoxes -IncludeDeletedBox $script:TicketFilterIncludeDeleted
+        } catch { }
+    }.GetNewClosure()
+    foreach ($menuItem in @($script:TicketsStatusContextMenu.Items)) {
+        try { $menuItem.Add_Click($script:TicketsStatusMenuItemHandler) } catch { }
+    }
+
+    $script:TicketsStatusContextMenuHandler = [System.Windows.Input.MouseButtonEventHandler]{
+        param($sender, $args)
+        try {
+            $point = $args.GetPosition($grid)
+            $hit = $grid.InputHitTest($point)
+            if (-not $hit) { return }
+
+            $row = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridRow])
+            if (-not $row) { return }
+
+            if (-not $row.IsSelected) {
+                $grid.SelectedItems.Clear()
+                $row.IsSelected = $true
+                $grid.SelectedItem = $row.Item
+            }
+
+            $cell = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridCell])
+            if (-not $cell) { return }
+            if ($cell.Column -and $cell.Column.Header -ne "Status") { return }
+
+            $script:TicketsStatusContextMenu.PlacementTarget = $cell
+            $script:TicketsStatusContextMenu.IsOpen = $true
+            $args.Handled = $true
+        } catch { }
+    }.GetNewClosure()
+    $grid.AddHandler([System.Windows.UIElement]::PreviewMouseRightButtonDownEvent, $script:TicketsStatusContextMenuHandler)
+
 
     $script:TicketsLoadedHandler = [System.Windows.RoutedEventHandler]{
         try {
