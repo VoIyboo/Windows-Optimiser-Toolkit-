@@ -94,17 +94,13 @@ function Get-QOTicketFilterState {
         [AllowNull()][System.Windows.Controls.CheckBox]$IncludeDeletedBox
     )
 
-    $statuses = @()
+    $statuses = $null
     if ($StatusBoxes) {
         $statuses = @(
             $StatusBoxes.GetEnumerator() |
                 Where-Object { $_.Value -and $_.Value.IsChecked } |
                 ForEach-Object { $_.Key }
         )
-    }
-
-    if ($StatusBoxes -and $statuses.Count -eq 0) {
-        $statuses = @($StatusBoxes.Keys)
     }
 
     $includeDeleted = $false
