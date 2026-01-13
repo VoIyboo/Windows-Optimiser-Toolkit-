@@ -9,6 +9,7 @@ $script:AppsUIInitialised = $false
 $script:MainWindow = $null
 $script:SummaryTextBlock = $null
 $script:SummaryTimer = $null
+$script:RunButtonTimer = $null
 
 function Get-QOTDriveSummary {
     $drives = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
@@ -311,8 +312,19 @@ function Start-QOTMainWindow {
                 }
             }
         })
-    }
 
+        if (Get-Command Test-QOTAnyActionsSelected -ErrorAction SilentlyContinue) {
+            $runButton.IsEnabled = Test-QOTAnyActionsSelected -Window $window
+            $script:RunButtonTimer = New-Object System.Windows.Threading.DispatcherTimer
+            $script:RunButtonTimer.Interval = [TimeSpan]::FromMilliseconds(500)
+            $script:RunButtonTimer.Add_Tick({
+                try {
+                    $runButton.IsEnabled = Test-QOTAnyActionsSelected -Window $window
+                } catch { }
+            })
+            $script:RunButtonTimer.Start()
+        }
+    }
 
 
     # ------------------------------------------------------------
