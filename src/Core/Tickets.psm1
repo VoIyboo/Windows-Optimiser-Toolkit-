@@ -297,6 +297,12 @@ function Initialize-QOTicketStorage {
 function Get-QOTickets {
     Initialize-QOTicketStorage
 
+    try {
+        $db = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        if (-not $db) {
+            $db = New-QODefaultTicketDatabase
+        }
+
         $db = Normalize-QOTicketDatabase -Database $db
         $ticketCount = 0
         try { $ticketCount = @($db.Tickets).Count } catch { }
@@ -306,7 +312,7 @@ function Get-QOTickets {
     }
     catch {
         Write-QOTicketsCoreLog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
-                $ticketPath = $script:TicketStorePath
+        $ticketPath = $script:TicketStorePath
         try {
             $backupPath = Get-QOLatestTicketBackupPath -TicketPath $ticketPath -BackupDirectory $script:TicketBackupPath
             if ($backupPath) {
