@@ -51,13 +51,29 @@ function Invoke-QOTScriptBlockSafely {
 
     try {
         $paramCount = 0
+        $firstParam = $null
+        $firstParamType = $null
         try {
             if ($Script.Ast -and $Script.Ast.ParamBlock) {
                 $paramCount = $Script.Ast.ParamBlock.Parameters.Count
+                if ($paramCount -gt 0) {
+                    $firstParam = $Script.Ast.ParamBlock.Parameters[0]
+                    try { $firstParamType = $firstParam.StaticType } catch { $firstParamType = $null }
+                }
             }
         } catch { $paramCount = 0 }
 
-        if ($paramCount -gt 0 -and $null -ne $Window) {
+        $shouldPassWindow = $false
+        if ($paramCount -eq 1 -and $null -ne $Window) {
+            if (-not $firstParamType -or $firstParamType -eq [object]) {
+                $shouldPassWindow = $true
+            }
+            elseif ($Window -is $firstParamType) {
+                $shouldPassWindow = $true
+            }
+        }
+
+        if ($shouldPassWindow) {
             return & $Script $Window
         }
 
