@@ -88,6 +88,54 @@ function Invoke-QOTRegisteredActions {
     param(
         [Parameter(Mandatory)]$Window
     )
+ $selectedItems = Get-QOTSelectedActions -Window $Window
+
+    if ($selectedItems.Count -eq 0) {
+        try { Write-QLog "No actions selected." "INFO" } catch { }
+        return
+    }
+
+    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
+    if ($selectedItems -is [System.Collections.IEnumerable]) {
+        $firstSelected = $selectedItems | Select-Object -First 1
+        if ($firstSelected) {
+            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
+            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
+        }
+    }
+
+    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
+    if ($selectedItems -is [System.Collections.IEnumerable]) {
+        $firstSelected = $selectedItems | Select-Object -First 1
+        if ($firstSelected) {
+            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
+            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
+        }
+    }
+
+    foreach ($entry in $selectedItems) {
+        $item = $entry.Item
+        $label = $null
+        $executor = $null
+        try { $label = $item.Label } catch { $label = "Unknown action" }
+        try { $executor = $item.Execute } catch { $executor = $null }
+        if ($executor -is [scriptblock]) {
+            try {
+                Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label)
+            }
+            catch {
+                try { Write-QLog ("Action failed ({0}): {1}" -f $label, $_.Exception.Message) "ERROR" } catch { }
+            }
+        }
+    }
+}
+
+function Get-QOTSelectedActions {
+    param(
+        [Parameter(Mandatory)]$Window
+    )
+
+
 
     $selectedItems = New-Object System.Collections.Generic.List[object]
 
@@ -163,44 +211,16 @@ function Invoke-QOTRegisteredActions {
         }
     }
 
-    if ($selectedItems.Count -eq 0) {
-        try { Write-QLog "No actions selected." "INFO" } catch { }
-        return
-    }
-
-    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
-    if ($selectedItems -is [System.Collections.IEnumerable]) {
-        $firstSelected = $selectedItems | Select-Object -First 1
-        if ($firstSelected) {
-            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
-            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
-        }
-    }
-
-    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
-    if ($selectedItems -is [System.Collections.IEnumerable]) {
-        $firstSelected = $selectedItems | Select-Object -First 1
-        if ($firstSelected) {
-            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
-            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
-        }
-    }
-
-    foreach ($entry in $selectedItems) {
-        $item = $entry.Item
-        $label = $null
-        $executor = $null
-        try { $label = $item.Label } catch { $label = "Unknown action" }
-        try { $executor = $item.Execute } catch { $executor = $null }
-        if ($executor -is [scriptblock]) {
-            try {
-                Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label)
-            }
-            catch {
-                try { Write-QLog ("Action failed ({0}): {1}" -f $label, $_.Exception.Message) "ERROR" } catch { }
-            }
-        }
-    }
+    return $selectedItems
 }
 
-Export-ModuleMember -Function Clear-QOTActionGroups, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions
+function Test-QOTAnyActionsSelected {
+    param(
+        [Parameter(Mandatory)]$Window
+    )
+
+    $selected = Get-QOTSelectedActions -Window $Window
+    return ($selected.Count -gt 0)
+}
+
+Export-ModuleMember -Function Clear-QOTActionGroups, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Test-QOTAnyActionsSelected
