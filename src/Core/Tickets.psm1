@@ -131,6 +131,10 @@ function Initialize-QOTicketStorage {
     $appDataRoot = Get-QOAppDataRoot
     $stableStorePath  = Join-Path $appDataRoot "StudioVoly\QuinnToolkit\Tickets\Tickets.json"
     $stableBackupPath = Join-Path $appDataRoot "StudioVoly\QuinnToolkit\Tickets\Backups"
+    $legacyStorePaths = @(
+        (Join-Path $appDataRoot "StudioVoly\QuinnToolkit\Tickets.json"),
+        (Join-Path $appDataRoot "StudioVoly\QuinnToolkit\Tickets\TicketStore.json")
+    )
 
     $currentPath = [string]$settings.TicketStorePath
     $needReset   = $false
@@ -156,10 +160,29 @@ function Initialize-QOTicketStorage {
 
                     if (-not (Test-Path -LiteralPath $stableStorePath)) {
                         Copy-Item -LiteralPath $currentPath -Destination $stableStorePath -Force
+                        Write-QOTicketsCoreLog ("Tickets: Migrated legacy store from {0} to {1}" -f $currentPath, $stableStorePath)
                     }
                 }
             }
         } catch { }
+        
+        if (-not (Test-Path -LiteralPath $stableStorePath)) {
+            foreach ($legacyPath in $legacyStorePaths) {
+                if ([string]::IsNullOrWhiteSpace($legacyPath)) { continue }
+                if (Test-Path -LiteralPath $legacyPath) {
+                    try {
+                        $stableDir = Split-Path -Parent $stableStorePath
+                        if (-not (Test-Path -LiteralPath $stableDir)) {
+                            New-Item -ItemType Directory -Path $stableDir -Force | Out-Null
+                        }
+                        Copy-Item -LiteralPath $legacyPath -Destination $stableStorePath -Force
+                        Write-QOTicketsCoreLog ("Tickets: Migrated legacy store from {0} to {1}" -f $legacyPath, $stableStorePath)
+                        break
+                    } catch { }
+                }
+            }
+        }
+
 
         $settings.TicketStorePath = $stableStorePath
     }
