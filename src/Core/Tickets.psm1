@@ -246,6 +246,18 @@ function Get-QOTickets {
     }
     catch {
         Write-QOTicketsCoreLog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
+        try {
+            $ticketPath = $script:TicketStorePath
+            if (-not [string]::IsNullOrWhiteSpace($ticketPath)) {
+                if (Test-Path -LiteralPath $ticketPath) {
+                    $backupName = "{0}.bak_{1}" -f $ticketPath, (Get-Date -Format "yyyyMMddHHmmss")
+                    Copy-Item -LiteralPath $ticketPath -Destination $backupName -Force -ErrorAction SilentlyContinue
+                }
+
+                New-QODefaultTicketDatabase | ConvertTo-Json -Depth 8 |
+                    Set-Content -LiteralPath $ticketPath -Encoding UTF8
+            }
+        } catch { }
         return (New-QODefaultTicketDatabase)
     }
 }
