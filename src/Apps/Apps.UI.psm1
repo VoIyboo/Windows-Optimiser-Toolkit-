@@ -23,6 +23,7 @@ function Initialize-QOTAppsUI {
         $AppsGrid        = $Window.FindName("AppsGrid")
         $InstallGrid     = $Window.FindName("InstallGrid")
         $RunButton       = $Window.FindName("RunButton")
+        $StatusLabel     = $Window.FindName("StatusLabel")
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return $false }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return $false }
@@ -51,32 +52,22 @@ function Initialize-QOTAppsUI {
             if ($appsGrid) { try { Commit-QOTGridEdits -Grid $appsGrid } catch { } }
             if ($installGrid) { try { Commit-QOTGridEdits -Grid $installGrid } catch { } }
 
-            if ($appsGrid) {
+            if ($appsGrid -or $installGrid) {
                 $appsGridRef = $appsGrid
+                $installGridRef = $installGrid
+                $statusLabelRef = $Window.FindName("StatusLabel")
                 $items += [pscustomobject]@{
-                    Label = "Uninstall selected apps"
+                    Id = "Apps.RunSelected"
+                    Label = "Run selected app actions"
                     IsSelected = ({
                         param($window)
                         $apps = @($appsGridRef.ItemsSource)
-                        (@($apps | Where-Object { $_.IsSelected -eq $true }).Count -gt 0)
+                        $common = @($installGridRef.ItemsSource)
+                        $installedSelected = @($apps | Where-Object { $_.IsSelected -eq $true })
+                        $commonSelected = @($common | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false })
+                        return (($installedSelected.Count + $commonSelected.Count) -gt 0)
                     }).GetNewClosure()
-                    Execute = ({ param($window) Invoke-QOTUninstallSelectedApps -Grid $appsGridRef -Rescan }).GetNewClosure()
-                }
-            }
-
-            if ($installGrid) {
-                foreach ($app in @($installGrid.ItemsSource)) {
-                    $appRef = $app
-                    if (-not $appRef) { continue }
-                    $items += [pscustomobject]@{
-                        Id = if ($appRef.WingetId) { "InstallApp:$($appRef.WingetId)" } else { "InstallApp:$($appRef.Name)" }
-                        Label = "Install: $($appRef.Name)"
-                        IsSelected = ({
-                            param($window)
-                            $appRef.IsSelected -eq $true -and -not [string]::IsNullOrWhiteSpace($appRef.WingetId) -and $appRef.IsInstallable -ne $false
-                        }).GetNewClosure()
-                        Execute = ({ param($window) Invoke-QOTInstallCommonAppItem -App $appRef }).GetNewClosure()
-                    }
+                   Execute = ({ param($window) Invoke-QOTRunSelectedAppsActions -Window $window -AppsGrid $appsGridRef -InstallGrid $installGridRef -StatusLabel $statusLabelRef }).GetNewClosure()
                 }
             }
 
@@ -112,6 +103,80 @@ function Commit-QOTGridEdits {
         $Grid.CommitEdit([System.Windows.Controls.DataGridEditingUnit]::Row,  $true) | Out-Null
     } catch { }
 }
+
+function Get-QOTNormalizedAppName {
+    param(
+        [string]$Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) { return "" }
+    $normalized = $Name.ToLowerInvariant()
+    $normalized = $normalized -replace "[^a-z0-9]", ""
+    return $normalized
+}
+
+function Get-QOTInstalledAppNameSet {
+    param(
+        [Parameter(Mandatory)][object[]]$Apps
+    )
+
+    $set = New-Object "System.Collections.Generic.HashSet[string]" ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($app in $Apps) {
+        if (-not $app) { continue }
+        $key = Get-QOTNormalizedAppName -Name $app.Name
+        if (-not [string]::IsNullOrWhiteSpace($key)) {
+            [void]$set.Add($key)
+        }
+    }
+
+    return $set
+}
+
+function Update-QOTCommonAppsInstallStatus {
+    param(
+        [Parameter(Mandatory)][object[]]$InstalledApps
+    )
+
+    $commonApps = @($Global:QOT_CommonAppsCollection)
+    if (-not $commonApps -or $commonApps.Count -eq 0) { return }
+
+    $installedNameSet = Get-QOTInstalledAppNameSet -Apps $InstalledApps
+
+    foreach ($item in $commonApps) {
+        if (-not $item) { continue }
+        $installed = $false
+        if (-not [string]::IsNullOrWhiteSpace($item.Name)) {
+            $key = Get-QOTNormalizedAppName -Name $item.Name
+            if ($installedNameSet.Contains($key)) { $installed = $true }
+        }
+
+        if ($null -eq $item.PSObject.Properties["Status"]) {
+            $item | Add-Member -NotePropertyName Status -NotePropertyValue "" -Force
+        }
+        if ($null -eq $item.PSObject.Properties["IsInstallable"]) {
+            $item | Add-Member -NotePropertyName IsInstallable -NotePropertyValue $true -Force
+        }
+
+        $item.Status = if ($installed) { "Installed" } else { "Available" }
+        $item.IsInstallable = -not $installed
+    }
+}
+
+function Set-QOTAppsStatus {
+    param(
+        [System.Windows.Controls.TextBlock]$StatusLabel,
+        [string]$Text
+    )
+
+    if (-not $StatusLabel -or [string]::IsNullOrWhiteSpace($Text)) { return }
+
+    try {
+        $StatusLabel.Dispatcher.Invoke([action]{ $StatusLabel.Text = $Text })
+    } catch {
+        try { $StatusLabel.Text = $Text } catch { }
+    }
+}
+
 
 function Initialize-QOTAppsGridsColumns {
     param(
@@ -201,6 +266,8 @@ function Start-QOTInstalledAppsScanAsync {
                     $Global:QOT_InstalledAppsCollection.Add($app)
                 }
             })
+
+            Update-QOTCommonAppsInstallStatus -InstalledApps $cachedResults
 
             try { Write-QLog ("Installed apps loaded from cache ({0} items)." -f $cachedResults.Count) "DEBUG" } catch { }
             return
@@ -311,6 +378,24 @@ function Invoke-QOTInstallCommonAppItem {
     $App.IsSelected = $false
 }
 
+function Get-QOTSilentUninstallCommand {
+    param(
+        [Parameter(Mandatory)][object]$App
+    )
+
+    $cmd = $App.UninstallString
+    if ([string]::IsNullOrWhiteSpace($cmd)) { return $null }
+
+    if ($cmd -match "(?i)msiexec") {
+        $cmd = $cmd -replace "(?i)\\s/I\\b", " /X"
+        if ($cmd -notmatch "(?i)\\s/(qn|quiet)\\b") {
+            $cmd = "$cmd /qn /norestart"
+        }
+    }
+
+    return $cmd
+}
+
 function Invoke-QOTUninstallAppItem {
     param(
         [Parameter(Mandatory)][object]$App
@@ -319,7 +404,7 @@ function Invoke-QOTUninstallAppItem {
     if (-not $App) { return }
 
     $name = $App.Name
-    $cmd  = $App.UninstallString
+    $cmd  = Get-QOTSilentUninstallCommand -App $App
 
     if ([string]::IsNullOrWhiteSpace($cmd)) {
         try { Write-QLog ("Skipping uninstall for '{0}' because UninstallString is empty." -f $name) "WARN" } catch { }
@@ -334,6 +419,123 @@ function Invoke-QOTUninstallAppItem {
     catch {
         try { Write-QLog ("Failed uninstall '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
     }
+}
+
+function Invoke-QOTRunSelectedAppsActions {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid,
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$InstallGrid,
+        [System.Windows.Controls.TextBlock]$StatusLabel
+    )
+
+    Commit-QOTGridEdits -Grid $AppsGrid
+    Commit-QOTGridEdits -Grid $InstallGrid
+
+    $installedItems = @($AppsGrid.ItemsSource)
+    $commonItems = @($InstallGrid.ItemsSource)
+
+    $selectedInstalled = @($installedItems | Where-Object { $_.IsSelected -eq $true })
+    $selectedCommon = @($commonItems | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false })
+
+    if ($selectedInstalled.Count -eq 0 -and $selectedCommon.Count -eq 0) {
+        try { Write-QLog "Apps actions skipped. Nothing selected." "INFO" } catch { }
+        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Idle"
+        return
+    }
+
+    $installedNameSet = Get-QOTInstalledAppNameSet -Apps $installedItems
+    $selectedInstalledNameSet = Get-QOTInstalledAppNameSet -Apps $selectedInstalled
+    $selectedCommonNameSet = Get-QOTInstalledAppNameSet -Apps $selectedCommon
+
+    $overlap = New-Object "System.Collections.Generic.HashSet[string]" ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($name in $selectedInstalledNameSet) {
+        if ($selectedCommonNameSet.Contains($name)) {
+            [void]$overlap.Add($name)
+        }
+    }
+
+    if ($overlap.Count -gt 0) {
+        foreach ($name in $overlap) {
+            try { Write-QLog ("App appears in both install and uninstall selections. Skipping '{0}'." -f $name) "WARN" } catch { }
+        }
+        $selectedInstalled = @($selectedInstalled | Where-Object { -not $overlap.Contains((Get-QOTNormalizedAppName -Name $_.Name)) })
+        $selectedCommon = @($selectedCommon | Where-Object { -not $overlap.Contains((Get-QOTNormalizedAppName -Name $_.Name)) })
+    }
+
+    $didChange = $false
+
+    foreach ($app in $selectedInstalled) {
+        $name = $app.Name
+        $key = Get-QOTNormalizedAppName -Name $name
+        if (-not $installedNameSet.Contains($key)) {
+            try { Write-QLog ("Skipping uninstall for '{0}' because it no longer appears installed." -f $name) "WARN" } catch { }
+            continue
+        }
+
+        $cmd = Get-QOTSilentUninstallCommand -App $app
+        if ([string]::IsNullOrWhiteSpace($cmd)) {
+            try { Write-QLog ("Skipping uninstall for '{0}' because no uninstall command is available." -f $name) "WARN" } catch { }
+            continue
+        }
+
+        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text ("Uninstalling {0}..." -f $name)
+        try {
+            Start-QOTProcessFromCommand -Command $cmd -Wait
+            $app.IsSelected = $false
+            $didChange = $true
+            try { Write-QLog ("Uninstall succeeded: {0}" -f $name) "INFO" } catch { }
+        }
+        catch {
+            try { Write-QLog ("Failed uninstall '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
+        }
+    }
+
+    foreach ($app in $selectedCommon) {
+        $name = $app.Name
+        $key = Get-QOTNormalizedAppName -Name $name
+
+        $alreadyInstalled = $false
+        if ($installedNameSet.Contains($key)) { $alreadyInstalled = $true }
+        if (-not $alreadyInstalled -and (Get-Command Test-QOTWingetAppInstalled -ErrorAction SilentlyContinue) -and -not [string]::IsNullOrWhiteSpace($app.WingetId)) {
+            try { $alreadyInstalled = Test-QOTWingetAppInstalled -WingetId $app.WingetId } catch { $alreadyInstalled = $false }
+        }
+
+        if ($alreadyInstalled) {
+            $app.Status = "Installed"
+            $app.IsInstallable = $false
+            $app.IsSelected = $false
+            try { Write-QLog ("Skipping install for '{0}' because it is already installed." -f $name) "INFO" } catch { }
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($app.WingetId)) {
+            try { Write-QLog ("Skipping install for '{0}' because WingetId is missing." -f $name) "WARN" } catch { }
+            continue
+        }
+
+        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text ("Installing {0}..." -f $name)
+        try {
+            Install-QOTCommonApp -Name $app.Name -WingetId $app.WingetId
+            $app.Status = "Installed"
+            $app.IsInstallable = $false
+            $app.IsSelected = $false
+            $didChange = $true
+            try { Write-QLog ("Install succeeded: {0}" -f $name) "INFO" } catch { }
+        }
+        catch {
+            $app.Status = "Failed"
+            try { Write-QLog ("Install failed for '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
+        }
+    }
+
+    Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Refreshing apps..."
+    if ($didChange) {
+        Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid -ForceScan
+    } else {
+        Update-QOTCommonAppsInstallStatus -InstalledApps $installedItems
+    }
+    Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Idle"
 }
 
 
@@ -382,7 +584,7 @@ function Invoke-QOTUninstallSelectedApps {
 
     foreach ($app in $selected) {
         $name = $app.Name
-        $cmd  = $app.UninstallString
+        $cmd  = Get-QOTSilentUninstallCommand -App $app
 
         if ([string]::IsNullOrWhiteSpace($cmd)) {
             try { Write-QLog ("Skipping uninstall for '{0}' because UninstallString is empty." -f $name) "WARN" } catch { }
