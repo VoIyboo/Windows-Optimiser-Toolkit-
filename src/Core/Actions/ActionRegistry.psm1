@@ -235,8 +235,14 @@ function Test-QOTAnyActionsSelected {
         [Parameter(Mandatory)]$Window
     )
 
-    $selected = Get-QOTSelectedActions -Window $Window
-    return ($selected.Count -gt 0)
+    try {
+        $selected = Get-QOTSelectedActions -Window $Window
+        return ($selected.Count -gt 0)
+    }
+    catch {
+        try { Write-QLog ("Failed to evaluate selected actions: {0}" -f $_.Exception.Message) "WARN" } catch { }
+        return $false
+    }
 }
 
 Export-ModuleMember -Function Clear-QOTActionGroups, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Test-QOTAnyActionsSelected
