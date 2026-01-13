@@ -46,7 +46,8 @@ function Invoke-QOTScriptBlockSafely {
     param(
         [Parameter(Mandatory)][scriptblock]$Script,
         [object]$Window,
-        [string]$Context
+        [string]$Context,
+        [switch]$IgnoreTypeMismatch
     )
 
     try {
@@ -85,6 +86,12 @@ function Invoke-QOTScriptBlockSafely {
                 return & $Script
             }
             catch {
+                if ($IgnoreTypeMismatch) {
+                    if ($Context) {
+                        try { Write-QLog ("{0} skipped due to parameter mismatch: {1}" -f $Context, $_.Exception.Message) "WARN" } catch { }
+                    }
+                    return $null
+                }
                 if ($Context) {
                     try { Write-QLog ("{0} failed without Window param: {1}" -f $Context, $_.Exception.Message) "ERROR" } catch { }
                 }
@@ -159,7 +166,7 @@ function Get-QOTSelectedActions {
         $items = @()
         try {
             if ($group.GetItems -is [scriptblock]) {
-                $items = @(Invoke-QOTScriptBlockSafely -Script $group.GetItems -Window $Window -Context ("Action group '{0}'" -f $group.Name))
+                $items = @(Invoke-QOTScriptBlockSafely -Script $group.GetItems -Window $Window -Context ("Action group '{0}'" -f $group.Name) -IgnoreTypeMismatch)
             }
         }
         catch {
