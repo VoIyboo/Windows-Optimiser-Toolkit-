@@ -85,6 +85,91 @@ function New-QODefaultTicketsFile {
     }
 }
 
+function Get-QOLatestTicketBackupPath {
+    param(
+        [Parameter(Mandatory)][string]$TicketPath,
+        [AllowNull()][string]$BackupDirectory
+    )
+
+    $candidates = @()
+    $ticketName = Split-Path -Leaf $TicketPath
+    $backupPattern = "{0}.bak_*" -f $ticketName
+
+    if (-not [string]::IsNullOrWhiteSpace($BackupDirectory)) {
+        try {
+            if (Test-Path -LiteralPath $BackupDirectory) {
+                $candidates += Get-ChildItem -LiteralPath $BackupDirectory -Filter $backupPattern -File -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
+
+    $ticketDir = Split-Path -Parent $TicketPath
+    if (-not [string]::IsNullOrWhiteSpace($ticketDir)) {
+        try {
+            if (Test-Path -LiteralPath $ticketDir) {
+                $candidates += Get-ChildItem -LiteralPath $ticketDir -Filter $backupPattern -File -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
+
+    if (-not $candidates -or $candidates.Count -eq 0) {
+        return $null
+    }
+
+    $latest = $candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latest) {
+        return [string]$latest.FullName
+    }
+
+    return $null
+}
+
+function Normalize-QOTicketDatabase {
+    param([Parameter(Mandatory)]$Database)
+
+    if (-not ($Database.PSObject.Properties.Name -contains "Tickets")) {
+        $Database | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
+    }
+
+    if ($null -eq $Database.Tickets) { $Database.Tickets = @() }
+    $Database.Tickets = @($Database.Tickets)
+    foreach ($ticket in $Database.Tickets) {
+        if ($null -eq $ticket) { continue }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "DeletedAt")) {
+            $ticket | Add-Member -NotePropertyName DeletedAt -NotePropertyValue $null -Force
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "Folder")) {
+            $folderValue = if ($ticket.DeletedAt) { "Deleted" } else { "Active" }
+            $ticket | Add-Member -NotePropertyName Folder -NotePropertyValue $folderValue -Force
+        } elseif ($ticket.DeletedAt -and $ticket.Folder -ne "Deleted") {
+            $ticket.Folder = "Deleted"
+        } elseif (-not $ticket.DeletedAt -and $ticket.Folder -eq "Deleted") {
+            $ticket.DeletedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "Status")) {
+            $ticket | Add-Member -NotePropertyName Status -NotePropertyValue "New" -Force
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$ticket.Status)) {
+            $ticket.Status = "New"
+        }
+
+        if ($ticket.Status -eq "Open") {
+            $ticket.Status = "In Progress"
+        }
+
+        if ($script:ValidTicketStatuses -notcontains $ticket.Status) {
+            $ticket.Status = "New"
+        }
+    }
+
+    return $Database
+}
+
+
 function Test-QOIsBadTicketPath {
     param([string]$Path)
 
@@ -212,55 +297,7 @@ function Initialize-QOTicketStorage {
 function Get-QOTickets {
     Initialize-QOTicketStorage
 
-    try {
-        $ticketPath = $script:TicketStorePath
-        $pathExists = $false
-        try { $pathExists = Test-Path -LiteralPath $ticketPath } catch { }
-        Write-QOTicketsCoreLog ("Tickets: Loading from {0} (exists={1})" -f $ticketPath, $pathExists)
-        
-        $db = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-        if (-not $db) { return (New-QODefaultTicketDatabase) }
-
-        if (-not ($db.PSObject.Properties.Name -contains "Tickets")) {
-            $db | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
-        }
-
-        if ($null -eq $db.Tickets) { $db.Tickets = @() }
-        $db.Tickets = @($db.Tickets)
-        foreach ($ticket in $db.Tickets) {
-            if ($null -eq $ticket) { continue }
-
-            if (-not ($ticket.PSObject.Properties.Name -contains "DeletedAt")) {
-                $ticket | Add-Member -NotePropertyName DeletedAt -NotePropertyValue $null -Force
-            }
-
-            if (-not ($ticket.PSObject.Properties.Name -contains "Folder")) {
-                $folderValue = if ($ticket.DeletedAt) { "Deleted" } else { "Active" }
-                $ticket | Add-Member -NotePropertyName Folder -NotePropertyValue $folderValue -Force
-            } elseif ($ticket.DeletedAt -and $ticket.Folder -ne "Deleted") {
-                $ticket.Folder = "Deleted"
-            } elseif (-not $ticket.DeletedAt -and $ticket.Folder -eq "Deleted") {
-                $ticket.DeletedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            }
-
-
-
-            if (-not ($ticket.PSObject.Properties.Name -contains "Status")) {
-                $ticket | Add-Member -NotePropertyName Status -NotePropertyValue "New" -Force
-            }
-
-            if ([string]::IsNullOrWhiteSpace([string]$ticket.Status)) {
-                $ticket.Status = "New"
-            }
-
-            if ($ticket.Status -eq "Open") {
-                $ticket.Status = "In Progress"
-            }
-
-            if ($script:ValidTicketStatuses -notcontains $ticket.Status) {
-                $ticket.Status = "New"
-            }
-        }
+        $db = Normalize-QOTicketDatabase -Database $db
         $ticketCount = 0
         try { $ticketCount = @($db.Tickets).Count } catch { }
         Write-QOTicketsCoreLog ("Tickets: Loaded {0} tickets." -f $ticketCount)
@@ -269,8 +306,22 @@ function Get-QOTickets {
     }
     catch {
         Write-QOTicketsCoreLog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
+                $ticketPath = $script:TicketStorePath
         try {
-            $ticketPath = $script:TicketStorePath
+            $backupPath = Get-QOLatestTicketBackupPath -TicketPath $ticketPath -BackupDirectory $script:TicketBackupPath
+            if ($backupPath) {
+                Copy-Item -LiteralPath $backupPath -Destination $ticketPath -Force -ErrorAction SilentlyContinue
+                $db = Get-Content -LiteralPath $ticketPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                if ($db) {
+                    $db = Normalize-QOTicketDatabase -Database $db
+                    $ticketCount = 0
+                    try { $ticketCount = @($db.Tickets).Count } catch { }
+                    Write-QOTicketsCoreLog ("Tickets: Restored from backup {0}. Loaded {1} tickets." -f $backupPath, $ticketCount)
+                    return $db
+                }
+            }
+        } catch { }
+        try {
             if (-not [string]::IsNullOrWhiteSpace($ticketPath)) {
                 if (Test-Path -LiteralPath $ticketPath) {
                     $backupName = "{0}.bak_{1}" -f $ticketPath, (Get-Date -Format "yyyyMMddHHmmss")
@@ -293,6 +344,19 @@ function Save-QOTickets {
     if (-not ($Database.PSObject.Properties.Name -contains "Tickets")) {
         $Database | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
     }
+
+    try {
+        if (Test-Path -LiteralPath $script:TicketStorePath) {
+            if (-not (Test-Path -LiteralPath $script:TicketBackupPath)) {
+                New-Item -ItemType Directory -Path $script:TicketBackupPath -Force | Out-Null
+            }
+            $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+            $ticketName = Split-Path -Leaf $script:TicketStorePath
+            $backupName = "{0}.bak_{1}" -f $ticketName, $timestamp
+            $backupPath = Join-Path $script:TicketBackupPath $backupName
+            Copy-Item -LiteralPath $script:TicketStorePath -Destination $backupPath -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
 
     $Database | ConvertTo-Json -Depth 25 |
         Set-Content -LiteralPath $script:TicketStorePath -Encoding UTF8
