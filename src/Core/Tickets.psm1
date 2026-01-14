@@ -127,6 +127,22 @@ function Get-QOLatestTicketBackupPath {
 function Normalize-QOTicketDatabase {
     param([Parameter(Mandatory)]$Database)
 
+    if ($Database -and (-not ($Database.PSObject.Properties.Name -contains "Tickets"))) {
+        $ticketList = @()
+        if ($Database -is [System.Array]) {
+            $ticketList = @($Database)
+        } elseif ($Database -is [System.Collections.IEnumerable] -and -not ($Database -is [string])) {
+            $ticketList = @($Database)
+        } else {
+            $ticketList = @($Database)
+        }
+
+        $Database = [pscustomobject]@{
+            SchemaVersion = 1
+            Tickets       = $ticketList
+        }
+    }
+
     if (-not ($Database.PSObject.Properties.Name -contains "Tickets")) {
         $Database | Add-Member -NotePropertyName Tickets -NotePropertyValue @() -Force
     }
