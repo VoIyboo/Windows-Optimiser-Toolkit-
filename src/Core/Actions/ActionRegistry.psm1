@@ -7,6 +7,12 @@ Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction Silent
 
 $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
 
+function Initialize-QOTActionGroups {
+    if (-not $script:QOT_ActionGroups -or -not ($script:QOT_ActionGroups -is [System.Collections.Generic.List[object]])) {
+        $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
+    }
+}
+
 function Clear-QOTActionGroups {
     $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
 }
@@ -17,9 +23,7 @@ function Register-QOTActionGroup {
         [Parameter(Mandatory)][scriptblock]$GetItems
     )
 
-    if (-not $script:QOT_ActionGroups) {
-        $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
-    }
+    Initialize-QOTActionGroups
 
     $existing = @($script:QOT_ActionGroups | Where-Object { $_.Name -eq $Name })
     foreach ($group in $existing) {
@@ -35,11 +39,14 @@ function Register-QOTActionGroup {
 }
 
 function Get-QOTActionGroups {
-    if (-not $script:QOT_ActionGroups) {
-        $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
+    Initialize-QOTActionGroups
+    try {
+        return $script:QOT_ActionGroups.ToArray()
     }
-
-    return @($script:QOT_ActionGroups)
+    catch {
+        Initialize-QOTActionGroups
+        return @()
+    }
 }
 
 function Invoke-QOTScriptBlockSafely {
