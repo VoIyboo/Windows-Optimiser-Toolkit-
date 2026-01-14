@@ -272,7 +272,10 @@ function Set-QOTicketsGridFilter {
             }
         } catch { }
 
-        if (-not $statusValue) { return $false }
+        if (-not $statusValue) {
+            if ($filterAllStatuses) { return $true }
+            return $false
+        }
 
         $isDeleted = $false
         try {
