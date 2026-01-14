@@ -581,6 +581,16 @@
                                        VerticalAlignment="Center" />
                         </Button>
 
+                        <ToggleButton x:Name="BtnToggleDeletedView"
+                                      Width="80"
+                                      Height="28"
+                                      Margin="0,0,8,0"
+                                      ToolTip="View deleted tickets">
+                            <TextBlock Text="Deleted"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </ToggleButton>
+
                         <Button x:Name="BtnRestoreTicketToolbar"
                                 Width="28"
                                 Height="28"
@@ -589,81 +599,6 @@
                             <TextBlock FontFamily="Segoe MDL2 Assets"
                                        FontSize="14"
                                        Text="&#xE1A5;"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </Button>
-
-                        <Grid>
-                            <Button x:Name="BtnTicketFilter"
-                                    Width="28"
-                                    Height="28"
-                                    Margin="0,0,8,0"
-                                    ToolTip="Status filters">
-                                <TextBlock FontFamily="Segoe MDL2 Assets"
-                                           FontSize="14"
-                                           Text="&#xE71C;"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                            </Button>
-                            <Ellipse x:Name="TicketFilterActiveDot"
-                                     Width="6"
-                                     Height="6"
-                                     Fill="{StaticResource AccentBrush}"
-                                     HorizontalAlignment="Right"
-                                     VerticalAlignment="Top"
-                                     Margin="0,4,4,0"
-                                     Visibility="Collapsed" />
-                        </Grid>
-
-                        <Popup x:Name="TicketFilterPopup"
-                               Placement="Bottom"
-                               PlacementTarget="{Binding ElementName=BtnTicketFilter}"
-                               StaysOpen="False"
-                               AllowsTransparency="True">
-                            <Border x:Name="TicketFilterPopupPanel"
-                                    Background="#0B1220"
-                                    BorderBrush="{StaticResource BorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="6"
-                                    Padding="10"
-                                    Focusable="True">
-                                <StackPanel>
-                                    <TextBlock Text="Status filters"
-                                               Foreground="{StaticResource TextSubtle}"
-                                               Margin="0,0,0,6" />
-                                    <CheckBox x:Name="TicketFilterStatusNew" Content="New" />
-                                    <CheckBox x:Name="TicketFilterStatusInProgress" Content="In Progress" />
-                                    <CheckBox x:Name="TicketFilterStatusWaitingOnUser" Content="Waiting on User" />
-                                    <CheckBox x:Name="TicketFilterStatusNoLongerRequired" Content="No Longer Required" />
-                                    <CheckBox x:Name="TicketFilterStatusCompleted" Content="Completed" />
-                                    <Separator />
-                                    <CheckBox x:Name="TicketFilterIncludeDeleted" Content="Include deleted" />
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                                        <Button x:Name="BtnTicketFilterSelectAllStatuses"
-                                                Content="Select all"
-                                                Width="80"
-                                                Height="26"
-                                                Margin="0,0,6,0" />
-                                        <Button x:Name="BtnTicketFilterClearAllStatuses"
-                                                Content="Clear"
-                                                Width="60"
-                                                Height="26" />
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-                        </Popup>
-
-                        <ComboBox x:Name="TicketStatusSelector"
-                                  Width="160"
-                                  Height="28"
-                                  Margin="0,0,8,0"
-                                  ToolTip="Set status for selected tickets" />
-
-                        <Button x:Name="BtnSetTicketStatus"
-                                Width="70"
-                                Height="28"
-                                ToolTip="Apply status to selected tickets">
-                            <TextBlock Text="Apply"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
                         </Button>
