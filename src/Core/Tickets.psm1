@@ -748,6 +748,7 @@ $exports = @(
     "Restore-QOTickets",
     "Set-QOTicketsStatus",
     "Get-QOTicketStatuses",
+    "Get-QOTicketsByFolder",
     "Get-QOTicketsFiltered",
     "Get-QOTMonitoredMailboxAddresses",
     "Add-QOTicketFromEmail",
