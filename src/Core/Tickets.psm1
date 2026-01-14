@@ -509,6 +509,21 @@ function Get-QOTicketStatuses {
     return @($script:ValidTicketStatuses)
 }
 
+function Get-QOTicketsByFolder {
+    param(
+        [ValidateSet("Active", "Deleted")]
+        [string]$Folder = "Active"
+    )
+
+    $db = Get-QOTickets
+    $folderValue = if ([string]::IsNullOrWhiteSpace($Folder)) { "Active" } else { [string]$Folder }
+
+    return @(
+        $db.Tickets |
+            Where-Object { $_ -and ($_.Folder -eq $folderValue) }
+    )
+}
+
 function Get-QOTicketsFiltered {
     param(
         [string[]]$Status,
