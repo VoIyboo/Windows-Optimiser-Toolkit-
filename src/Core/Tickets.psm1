@@ -533,10 +533,29 @@ function Get-QOTicketsFiltered {
 
     $includeDeleted = [bool]$IncludeDeleted
 
-    return @(
+    $matchesAllStatuses = $false
+    if ($statuses.Count -ge $script:ValidTicketStatuses.Count) {
+        $matchCount = @(
+            $script:ValidTicketStatuses |
+                Where-Object { $statuses -contains $_ }
+        ).Count
+        $matchesAllStatuses = ($matchCount -eq $script:ValidTicketStatuses.Count)
+    }
+
+    $items = @(
         $db.Tickets |
-            Where-Object { $_ } |
-            Where-Object { $statuses -contains $_.Status } |
+            Where-Object { $_ }
+    )
+
+    if (-not $matchesAllStatuses) {
+        $items = @(
+            $items |
+                Where-Object { $statuses -contains $_.Status }
+        )
+    }
+
+    return @(
+        $items |
             Where-Object { $includeDeleted -or ($_.Folder -ne "Deleted") }
     )
 }
