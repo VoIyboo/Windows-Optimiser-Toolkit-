@@ -72,8 +72,19 @@ function Get-QOTicketsForGrid {
     )
 
     try {
-        if ($GetTicketsCmd.Parameters.Keys -contains "Status") {
-            $items = & $GetTicketsCmd -Status $Statuses -IncludeDeleted:$IncludeDeleted
+        $supportsStatus = $false
+        $supportsIncludeDeleted = $false
+        try {
+            $supportsStatus = ($GetTicketsCmd.Parameters.Keys -contains "Status")
+            $supportsIncludeDeleted = ($GetTicketsCmd.Parameters.Keys -contains "IncludeDeleted")
+        } catch { }
+
+        if ($supportsStatus) {
+            if ($supportsIncludeDeleted) {
+                $items = & $GetTicketsCmd -Status $Statuses -IncludeDeleted:$IncludeDeleted
+            } else {
+                $items = & $GetTicketsCmd -Status $Statuses
+            }
         } else {
             $items = & $GetTicketsCmd
         }
