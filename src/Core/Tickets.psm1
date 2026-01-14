@@ -28,9 +28,9 @@ $script:TicketBackupPath = $null
 $script:ValidTicketStatuses = @(
     "New",
     "In Progress",
-    "Waiting on User",
-    "No Longer Required",
-    "Completed"
+    "Pending",
+    "Closed"
+    
 )
 
 function Write-QOTicketsCoreLog {
@@ -177,8 +177,58 @@ function Normalize-QOTicketDatabase {
             $ticket.Status = "In Progress"
         }
 
+        if ($ticket.Status -eq "Waiting on User") {
+            $ticket.Status = "Pending"
+        }
+
+        if ($ticket.Status -eq "No Longer Required") {
+            $ticket.Status = "Closed"
+        }
+
+        if ($ticket.Status -eq "Completed") {
+            $ticket.Status = "Closed"
+        }
+
         if ($script:ValidTicketStatuses -notcontains $ticket.Status) {
             $ticket.Status = "New"
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "TicketName")) {
+            $ticket | Add-Member -NotePropertyName TicketName -NotePropertyValue $ticket.Title -Force
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$ticket.TicketName)) {
+            $ticket.TicketName = $ticket.Title
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "Subject")) {
+            $ticket | Add-Member -NotePropertyName Subject -NotePropertyValue $ticket.Title -Force
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "CreatedAt")) {
+            if ($ticket.PSObject.Properties.Name -contains "Created") {
+                $ticket | Add-Member -NotePropertyName CreatedAt -NotePropertyValue $ticket.Created -Force
+            } else {
+                $ticket | Add-Member -NotePropertyName CreatedAt -NotePropertyValue (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -Force
+            }
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "UpdatedAt")) {
+            $ticket | Add-Member -NotePropertyName UpdatedAt -NotePropertyValue $ticket.CreatedAt -Force
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "EmailFrom")) {
+            $ticket | Add-Member -NotePropertyName EmailFrom -NotePropertyValue "" -Force
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "Replies")) {
+            $ticket | Add-Member -NotePropertyName Replies -NotePropertyValue @() -Force
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "Notes")) {
+            $ticket | Add-Member -NotePropertyName Notes -NotePropertyValue @() -Force
+        }
+
+
         }
     }
 
@@ -393,19 +443,43 @@ function Save-QOTickets {
 function New-QOTicket {
     param(
         [Parameter(Mandatory)][string]$Title,
-        [string]$Priority = "Normal"
+        [string]$TicketName,
+        [string]$Subject,
+        [string]$Priority = "Normal",
+        [string]$Status = "New",
+        [string]$InitialNote
     )
+    $statusValue = if ([string]::IsNullOrWhiteSpace([string]$Status)) { "New" } else { [string]$Status }
+    if ($statusValue -eq "Open") { $statusValue = "In Progress" }
+    if ($script:ValidTicketStatuses -notcontains $statusValue) { $statusValue = "New" }
 
+    $nameValue = if ([string]::IsNullOrWhiteSpace([string]$TicketName)) { $Title } else { $TicketName }
+    $subjectValue = if ([string]::IsNullOrWhiteSpace([string]$Subject)) { $nameValue } else { $Subject }
+
+    $notes = @()
+    if (-not [string]::IsNullOrWhiteSpace($InitialNote)) {
+        $notes += [pscustomobject]@{
+            Body      = $InitialNote
+            CreatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
+        }
+    }
     $now = Get-Date
 
     [pscustomobject]@{
-        Id        = [guid]::NewGuid().ToString()
-        Title     = $Title
-        CreatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
-        Status    = "New"
-        Priority  = $Priority
-        Folder    = "Active"
-        DeletedAt = $null
+        Id         = [guid]::NewGuid().ToString()
+        Title      = $nameValue
+        TicketName = $nameValue
+        Subject    = $subjectValue
+        CreatedAt  = $now.ToString("yyyy-MM-dd HH:mm:ss")
+        UpdatedAt  = $now.ToString("yyyy-MM-dd HH:mm:ss")
+        Status     = $statusValue
+        Priority   = $Priority
+        Source     = "Manual"
+        Folder     = "Active"
+        DeletedAt  = $null
+        EmailFrom  = ""
+        Notes      = $notes
+        Replies    = @()
     }
 }
 
@@ -413,6 +487,11 @@ function Add-QOTicket {
     param([Parameter(Mandatory)]$Ticket)
 
     $db = Get-QOTickets
+    try {
+        if ($Ticket.PSObject.Properties.Name -notcontains "UpdatedAt") {
+            $Ticket | Add-Member -NotePropertyName UpdatedAt -NotePropertyValue (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") -Force
+        }
+    } catch { }
     $db.Tickets = @($db.Tickets) + @($Ticket)
     Save-QOTickets -Database $db
     return $Ticket
@@ -433,6 +512,15 @@ function Update-QOTicket {
     foreach ($existing in @($db.Tickets)) {
         if ($null -eq $existing) { continue }
         if ($existing.Id -ne $ticketId) { continue }
+
+        $nowStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        try {
+            if ($Ticket.PSObject.Properties.Name -contains "UpdatedAt") {
+                $Ticket.UpdatedAt = $nowStamp
+            } else {
+                $Ticket | Add-Member -NotePropertyName UpdatedAt -NotePropertyValue $nowStamp -Force
+            }
+        } catch { }
 
         foreach ($prop in $Ticket.PSObject.Properties) {
             if ($prop.Name -eq "Id") { continue }
@@ -467,6 +555,7 @@ function Remove-QOTicket {
         if ($ids -contains $ticket.Id) {
             $ticket.Folder = "Deleted"
             $ticket.DeletedAt = $now
+            $ticket.UpdatedAt = $now
         }
     }
     Save-QOTickets -Database $db
@@ -486,6 +575,7 @@ function Restore-QOTickets {
         if ($ids -contains $ticket.Id) {
             $ticket.Folder = "Active"
             $ticket.DeletedAt = $null
+            $ticket.UpdatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         }
     }
 
@@ -515,6 +605,7 @@ function Set-QOTicketsStatus {
         if ($null -eq $ticket) { continue }
         if ($ids -contains $ticket.Id) {
             $ticket.Status = $statusValue
+            $ticket.UpdatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         }
     }
 
@@ -524,6 +615,46 @@ function Set-QOTicketsStatus {
 function Get-QOTicketStatuses {
     return @($script:ValidTicketStatuses)
 }
+
+function Get-QOTicketsByBucket {
+    param(
+        [ValidateSet("Open", "Closed", "Deleted", "All")]
+        [string]$Bucket = "Open"
+    )
+
+    $bucketValue = if ([string]::IsNullOrWhiteSpace([string]$Bucket)) { "Open" } else { [string]$Bucket }
+    $includeDeleted = $false
+    $statuses = @($script:ValidTicketStatuses)
+
+    switch ($bucketValue) {
+        "Open" {
+            $statuses = @("New", "In Progress", "Pending")
+        }
+        "Closed" {
+            $statuses = @("Closed")
+        }
+        "Deleted" {
+            $includeDeleted = $true
+            $statuses = @($script:ValidTicketStatuses)
+        }
+        "All" {
+            $includeDeleted = $true
+            $statuses = @($script:ValidTicketStatuses)
+        }
+    }
+
+    $items = Get-QOTicketsFiltered -Status $statuses -IncludeDeleted:$includeDeleted
+    if ($bucketValue -eq "Deleted") {
+        return @($items | Where-Object { $_ -and ($_.Folder -eq "Deleted") })
+    }
+
+    if ($bucketValue -eq "All") {
+        return @($items)
+    }
+
+    return @($items | Where-Object { $_ -and ($_.Folder -ne "Deleted") })
+}
+
 
 function Get-QOTicketsByFolder {
     param(
@@ -704,8 +835,11 @@ function Add-QOTicketFromEmail {
     $ticket = [pscustomobject]@{
         Id             = ([guid]::NewGuid().ToString())
         Title          = $subject
+        TicketName     = $subject
+        Subject        = $subject
         Status         = "New"
         CreatedAt      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        UpdatedAt      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         Priority       = "Normal"
         Source         = "Email"
         Folder         = "Active"
@@ -715,6 +849,8 @@ function Add-QOTicketFromEmail {
         EmailReceived  = $received
         EmailMessageId = $msgId
         EmailBody      = $body
+        Notes          = @()
+        Replies        = @()
     }
 
     $db.Tickets = @($db.Tickets) + @($ticket)
@@ -750,6 +886,98 @@ function Sync-QOTicketsFromEmail {
     }
 }
 
+function Rename-QOTicket {
+    param(
+        [Parameter(Mandatory)][string]$Id,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+
+    $db = Get-QOTickets
+    $updated = $false
+    $nowStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+
+    foreach ($ticket in @($db.Tickets)) {
+        if ($null -eq $ticket) { continue }
+        if ($ticket.Id -ne $Id) { continue }
+
+        $ticket.TicketName = $Name
+        $ticket.Title = $Name
+        $ticket.UpdatedAt = $nowStamp
+        $updated = $true
+        break
+    }
+
+    if ($updated) {
+        Save-QOTickets -Database $db
+    }
+
+    return $updated
+}
+
+function Send-QOTicketReply {
+    param(
+        [Parameter(Mandatory)]$Ticket,
+        [Parameter(Mandatory)][string]$Subject,
+        [Parameter(Mandatory)][string]$Body,
+        [string]$Status
+    )
+
+    $subjectValue = ([string]$Subject).Trim()
+    $bodyValue = ([string]$Body).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($subjectValue)) {
+        throw "Reply subject is required."
+    }
+    if ([string]::IsNullOrWhiteSpace($bodyValue)) {
+        throw "Reply body is required."
+    }
+
+    $result = $null
+    if (Get-Command Send-QOTicketOutlookReply -ErrorAction SilentlyContinue) {
+        $result = Send-QOTicketOutlookReply -Ticket $Ticket -Subject $subjectValue -Body $bodyValue
+    } else {
+        return [pscustomobject]@{
+            Success = $false
+            Note    = "Outlook reply function not available."
+        }
+    }
+
+    $success = $false
+    try { $success = [bool]$result.Success } catch { $success = $false }
+
+    if ($success) {
+        $replyEntry = [pscustomobject]@{
+            Subject   = $subjectValue
+            Body      = $bodyValue
+            CreatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        }
+
+        $existingReplies = @()
+        try {
+            if ($Ticket.PSObject.Properties.Name -contains "Replies") {
+                $existingReplies = @($Ticket.Replies)
+            }
+        } catch { $existingReplies = @() }
+
+        $Ticket.Replies = @($existingReplies) + @($replyEntry)
+
+        if (-not [string]::IsNullOrWhiteSpace($Status)) {
+            $statusValue = [string]$Status
+            if ($statusValue -eq "Open") { $statusValue = "In Progress" }
+            if ($script:ValidTicketStatuses -contains $statusValue) {
+                $Ticket.Status = $statusValue
+            }
+        }
+
+        $Ticket.UpdatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        $null = Update-QOTicket -Ticket $Ticket
+    }
+
+    return $result
+}
+
 
 $exports = @(
     "Initialize-QOTicketStorage",
@@ -764,11 +992,14 @@ $exports = @(
     "Restore-QOTickets",
     "Set-QOTicketsStatus",
     "Get-QOTicketStatuses",
+    "Get-QOTicketsByBucket",
     "Get-QOTicketsByFolder",
     "Get-QOTicketsFiltered",
     "Get-QOTMonitoredMailboxAddresses",
     "Add-QOTicketFromEmail",
-    "Sync-QOTicketsFromEmail"
+    "Sync-QOTicketsFromEmail",
+    "Rename-QOTicket",
+    "Send-QOTicketReply"
 )
 
 # Only export Outlook sync if it actually exists (module loaded)
