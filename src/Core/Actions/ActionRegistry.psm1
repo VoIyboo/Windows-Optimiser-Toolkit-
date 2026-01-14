@@ -248,6 +248,16 @@ function Test-QOTAnyActionsSelected {
     }
     catch {
         try { Write-QLog ("Failed to evaluate selected actions: {0}" -f $_.Exception.Message) "WARN" } catch { }
+        $ex = $_.Exception
+        $msg = $ex.Message
+        $type = $ex.GetType().FullName
+
+        $stack = ""
+        try { $stack = $_.ScriptStackTrace } catch { }
+
+        Write-QLog ("Failed to evaluate selected actions: {0}" -f $msg) "WARN"
+        Write-QLog ("Exception type: {0}" -f $type) "WARN"
+        if ($stack) { Write-QLog ("Stack: {0}" -f $stack) "WARN" }
         return $false
     }
 }
