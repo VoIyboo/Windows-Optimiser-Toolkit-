@@ -122,12 +122,22 @@ function Get-QOTicketFilterState {
     )
 
     $statuses = $null
+    $allSelected = $true
+    $anySelected = $false
     if ($StatusBoxes) {
         $statuses = @(
             $StatusBoxes.GetEnumerator() |
                 Where-Object { $_.Value -and $_.Value.IsChecked } |
                 ForEach-Object { $_.Key }
         )
+        foreach ($box in $StatusBoxes.Values) {
+            if (-not $box) { continue }
+            if ($box.IsChecked) {
+                $anySelected = $true
+            } else {
+                $allSelected = $false
+            }
+        }
     }
 
     $includeDeleted = $false
@@ -136,6 +146,8 @@ function Get-QOTicketFilterState {
     return [pscustomobject]@{
         Statuses = $statuses
         IncludeDeleted = $includeDeleted
+        AllStatusesSelected = $allSelected
+        AnyStatusSelected = $anySelected
     }
 }
 
@@ -254,7 +266,7 @@ function Set-QOTicketsGridFilter {
     if (-not $view) { return }
 
     $currentState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
-    if (-not $currentState.Statuses -or $currentState.Statuses.Count -eq 0) {
+    if (-not $currentState.AnyStatusSelected -or $currentState.AllStatusesSelected) {
         Write-QOTicketsUILog "Tickets: No statuses selected in filter; showing all statuses."
     }
 
@@ -263,7 +275,7 @@ function Set-QOTicketsGridFilter {
         if (-not $item) { return $false }
 
         $filterState = Get-QOTicketFilterState -StatusBoxes $StatusBoxes -IncludeDeletedBox $IncludeDeletedBox
-        $filterAllStatuses = (-not $filterState.Statuses -or $filterState.Statuses.Count -eq 0)
+        $filterAllStatuses = (-not $filterState.AnyStatusSelected) -or $filterState.AllStatusesSelected
 
         $statusValue = $null
         try {
