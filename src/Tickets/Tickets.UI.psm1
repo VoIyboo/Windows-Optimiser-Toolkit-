@@ -4,6 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 Import-Module (Join-Path $PSScriptRoot "..\Core\Tickets.psm1") -Force -ErrorAction Stop
+Import-Module (Join-Path $PSScriptRoot "..\Core\Settings.psm1") -Force -ErrorAction Stop
 Import-Module (Join-Path $PSScriptRoot "..\Core\Logging\Logging.psm1") -Force -ErrorAction SilentlyContinue
 
 # -------------------------
