@@ -153,6 +153,9 @@ function Convert-QOTMailItemToTicket {
     $entryId = ""
     try { $entryId = [string]$MailItem.EntryID } catch { }
 
+    $storeId = ""
+    try { $storeId = [string]$MailItem.Parent.StoreID } catch { }
+
     $internetId = ""
     try {
         $internetId = [string]$MailItem.PropertyAccessor.GetProperty(
@@ -186,18 +189,24 @@ function Convert-QOTMailItemToTicket {
         Id              = ([guid]::NewGuid().ToString())
 
         Title           = $cleanTitle
+        TicketName      = $cleanTitle
+        Subject         = $subject
         Created         = $createdStr
         CreatedAt       = $createdStr
+        UpdatedAt       = $createdStr
         Status          = "New"
         Priority        = $priority
 
         Source          = "Outlook"
         SourceMailbox   = $MailboxAddress
         SourceMessageId = $sourceId
+        SourceStoreId   = $storeId
 
         EmailFrom       = if ($from) { $from } else { "Unknown sender" }
         EmailReceived   = $createdStr
         EmailBody       = $body
+        Notes           = @()
+        Replies         = @()
     }
 }
 
@@ -291,3 +300,129 @@ function Sync-QOTicketsFromOutlook {
 }
 
 Export-ModuleMember -Function Sync-QOTicketsFromOutlook
+
+function Find-QOTOutlookMessageByInternetId {
+    param(
+        [Parameter(Mandatory)][object]$MAPI,
+        [Parameter(Mandatory)][string]$InternetMessageId,
+        [int]$MaxScan = 250
+    )
+
+    $mailboxes = Get-QOTMonitoredMailboxAddresses
+    if (-not $mailboxes -or $mailboxes.Count -eq 0) { return $null }
+
+    foreach ($mb in $mailboxes) {
+        $inbox = $null
+        try { $inbox = Get-QOTMailboxInboxFolder -MAPI $MAPI -MailboxAddress $mb } catch { $inbox = $null }
+        if (-not $inbox) { continue }
+
+        $items = $inbox.Items
+        try { $items.Sort("[ReceivedTime]", $true) } catch { }
+
+        $count = 0
+        foreach ($item in @($items)) {
+            if ($count -ge $MaxScan) { break }
+            $isMail = $false
+            try { $isMail = ($item.MessageClass -like "IPM.Note*") } catch { }
+            if (-not $isMail) { continue }
+
+            $internetId = ""
+            try {
+                $internetId = [string]$item.PropertyAccessor.GetProperty(
+                    "http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/InternetMessageId"
+                )
+            } catch { }
+
+            if ($internetId -and ($internetId -eq $InternetMessageId)) {
+                return $item
+            }
+
+            $count++
+        }
+    }
+
+    return $null
+}
+
+function Send-QOTicketOutlookReply {
+    param(
+        [Parameter(Mandatory)]$Ticket,
+        [Parameter(Mandatory)][string]$Subject,
+        [Parameter(Mandatory)][string]$Body
+    )
+
+    $subjectValue = ([string]$Subject).Trim()
+    $bodyValue = ([string]$Body).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($subjectValue)) {
+        return [pscustomobject]@{ Success = $false; Note = "Reply subject required." }
+    }
+    if ([string]::IsNullOrWhiteSpace($bodyValue)) {
+        return [pscustomobject]@{ Success = $false; Note = "Reply body required." }
+    }
+
+    $mapi = Get-QOTOutlookNamespace
+
+    $sourceId = ""
+    $storeId = ""
+    try {
+        if ($Ticket.PSObject.Properties.Name -contains "SourceMessageId") {
+            $sourceId = [string]$Ticket.SourceMessageId
+        }
+    } catch { }
+    try {
+        if ($Ticket.PSObject.Properties.Name -contains "SourceStoreId") {
+            $storeId = [string]$Ticket.SourceStoreId
+        }
+    } catch { }
+
+    $mailItem = $null
+    if ($sourceId) {
+        try {
+            if ($storeId) {
+                $mailItem = $mapi.GetItemFromID($sourceId, $storeId)
+            } else {
+                $mailItem = $mapi.GetItemFromID($sourceId)
+            }
+        } catch { $mailItem = $null }
+    }
+
+    if (-not $mailItem) {
+        $internetId = ""
+        try {
+            if ($Ticket.PSObject.Properties.Name -contains "EmailMessageId") {
+                $internetId = [string]$Ticket.EmailMessageId
+            }
+        } catch { }
+
+        if ($internetId) {
+            $mailItem = Find-QOTOutlookMessageByInternetId -MAPI $mapi -InternetMessageId $internetId
+        }
+    }
+
+    if (-not $mailItem) {
+        return [pscustomobject]@{
+            Success = $false
+            Note    = "Original email not found in Outlook."
+        }
+    }
+
+    try {
+        $reply = $mailItem.Reply()
+        $reply.Subject = $subjectValue
+        $reply.Body = $bodyValue + "`r`n`r`n" + $reply.Body
+        $reply.Send()
+    } catch {
+        return [pscustomobject]@{
+            Success = $false
+            Note    = ("Reply failed: " + $_.Exception.Message)
+        }
+    }
+
+    return [pscustomobject]@{
+        Success = $true
+        Note    = "Reply sent."
+    }
+}
+
+Export-ModuleMember -Function Send-QOTicketOutlookReply
