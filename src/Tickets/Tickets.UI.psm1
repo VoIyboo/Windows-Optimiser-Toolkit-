@@ -17,12 +17,13 @@ $script:TicketsLoadedHandler  = $null
 $script:TicketsRefreshHandler = $null
 $script:TicketsNewHandler     = $null
 $script:TicketsDeleteHandler  = $null
-$script:TicketsRestoreHandler = $null
-$script:TicketsDeletedToggleHandler = $null
 $script:TicketsToggleDetailsHandler = $null
 $script:TicketsSelectionChangedHandler = $null
 $script:TicketsRowEditHandler = $null
 $script:TicketsSendReplyHandler = $null
+$script:TicketsFilterMenuHandler = $null
+$script:TicketsFilterButtonHandler = $null
+$script:TicketsUndeleteHandler = $null
 
 $script:TicketsAutoRefreshTimer = $null
 $script:TicketsAutoRefreshInProgress = $false
@@ -45,6 +46,17 @@ function Write-QOTicketsUILog {
 
 Write-QOTicketsUILog "=== Tickets.UI.psm1 LOADED ==="
 
+
+function New-QOTicketsObservableCollection {
+    param([object[]]$Items)
+
+    $collection = New-Object System.Collections.ObjectModel.ObservableCollection[object]
+    foreach ($item in @($Items)) {
+        $collection.Add($item) | Out-Null
+    }
+    return $collection
+}
+
 function Get-QOTicketsForGrid {
     param(
         [Parameter(Mandatory)]$GetTicketsCmd,
@@ -52,6 +64,9 @@ function Get-QOTicketsForGrid {
     )
 
     try {
+        $storePath = ""
+        try { $storePath = Get-QOTicketsStorePath } catch { $storePath = "" }
+        Write-QOTicketsUILog ("Tickets: Load start. View={0}; StorePath={1}" -f $View, $storePath)
         $supportsFolder = $false
         $supportsBucket = $false
         try {
@@ -80,6 +95,8 @@ function Get-QOTicketsForGrid {
         return $list
     }
     catch {
+        Write-QOTicketsUILog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
+        [System.Windows.MessageBox]::Show("Tickets failed to load. Check the log for details.") | Out-Null
         return @()
     }
 }
@@ -92,8 +109,9 @@ function Refresh-QOTicketsGrid {
     )
 
     try {
+        Write-QOTicketsUILog ("Tickets: Grid refresh started. View={0}" -f $View)
         $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -View $View)
-        $Grid.ItemsSource = $items
+        $Grid.ItemsSource = (New-QOTicketsObservableCollection -Items $items)
         $Grid.Items.Refresh()
 
         $sourceType = $null
@@ -103,8 +121,10 @@ function Refresh-QOTicketsGrid {
         try { $gridCount = $Grid.Items.Count } catch { }
 
         Write-QOTicketsUILog ("Tickets: ItemsSource set. Type={0}; Items={1}; GridCount={2}" -f $sourceType, $items.Count, $gridCount)
+        Write-QOTicketsUILog "Tickets: Grid refresh completed."
     }
     catch {
+        Write-QOTicketsUILog ("Tickets: Grid refresh failed: " + $_.Exception.Message) "ERROR"
         [System.Windows.MessageBox]::Show("Load tickets failed.`r`n$($_.Exception.Message)") | Out-Null
     }
 }
@@ -289,8 +309,7 @@ function Initialize-QOTicketsUI {
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
-    $cmbFilter = $Window.FindName("CmbTicketsFilter")
-    $btnRestore = $Window.FindName("BtnRestoreTicketToolbar")
+    $btnFilterMenu = $Window.FindName("BtnTicketsFilterMenu")
     $btnToggleDetails = $Window.FindName("BtnToggleTicketDetails")
     $detailsPanel = $Window.FindName("TicketDetailsPanel")
     $detailsChevron = $Window.FindName("TicketDetailsChevron")
@@ -303,8 +322,7 @@ function Initialize-QOTicketsUI {
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
-    if (-not $cmbFilter) { [System.Windows.MessageBox]::Show("Missing XAML control: CmbTicketsFilter") | Out-Null; return }
-    if (-not $btnRestore) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRestoreTicketToolbar") | Out-Null; return }
+    if (-not $btnFilterMenu) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsFilterMenu") | Out-Null; return }
    
     if (-not $btnToggleDetails) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnToggleTicketDetails") | Out-Null; return }
     if (-not $detailsPanel) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketDetailsPanel") | Out-Null; return }
@@ -326,10 +344,16 @@ function Initialize-QOTicketsUI {
     try { if ($script:TicketsRefreshHandler) { $btnRefresh.Remove_Click($script:TicketsRefreshHandler) } } catch { }
     try { if ($script:TicketsNewHandler)     { $btnNew.Remove_Click($script:TicketsNewHandler) } } catch { }
     try { if ($script:TicketsDeleteHandler)  { $btnDelete.Remove_Click($script:TicketsDeleteHandler) } } catch { }
-    try { if ($script:TicketsRestoreHandler) { $btnRestore.Remove_Click($script:TicketsRestoreHandler) } } catch { }
 
     try { if ($script:TicketsToggleDetailsHandler) { $btnToggleDetails.Remove_Click($script:TicketsToggleDetailsHandler) } } catch { }
-    try { if ($script:TicketsDeletedToggleHandler) { $cmbFilter.Remove_SelectionChanged($script:TicketsDeletedToggleHandler) } } catch { }
+    try {
+        if ($script:TicketsFilterMenuHandler -and $script:TicketsFilterMenu) {
+            foreach ($menuItem in @($script:TicketsFilterMenu.Items)) {
+                try { $menuItem.Remove_Click($script:TicketsFilterMenuHandler) } catch { }
+            }
+        }
+    } catch { }
+    try { if ($script:TicketsFilterButtonHandler) { $btnFilterMenu.Remove_Click($script:TicketsFilterButtonHandler) } } catch { }
 
     try {
         if ($script:TicketsSelectionChangedHandler) {
@@ -389,6 +413,77 @@ function Initialize-QOTicketsUI {
     if ($grid.ContextMenu) {
         $grid.ContextMenu = $null
     }
+    $script:TicketsFilterMenu = New-Object System.Windows.Controls.ContextMenu
+    foreach ($viewName in @("Open", "Closed", "Deleted", "All")) {
+        $menuItem = New-Object System.Windows.Controls.MenuItem
+        $menuItem.Header = $viewName
+        $menuItem.Tag = $viewName
+        $script:TicketsFilterMenu.Items.Add($menuItem) | Out-Null
+    }
+
+    $setTicketsView = {
+        param([string]$ViewName)
+        $viewValue = if ([string]::IsNullOrWhiteSpace($ViewName)) { "Open" } else { $ViewName }
+        $script:TicketsCurrentView = $viewValue
+        $btnDelete.IsEnabled = ($viewValue -ne "Deleted")
+        $btnFilterMenu.ToolTip = ("Filter tickets ({0})" -f $viewValue)
+        foreach ($menuItem in @($script:TicketsFilterMenu.Items)) {
+            try { $menuItem.IsChecked = ($menuItem.Tag -eq $viewValue) } catch { }
+        }
+        Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
+    }.GetNewClosure()
+
+    $script:TicketsFilterMenuHandler = [System.Windows.RoutedEventHandler]{
+        param($sender, $args)
+        try {
+            $viewValue = [string]$sender.Tag
+            & $setTicketsView $viewValue
+        } catch {
+            Write-QOTicketsUILog ("Tickets: Filter change failed: " + $_.Exception.Message) "ERROR"
+        }
+    }.GetNewClosure()
+
+    foreach ($menuItem in @($script:TicketsFilterMenu.Items)) {
+        try { $menuItem.Add_Click($script:TicketsFilterMenuHandler) } catch { }
+    }
+
+    $script:TicketsFilterButtonHandler = [System.Windows.RoutedEventHandler]{
+        param($sender, $args)
+        try {
+            $script:TicketsFilterMenu.PlacementTarget = $btnFilterMenu
+            $script:TicketsFilterMenu.IsOpen = $true
+        } catch {
+            Write-QOTicketsUILog ("Tickets: Filter menu open failed: " + $_.Exception.Message) "ERROR"
+        }
+    }.GetNewClosure()
+    $btnFilterMenu.Add_Click($script:TicketsFilterButtonHandler)
+
+    $script:TicketsRowContextMenu = New-Object System.Windows.Controls.ContextMenu
+    $script:TicketsUndeleteMenuItem = New-Object System.Windows.Controls.MenuItem
+    $script:TicketsUndeleteMenuItem.Header = "Undelete"
+    $script:TicketsRowContextMenu.Items.Add($script:TicketsUndeleteMenuItem) | Out-Null
+
+    $script:TicketsUndeleteHandler = [System.Windows.RoutedEventHandler]{
+        param($sender, $args)
+        try {
+            $selectedItems = @($grid.SelectedItems)
+            if ($selectedItems.Count -eq 0) { return }
+
+            $ids = @(
+                $selectedItems |
+                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Id") } |
+                    ForEach-Object { $_.Id }
+            )
+            if ($ids.Count -eq 0) { return }
+
+            $null = & $restoreCmd -Id $ids
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
+        } catch {
+            Write-QOTicketsUILog ("Tickets: Undelete failed: " + $_.Exception.Message) "ERROR"
+        }
+    }.GetNewClosure()
+    $script:TicketsUndeleteMenuItem.Add_Click($script:TicketsUndeleteHandler)
+
 
     $script:TicketsStatusContextMenu = New-Object System.Windows.Controls.ContextMenu
     $statusMenuItems = @()
@@ -429,7 +524,9 @@ function Initialize-QOTicketsUI {
 
             $null = & $setStatusCmd -Id $ids -Status $statusValue
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
-        } catch { }
+        } catch {
+            Write-QOTicketsUILog ("Tickets: Load handler failed: " + $_.Exception.Message) "ERROR"
+        }
     }.GetNewClosure()
 
     foreach ($menuItem in @($script:TicketsStatusContextMenu.Items)) {
@@ -455,6 +552,15 @@ function Initialize-QOTicketsUI {
                 $grid.SelectedItems.Clear()
                 $row.IsSelected = $true
                 $grid.SelectedItem = $row.Item
+            }
+
+
+            if ($script:TicketsCurrentView -eq "Deleted") {
+                $script:TicketsUndeleteMenuItem.IsEnabled = ($grid.SelectedItems.Count -gt 0)
+                $script:TicketsRowContextMenu.PlacementTarget = $cell
+                $script:TicketsRowContextMenu.IsOpen = $true
+                $args.Handled = $true
+                return
             }
 
             if ($cell.Column.Header -eq "Status") {
@@ -536,26 +642,7 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
     $btnToggleDetails.Add_Click($script:TicketsToggleDetailsHandler)
-
-    $script:TicketsDeletedToggleHandler = [System.Windows.RoutedEventHandler]{
-        param($sender, $args)
-        try {
-            $selectedItem = $cmbFilter.SelectedItem
-            $bucket = "Open"
-            if ($selectedItem -and $selectedItem.Content) {
-                $bucket = [string]$selectedItem.Content
-            }
-            $script:TicketsCurrentView = $bucket
-            $btnDelete.IsEnabled = ($bucket -ne "Deleted")
-            $btnRestore.IsEnabled = ($bucket -eq "Deleted")
-            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
-        } catch { }
-    }.GetNewClosure()
-    $cmbFilter.Add_SelectionChanged($script:TicketsDeletedToggleHandler)
-
-    $script:TicketsCurrentView = "Open"
-    $btnDelete.IsEnabled = $true
-    $btnRestore.IsEnabled = $false
+    & $setTicketsView "Open"
     
     # Selection changed handler typed
     $script:TicketsSelectionChangedHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
@@ -729,7 +816,7 @@ function Initialize-QOTicketsUI {
             $ticket = & $newTicketCmd -Title $ticketName -TicketName $ticketName -Subject $ticketName -Status $statusValue -InitialNote $initialNote
             $null   = & $addTicketCmd -Ticket $ticket
 
-            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
 
             $grid.SelectedItem = $ticket
             $grid.ScrollIntoView($ticket)
@@ -774,28 +861,6 @@ function Initialize-QOTicketsUI {
         catch { }
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
-
-    # Restore handler typed
-    $script:TicketsRestoreHandler = [System.Windows.RoutedEventHandler]{
-        param($sender, $args)
-        try {
-            $selectedItems = @($grid.SelectedItems)
-            if ($selectedItems.Count -eq 0) { return }
-
-            $ids = @(
-                $selectedItems |
-                    Where-Object { $_ -and ($_.PSObject.Properties.Name -contains "Id") -and ($_.Folder -eq "Deleted") } |
-                    ForEach-Object { $_.Id }
-            )
-            if ($ids.Count -eq 0) { return }
-
-            $null = & $restoreCmd -Id $ids
-            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
-        }
-        catch { }
-    }.GetNewClosure()
-    $btnRestore.Add_Click($script:TicketsRestoreHandler)
-
 
     if ($syncCmd) {
         $script:TicketsAutoRefreshTimer = [System.Windows.Threading.DispatcherTimer]::new()
