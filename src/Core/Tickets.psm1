@@ -679,12 +679,14 @@ function Get-QOTicketsByBucket {
             )
         }
         "Deleted" {
-            $includeDeleted = $true
-            $statuses = @($script:ValidTicketStatuses)
+            return @(
+                $items | Where-Object {
+                    $_ -and ([bool]$_.IsDeleted)
+                }
+            )
         }
         "All" {
             return @($items)
-            )
         }
     }
 }
