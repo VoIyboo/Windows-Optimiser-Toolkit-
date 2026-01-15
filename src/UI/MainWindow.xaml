@@ -581,15 +581,17 @@
                                        VerticalAlignment="Center" />
                         </Button>
 
-                        <ToggleButton x:Name="BtnToggleDeletedView"
-                                      Width="80"
-                                      Height="28"
-                                      Margin="0,0,8,0"
-                                      ToolTip="View deleted tickets">
-                            <TextBlock Text="Deleted"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                        </ToggleButton>
+                        <ComboBox x:Name="CmbTicketsFilter"
+                                  Width="110"
+                                  Height="28"
+                                  Margin="0,0,8,0"
+                                  SelectedIndex="0"
+                                  ToolTip="Filter tickets">
+                            <ComboBoxItem Content="Open" />
+                            <ComboBoxItem Content="Closed" />
+                            <ComboBoxItem Content="Deleted" />
+                            <ComboBoxItem Content="All" />
+                        </ComboBox>
 
                         <Button x:Name="BtnRestoreTicketToolbar"
                                 Width="28"
@@ -629,10 +631,12 @@
                           Foreground="White">
 
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
+                        <DataGridTextColumn Header="Ticket Name" Binding="{Binding TicketName}" Width="180" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Updated" Binding="{Binding UpdatedAt}" Width="150" IsReadOnly="True" />
                         <DataGridTextColumn Header="Created" Binding="{Binding CreatedAt}" Width="150" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Priority" Binding="{Binding Priority}" Width="*" IsReadOnly="False" />
+                        <DataGridTextColumn Header="From" Binding="{Binding EmailFrom}" Width="160" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Subject" Binding="{Binding Subject}" Width="*" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
 
@@ -700,15 +704,28 @@
                                            Foreground="{StaticResource TextSubtle}"
                                            Margin="0,0,0,8" />
 
-                                <TextBox x:Name="TicketReplyText"
-                                         Grid.Row="1"
-                                         AcceptsReturn="True"
-                                         TextWrapping="Wrap"
-                                         VerticalScrollBarVisibility="Auto"
-                                         Background="#0B1220"
-                                         Foreground="White"
-                                         BorderBrush="{StaticResource BorderBrush}"
-                                         Padding="8" />
+                                <StackPanel Grid.Row="1">
+                                    <TextBlock Text="Subject"
+                                               Foreground="{StaticResource TextSubtle}"
+                                               Margin="0,0,0,6" />
+                                    <TextBox x:Name="TicketReplySubject"
+                                             Background="#0B1220"
+                                             Foreground="White"
+                                             BorderBrush="{StaticResource BorderBrush}"
+                                             Margin="0,0,0,8"
+                                             Padding="8" />
+                                    <TextBlock Text="Message"
+                                               Foreground="{StaticResource TextSubtle}"
+                                               Margin="0,0,0,6" />
+                                    <TextBox x:Name="TicketReplyText"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             Background="#0B1220"
+                                             Foreground="White"
+                                             BorderBrush="{StaticResource BorderBrush}"
+                                             Padding="8" />
+                                </StackPanel>
 
                                 <Button x:Name="BtnSendTicketReply"
                                         Grid.Row="2"
