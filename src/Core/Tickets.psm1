@@ -152,17 +152,40 @@ function Normalize-QOTicketDatabase {
     foreach ($ticket in $Database.Tickets) {
         if ($null -eq $ticket) { continue }
 
+        $nowStamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+
         if (-not ($ticket.PSObject.Properties.Name -contains "DeletedAt")) {
             $ticket | Add-Member -NotePropertyName DeletedAt -NotePropertyValue $null -Force
         }
 
+        $isDeleted = $false
+        if ($ticket.PSObject.Properties.Name -contains "IsDeleted") {
+            try { $isDeleted = [bool]$ticket.IsDeleted } catch { $isDeleted = $false }
+        } else {
+            $isDeleted = ([bool]$ticket.DeletedAt -or ($ticket.PSObject.Properties.Name -contains "Folder" -and $ticket.Folder -eq "Deleted"))
+        }
+
         if (-not ($ticket.PSObject.Properties.Name -contains "Folder")) {
-            $folderValue = if ($ticket.DeletedAt) { "Deleted" } else { "Active" }
+            $folderValue = if ($isDeleted) { "Deleted" } else { "Active" }
             $ticket | Add-Member -NotePropertyName Folder -NotePropertyValue $folderValue -Force
-        } elseif ($ticket.DeletedAt -and $ticket.Folder -ne "Deleted") {
+                }
+
+        if ($isDeleted -and $ticket.Folder -ne "Deleted") {
             $ticket.Folder = "Deleted"
-        } elseif (-not $ticket.DeletedAt -and $ticket.Folder -eq "Deleted") {
-            $ticket.DeletedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        } elseif (-not $isDeleted -and $ticket.Folder -eq "Deleted") {
+            $ticket.Folder = "Active"
+        }
+
+        if ($isDeleted -and (-not $ticket.DeletedAt)) {
+            $ticket.DeletedAt = $nowStamp
+        } elseif (-not $isDeleted -and $ticket.DeletedAt) {
+            $ticket.DeletedAt = $null
+        }
+
+        if (-not ($ticket.PSObject.Properties.Name -contains "IsDeleted")) {
+            $ticket | Add-Member -NotePropertyName IsDeleted -NotePropertyValue $isDeleted -Force
+        } else {
+            $ticket.IsDeleted = $isDeleted
         }
 
         if (-not ($ticket.PSObject.Properties.Name -contains "Status")) {
@@ -191,7 +214,8 @@ function Normalize-QOTicketDatabase {
 
         if ($script:ValidTicketStatuses -notcontains $ticket.Status) {
             $ticket.Status = "New"
-
+        }
+        
         if (-not ($ticket.PSObject.Properties.Name -contains "TicketName")) {
             $ticket | Add-Member -NotePropertyName TicketName -NotePropertyValue $ticket.Title -Force
         }
@@ -226,9 +250,6 @@ function Normalize-QOTicketDatabase {
 
         if (-not ($ticket.PSObject.Properties.Name -contains "Notes")) {
             $ticket | Add-Member -NotePropertyName Notes -NotePropertyValue @() -Force
-        }
-
-
         }
     }
 
@@ -364,6 +385,7 @@ function Get-QOTickets {
     Initialize-QOTicketStorage
 
     try {
+        Write-QOTicketsCoreLog ("Tickets: Load started. StorePath={0}" -f $script:TicketStorePath)
         $db = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
         if (-not $db) {
             $db = New-QODefaultTicketDatabase
@@ -372,13 +394,21 @@ function Get-QOTickets {
         $db = Normalize-QOTicketDatabase -Database $db
         $ticketCount = 0
         try { $ticketCount = @($db.Tickets).Count } catch { }
-        Write-QOTicketsCoreLog ("Tickets: Loaded {0} tickets." -f $ticketCount)
+        Write-QOTicketsCoreLog ("Tickets: Load completed. Tickets={0}." -f $ticketCount)
         
         return $db
     }
     catch {
         Write-QOTicketsCoreLog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
         $ticketPath = $script:TicketStorePath
+        try {
+            [System.Windows.MessageBox]::Show(
+                "Tickets failed to load. Check the log for details.",
+                "Tickets load failed",
+                [System.Windows.MessageBoxButton]::OK,
+                [System.Windows.MessageBoxImage]::Warning
+            ) | Out-Null
+        } catch { }
         try {
             $backupPath = Get-QOLatestTicketBackupPath -TicketPath $ticketPath -BackupDirectory $script:TicketBackupPath
             if ($backupPath) {
@@ -456,6 +486,7 @@ function New-QOTicket {
     $nameValue = if ([string]::IsNullOrWhiteSpace([string]$TicketName)) { $Title } else { $TicketName }
     $subjectValue = if ([string]::IsNullOrWhiteSpace([string]$Subject)) { $nameValue } else { $Subject }
 
+    $now = Get-Date
     $notes = @()
     if (-not [string]::IsNullOrWhiteSpace($InitialNote)) {
         $notes += [pscustomobject]@{
@@ -463,7 +494,7 @@ function New-QOTicket {
             CreatedAt = $now.ToString("yyyy-MM-dd HH:mm:ss")
         }
     }
-    $now = Get-Date
+
 
     [pscustomobject]@{
         Id         = [guid]::NewGuid().ToString()
@@ -477,6 +508,7 @@ function New-QOTicket {
         Source     = "Manual"
         Folder     = "Active"
         DeletedAt  = $null
+        IsDeleted  = $false
         EmailFrom  = ""
         Notes      = $notes
         Replies    = @()
@@ -555,6 +587,7 @@ function Remove-QOTicket {
         if ($ids -contains $ticket.Id) {
             $ticket.Folder = "Deleted"
             $ticket.DeletedAt = $now
+            $ticket.IsDeleted = $true
             $ticket.UpdatedAt = $now
         }
     }
@@ -575,6 +608,7 @@ function Restore-QOTickets {
         if ($ids -contains $ticket.Id) {
             $ticket.Folder = "Active"
             $ticket.DeletedAt = $null
+            $ticket.IsDeleted = $false
             $ticket.UpdatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         }
     }
@@ -623,36 +657,36 @@ function Get-QOTicketsByBucket {
     )
 
     $bucketValue = if ([string]::IsNullOrWhiteSpace([string]$Bucket)) { "Open" } else { [string]$Bucket }
-    $includeDeleted = $false
-    $statuses = @($script:ValidTicketStatuses)
+    $db = Get-QOTickets
+    $items = @($db.Tickets)
+    $totalCount = 0
+    try { $totalCount = $items.Count } catch { }
+    Write-QOTicketsCoreLog ("Tickets: Filtering bucket '{0}'. Total before filter={1}." -f $bucketValue, $totalCount)
 
     switch ($bucketValue) {
         "Open" {
-            $statuses = @("New", "In Progress", "Pending")
+            return @(
+                $items | Where-Object {
+                    $_ -and (-not [bool]$_.IsDeleted) -and ($_.Status -ne "Closed") -and ($_.Status -ne "Completed")
+                }
+            )
         }
         "Closed" {
-            $statuses = @("Closed")
+            return @(
+                $items | Where-Object {
+                    $_ -and (-not [bool]$_.IsDeleted) -and (($_.Status -eq "Closed") -or ($_.Status -eq "Completed"))
+                }
+            )
         }
         "Deleted" {
             $includeDeleted = $true
             $statuses = @($script:ValidTicketStatuses)
         }
         "All" {
-            $includeDeleted = $true
-            $statuses = @($script:ValidTicketStatuses)
+            return @($items)
+            )
         }
     }
-
-    $items = Get-QOTicketsFiltered -Status $statuses -IncludeDeleted:$includeDeleted
-    if ($bucketValue -eq "Deleted") {
-        return @($items | Where-Object { $_ -and ($_.Folder -eq "Deleted") })
-    }
-
-    if ($bucketValue -eq "All") {
-        return @($items)
-    }
-
-    return @($items | Where-Object { $_ -and ($_.Folder -ne "Deleted") })
 }
 
 
@@ -663,6 +697,9 @@ function Get-QOTicketsByFolder {
     )
 
     $db = Get-QOTickets
+    $totalCount = 0
+    try { $totalCount = @($db.Tickets).Count } catch { }
+    Write-QOTicketsCoreLog ("Tickets: Filtering folder '{0}'. Total before filter={1}." -f $Folder, $totalCount)
     $folderValue = if ([string]::IsNullOrWhiteSpace($Folder)) { "Active" } else { [string]$Folder }
 
     return @(
@@ -718,7 +755,7 @@ function Get-QOTicketsFiltered {
 
     return @(
         $items |
-            Where-Object { $includeDeleted -or ($_.Folder -ne "Deleted") }
+            Where-Object { $includeDeleted -or (-not [bool]$_.IsDeleted) }
     )
 }
 
@@ -844,6 +881,7 @@ function Add-QOTicketFromEmail {
         Source         = "Email"
         Folder         = "Active"
         DeletedAt      = $null
+        IsDeleted      = $false
         EmailFrom      = $from
         EmailTo        = $to
         EmailReceived  = $received
