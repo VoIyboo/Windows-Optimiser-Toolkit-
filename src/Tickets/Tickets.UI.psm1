@@ -29,7 +29,7 @@ $script:TicketsAutoRefreshInProgress = $false
 $script:TicketsFileWatcher = $null
 $script:TicketsFileWatcherEvents = @()
 $script:TicketsFileRefreshTimer = $null
-$script:TicketsCurrentFolder = "Active"
+$script:TicketsCurrentView = "Open"
 
 function Write-QOTicketsUILog {
     param(
@@ -48,16 +48,21 @@ Write-QOTicketsUILog "=== Tickets.UI.psm1 LOADED ==="
 function Get-QOTicketsForGrid {
     param(
         [Parameter(Mandatory)]$GetTicketsCmd,
-        [string]$Folder
+        [string]$View
     )
 
     try {
         $supportsFolder = $false
+        $supportsBucket = $false
         try {
             $supportsFolder = ($GetTicketsCmd.Parameters.Keys -contains "Folder")
+            $supportsBucket = ($GetTicketsCmd.Parameters.Keys -contains "Bucket")
         } catch { }
-        if ($supportsFolder) {
-            $items = & $GetTicketsCmd -Folder $Folder
+        if ($supportsBucket) {
+            $items = & $GetTicketsCmd -Bucket $View
+        } elseif ($supportsFolder) {
+            $folderValue = if ($View -eq "Deleted") { "Deleted" } else { "Active" }
+            $items = & $GetTicketsCmd -Folder $folderValue
         } else {
             $items = & $GetTicketsCmd
         }
@@ -83,11 +88,11 @@ function Refresh-QOTicketsGrid {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
         [Parameter(Mandatory)]$GetTicketsCmd,
-        [string]$Folder
+        [string]$View
     )
 
     try {
-        $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -Folder $Folder)
+        $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -View $View)
         $Grid.ItemsSource = $items
         $Grid.Items.Refresh()
 
@@ -101,24 +106,6 @@ function Refresh-QOTicketsGrid {
     }
     catch {
         [System.Windows.MessageBox]::Show("Load tickets failed.`r`n$($_.Exception.Message)") | Out-Null
-    }
-}
-
-function Update-QOTicketsFolderState {
-    param(
-        [AllowNull()][System.Windows.Controls.Primitives.ToggleButton]$ToggleButton,
-        [AllowNull()][System.Windows.Controls.Button]$DeleteButton,
-        [AllowNull()][System.Windows.Controls.Button]$RestoreButton
-    )
-
-   if (-not $ToggleButton) { return }
-    $script:TicketsCurrentFolder = if ($ToggleButton.IsChecked -eq $true) { "Deleted" } else { "Active" }
-
-    if ($DeleteButton) {
-        $DeleteButton.IsEnabled = ($script:TicketsCurrentFolder -ne "Deleted")
-    }
-    if ($RestoreButton) {
-        $RestoreButton.IsEnabled = ($script:TicketsCurrentFolder -eq "Deleted")
     }
 }
 
@@ -142,6 +129,7 @@ function Update-QOTicketDetailsView {
         [AllowNull()]$Ticket,
         [AllowNull()][System.Windows.UIElement]$DetailsPanel,
         [AllowNull()][System.Windows.Controls.TextBlock]$BodyText,
+        [AllowNull()][System.Windows.Controls.TextBox]$ReplySubject,
         [AllowNull()][System.Windows.Controls.TextBox]$ReplyText,
         [AllowNull()][System.Windows.Controls.Button]$ReplyButton,
         [AllowNull()][System.Windows.Controls.TextBlock]$Chevron
@@ -149,6 +137,7 @@ function Update-QOTicketDetailsView {
 
     if (-not $Ticket) {
         if ($BodyText) { $BodyText.Text = "Select a ticket to view details." }
+        if ($ReplySubject) { $ReplySubject.Text = "" }
         if ($ReplyText) { $ReplyText.Text = "" }
         if ($ReplyButton) { $ReplyButton.IsEnabled = $false }
         Set-QOTicketDetailsVisibility -DetailsPanel $DetailsPanel -Chevron $Chevron -IsOpen:$false
@@ -169,7 +158,37 @@ function Update-QOTicketDetailsView {
     }
 
     if ($BodyText) { $BodyText.Text = $body }
-    if ($ReplyButton) { $ReplyButton.IsEnabled = $true }
+        if ($ReplySubject) {
+        $subjectValue = ""
+        try {
+            if ($Ticket.PSObject.Properties.Name -contains "Subject") {
+                $subjectValue = [string]$Ticket.Subject
+            } elseif ($Ticket.PSObject.Properties.Name -contains "Title") {
+                $subjectValue = [string]$Ticket.Title
+            }
+        } catch { }
+
+        if ($subjectValue) {
+            if ($subjectValue -notmatch '^(RE|FW|FWD):') {
+                $subjectValue = "RE: " + $subjectValue
+            }
+        }
+
+        $ReplySubject.Text = $subjectValue
+    }
+    if ($ReplyButton) {
+        $canReply = $false
+        try {
+            if ($Ticket.PSObject.Properties.Name -contains "SourceMessageId") {
+                if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.SourceMessageId)) { $canReply = $true }
+            }
+            if (-not $canReply -and ($Ticket.PSObject.Properties.Name -contains "EmailMessageId")) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.EmailMessageId)) { $canReply = $true }
+            }
+        } catch { $canReply = $false }
+
+        $ReplyButton.IsEnabled = $canReply
+    }
     Set-QOTicketDetailsVisibility -DetailsPanel $DetailsPanel -Chevron $Chevron -IsOpen:$true
 }
 
@@ -191,7 +210,7 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
         [Parameter(Mandatory)]$GetTicketsCmd,
         [Parameter(Mandatory)]$SyncCmd,
-        [string]$Folder
+        [string]$View
     )
 
     Write-QOTicketsUILog "Tickets: Email sync started"
@@ -214,17 +233,17 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
         Write-QOTicketsUILog ("Tickets: Email sync failed: " + $_.Exception.Message) "ERROR"
     }
 
-    Invoke-QOTicketsGridRefresh -Grid $Grid -GetTicketsCmd $GetTicketsCmd -Folder $Folder
+    Invoke-QOTicketsGridRefresh -Grid $Grid -GetTicketsCmd $GetTicketsCmd -View $View
 }
 
 function Invoke-QOTicketsGridRefresh {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
         [Parameter(Mandatory)]$GetTicketsCmd,
-        [string]$Folder
+        [string]$View
     )
 
-    Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd -Folder $Folder
+    Refresh-QOTicketsGrid -Grid $Grid -GetTicketsCmd $GetTicketsCmd -View $View
 
     $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($Grid.ItemsSource)
     if ($view) {
@@ -240,9 +259,13 @@ function Initialize-QOTicketsUI {
     # Capture core commands now
     $getTicketsCmd = $null
     try {
-        $getTicketsCmd = Get-Command Get-QOTicketsByFolder -ErrorAction Stop
+        $getTicketsCmd = Get-Command Get-QOTicketsByBucket -ErrorAction Stop
     } catch {
-        $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
+        try {
+            $getTicketsCmd = Get-Command Get-QOTicketsByFolder -ErrorAction Stop
+        } catch {
+            $getTicketsCmd = Get-Command Get-QOTickets -ErrorAction Stop
+        }
     }
 
     $newTicketCmd  = Get-Command New-QOTicket  -ErrorAction Stop
@@ -251,6 +274,9 @@ function Initialize-QOTicketsUI {
     $removeCmd     = Get-Command Remove-QOTicket -ErrorAction Stop
     $restoreCmd    = Get-Command Restore-QOTickets -ErrorAction Stop
     $setStatusCmd  = Get-Command Set-QOTicketsStatus -ErrorAction Stop
+    $renameTicketCmd = Get-Command Rename-QOTicket -ErrorAction Stop
+    $sendReplyCmd = Get-Command Send-QOTicketReply -ErrorAction Stop
+    $getStatusesCmd = Get-Command Get-QOTicketStatuses -ErrorAction Stop
 
     $syncCmd = $null
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
@@ -263,12 +289,13 @@ function Initialize-QOTicketsUI {
     $btnRefresh = $Window.FindName("BtnRefreshTickets")
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
-    $btnToggleDeleted = $Window.FindName("BtnToggleDeletedView")
+    $cmbFilter = $Window.FindName("CmbTicketsFilter")
     $btnRestore = $Window.FindName("BtnRestoreTicketToolbar")
     $btnToggleDetails = $Window.FindName("BtnToggleTicketDetails")
     $detailsPanel = $Window.FindName("TicketDetailsPanel")
     $detailsChevron = $Window.FindName("TicketDetailsChevron")
     $ticketBodyText = $Window.FindName("TicketEmailBodyText")
+    $ticketReplySubject = $Window.FindName("TicketReplySubject")
     $ticketReplyText = $Window.FindName("TicketReplyText")
     $btnSendReply = $Window.FindName("BtnSendTicketReply")
 
@@ -276,13 +303,14 @@ function Initialize-QOTicketsUI {
     if (-not $btnRefresh) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRefreshTickets") | Out-Null; return }
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
-    if (-not $btnToggleDeleted) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnToggleDeletedView") | Out-Null; return }
+    if (-not $cmbFilter) { [System.Windows.MessageBox]::Show("Missing XAML control: CmbTicketsFilter") | Out-Null; return }
     if (-not $btnRestore) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnRestoreTicketToolbar") | Out-Null; return }
    
     if (-not $btnToggleDetails) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnToggleTicketDetails") | Out-Null; return }
     if (-not $detailsPanel) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketDetailsPanel") | Out-Null; return }
     if (-not $detailsChevron) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketDetailsChevron") | Out-Null; return }
     if (-not $ticketBodyText) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketEmailBodyText") | Out-Null; return }
+    if (-not $ticketReplySubject) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketReplySubject") | Out-Null; return }
     if (-not $ticketReplyText) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketReplyText") | Out-Null; return }
     if (-not $btnSendReply) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnSendTicketReply") | Out-Null; return }
 
@@ -301,7 +329,7 @@ function Initialize-QOTicketsUI {
     try { if ($script:TicketsRestoreHandler) { $btnRestore.Remove_Click($script:TicketsRestoreHandler) } } catch { }
 
     try { if ($script:TicketsToggleDetailsHandler) { $btnToggleDetails.Remove_Click($script:TicketsToggleDetailsHandler) } } catch { }
-    try { if ($script:TicketsDeletedToggleHandler) { $btnToggleDeleted.Remove_Click($script:TicketsDeletedToggleHandler) } } catch { }
+    try { if ($script:TicketsDeletedToggleHandler) { $cmbFilter.Remove_SelectionChanged($script:TicketsDeletedToggleHandler) } } catch { }
 
     try {
         if ($script:TicketsSelectionChangedHandler) {
@@ -354,7 +382,7 @@ function Initialize-QOTicketsUI {
         }
     } catch { }
 
-    Update-QOTicketDetailsView -Ticket $null -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
+    Update-QOTicketDetailsView -Ticket $null -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplySubject $ticketReplySubject -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
 
     $grid.SelectionMode = [System.Windows.Controls.DataGridSelectionMode]::Extended
 
@@ -364,7 +392,7 @@ function Initialize-QOTicketsUI {
 
     $script:TicketsStatusContextMenu = New-Object System.Windows.Controls.ContextMenu
     $statusMenuItems = @()
-    $statusMenuItems = @("New", "In Progress", "Waiting on User", "No Longer Required", "Completed")
+    try { $statusMenuItems = @(& $getStatusesCmd) } catch { $statusMenuItems = @("New", "In Progress", "Pending", "Closed") }
 
     foreach ($status in $statusMenuItems) {
         $menuItem = New-Object System.Windows.Controls.MenuItem
@@ -400,7 +428,7 @@ function Initialize-QOTicketsUI {
             if ($ids.Count -eq 0) { return }
 
             $null = & $setStatusCmd -Id $ids -Status $statusValue
-            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
         } catch { }
     }.GetNewClosure()
 
@@ -418,7 +446,7 @@ function Initialize-QOTicketsUI {
 
             $cell = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridCell])
             if (-not $cell) { $args.Handled = $true; return }
-            if ($cell.Column -and $cell.Column.Header -ne "Status") { $args.Handled = $true; return }
+            if (-not $cell.Column) { $args.Handled = $true; return }
 
             $row = Get-QOParentVisual -Element $hit -Type ([System.Windows.Controls.DataGridRow])
             if (-not $row) { $args.Handled = $true; return }
@@ -429,8 +457,44 @@ function Initialize-QOTicketsUI {
                 $grid.SelectedItem = $row.Item
             }
 
-            $script:TicketsStatusContextMenu.PlacementTarget = $cell
-            $script:TicketsStatusContextMenu.IsOpen = $true
+            if ($cell.Column.Header -eq "Status") {
+                $script:TicketsStatusContextMenu.PlacementTarget = $cell
+                $script:TicketsStatusContextMenu.IsOpen = $true
+                $args.Handled = $true
+                return
+            }
+
+            if ($cell.Column.Header -eq "Ticket Name") {
+                $selectedItem = $grid.SelectedItem
+                if (-not $selectedItem) { return }
+
+                try { Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null } catch { }
+                $currentName = ""
+                try {
+                    if ($selectedItem.PSObject.Properties.Name -contains "TicketName") {
+                        $currentName = [string]$selectedItem.TicketName
+                    } elseif ($selectedItem.PSObject.Properties.Name -contains "Title") {
+                        $currentName = [string]$selectedItem.Title
+                    }
+                } catch { }
+
+                $newName = [Microsoft.VisualBasic.Interaction]::InputBox("Enter new ticket name:", "Rename ticket", $currentName)
+                if ([string]::IsNullOrWhiteSpace($newName)) { return }
+
+                try {
+                    $idValue = [string]$selectedItem.Id
+                    if ($idValue) {
+                        $null = & $renameTicketCmd -Id $idValue -Name $newName
+                        $selectedItem.TicketName = $newName
+                        $selectedItem.Title = $newName
+                        $grid.Items.Refresh()
+                        Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
+                    }
+                } catch { }
+
+                $args.Handled = $true
+                return
+            }
             $args.Handled = $true
         } catch { }
     }.GetNewClosure()
@@ -443,9 +507,9 @@ function Initialize-QOTicketsUI {
         try {
             if (-not $script:TicketsEmailSyncRan) {
                 $script:TicketsEmailSyncRan = $true
-                 & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -Folder $script:TicketsCurrentFolder
+                 & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -View $script:TicketsCurrentView
             } else {
-                Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
+                Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
             }
         } catch { }
     }.GetNewClosure()
@@ -455,7 +519,7 @@ function Initialize-QOTicketsUI {
     # Refresh click handler typed
     $script:TicketsRefreshHandler = [System.Windows.RoutedEventHandler]{
         param($sender, $args)
-        & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -Folder $script:TicketsCurrentFolder
+        & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -View $script:TicketsCurrentView
     }.GetNewClosure()
     $btnRefresh.Add_Click($script:TicketsRefreshHandler)
 
@@ -467,7 +531,7 @@ function Initialize-QOTicketsUI {
             if ($isOpen) {
                 Set-QOTicketDetailsVisibility -DetailsPanel $detailsPanel -Chevron $detailsChevron -IsOpen:$false
             } else {
-                Update-QOTicketDetailsView -Ticket $grid.SelectedItem -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
+                Update-QOTicketDetailsView -Ticket $grid.SelectedItem -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplySubject $ticketReplySubject -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
             }
         } catch { }
     }.GetNewClosure()
@@ -476,17 +540,28 @@ function Initialize-QOTicketsUI {
     $script:TicketsDeletedToggleHandler = [System.Windows.RoutedEventHandler]{
         param($sender, $args)
         try {
-            Update-QOTicketsFolderState -ToggleButton $btnToggleDeleted -DeleteButton $btnDelete -RestoreButton $btnRestore
-            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
+            $selectedItem = $cmbFilter.SelectedItem
+            $bucket = "Open"
+            if ($selectedItem -and $selectedItem.Content) {
+                $bucket = [string]$selectedItem.Content
+            }
+            $script:TicketsCurrentView = $bucket
+            $btnDelete.IsEnabled = ($bucket -ne "Deleted")
+            $btnRestore.IsEnabled = ($bucket -eq "Deleted")
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
         } catch { }
     }.GetNewClosure()
-    $btnToggleDeleted.Add_Click($script:TicketsDeletedToggleHandler)
+    $cmbFilter.Add_SelectionChanged($script:TicketsDeletedToggleHandler)
+
+    $script:TicketsCurrentView = "Open"
+    $btnDelete.IsEnabled = $true
+    $btnRestore.IsEnabled = $false
     
     # Selection changed handler typed
     $script:TicketsSelectionChangedHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
         param($sender, $args)
         try {
-            Update-QOTicketDetailsView -Ticket $grid.SelectedItem -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
+            Update-QOTicketDetailsView -Ticket $grid.SelectedItem -DetailsPanel $detailsPanel -BodyText $ticketBodyText -ReplySubject $ticketReplySubject -ReplyText $ticketReplyText -ReplyButton $btnSendReply -Chevron $detailsChevron
         } catch { }
     }.GetNewClosure()
     $grid.AddHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
@@ -513,10 +588,11 @@ function Initialize-QOTicketsUI {
             $ticket = $grid.SelectedItem
             if (-not $ticket) { return }
 
+            $replySubject = ([string]$ticketReplySubject.Text).Trim()
             $replyText = ([string]$ticketReplyText.Text).Trim()
-            if (-not $replyText) {
+            if (-not $replySubject -or -not $replyText) {
                 [System.Windows.MessageBox]::Show(
-                    "Enter a reply before sending.",
+                    "Enter a subject and reply before sending.",
                     "Reply required",
                     [System.Windows.MessageBoxButton]::OK,
                     [System.Windows.MessageBoxImage]::Information
@@ -524,30 +600,35 @@ function Initialize-QOTicketsUI {
                 return
             }
 
-            $replyEntry = [pscustomobject]@{
-                Body      = $replyText
-                CreatedAt = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            }
+            $result = & $sendReplyCmd -Ticket $ticket -Subject $replySubject -Body $replyText
+            $success = $false
+            $note = ""
+            try { $success = [bool]$result.Success } catch { $success = $false }
+            try { if ($result.PSObject.Properties.Name -contains "Note") { $note = [string]$result.Note } } catch { }
 
-            $existingReplies = @()
-            try {
-                if ($ticket.PSObject.Properties.Name -contains "Replies") {
-                    $existingReplies = @($ticket.Replies)
-                }
-            } catch { $existingReplies = @() }
-
-            $ticket.Replies = @($existingReplies) + @($replyEntry)
+            if ($success) {
+                $ticketReplyText.Text = ""
+                $ticketReplySubject.Text = ""
+                Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
 
             $null = & $updateTicketCmd -Ticket $ticket
             $ticketReplyText.Text = ""
             Write-QOTicketsUILog "Ticket reply saved to local history."
 
-            [System.Windows.MessageBox]::Show(
-                "Reply saved to ticket history (email sending not wired yet).",
-                "Reply saved",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Information
-            ) | Out-Null
+                [System.Windows.MessageBox]::Show(
+                    "Reply sent.",
+                    "Reply sent",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Information
+                ) | Out-Null
+            } else {
+                [System.Windows.MessageBox]::Show(
+                    ("Reply failed. " + $note),
+                    "Reply failed",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                ) | Out-Null
+            }
         } catch {
             Write-QOTicketsUILog ("Ticket reply failed: " + $_.Exception.Message) "ERROR"
         }
@@ -558,7 +639,94 @@ function Initialize-QOTicketsUI {
     $script:TicketsNewHandler = [System.Windows.RoutedEventHandler]{
         param($sender, $args)
         try {
-            $ticket = & $newTicketCmd -Title "New ticket"
+            $dialog = New-Object System.Windows.Window
+            $dialog.Title = "New ticket"
+            $dialog.Width = 420
+            $dialog.Height = 320
+            $dialog.WindowStartupLocation = "CenterOwner"
+            $dialog.ResizeMode = "NoResize"
+            $dialog.Owner = $Window
+
+            $stack = New-Object System.Windows.Controls.StackPanel
+            $stack.Margin = "12"
+
+            $nameLabel = New-Object System.Windows.Controls.TextBlock
+            $nameLabel.Text = "Ticket name"
+            $nameLabel.Margin = "0,0,0,4"
+            $stack.Children.Add($nameLabel) | Out-Null
+
+            $nameBox = New-Object System.Windows.Controls.TextBox
+            $nameBox.Margin = "0,0,0,8"
+            $stack.Children.Add($nameBox) | Out-Null
+
+            $statusLabel = New-Object System.Windows.Controls.TextBlock
+            $statusLabel.Text = "Status"
+            $statusLabel.Margin = "0,0,0,4"
+            $stack.Children.Add($statusLabel) | Out-Null
+
+            $statusBox = New-Object System.Windows.Controls.ComboBox
+            $statusBox.Margin = "0,0,0,8"
+            foreach ($status in @($statusMenuItems)) {
+                $statusBox.Items.Add($status) | Out-Null
+            }
+            $statusBox.SelectedIndex = 0
+            $stack.Children.Add($statusBox) | Out-Null
+
+            $noteLabel = New-Object System.Windows.Controls.TextBlock
+            $noteLabel.Text = "Initial note (optional)"
+            $noteLabel.Margin = "0,0,0,4"
+            $stack.Children.Add($noteLabel) | Out-Null
+
+            $noteBox = New-Object System.Windows.Controls.TextBox
+            $noteBox.Height = 90
+            $noteBox.AcceptsReturn = $true
+            $noteBox.TextWrapping = "Wrap"
+            $noteBox.Margin = "0,0,0,12"
+            $stack.Children.Add($noteBox) | Out-Null
+
+            $buttonsPanel = New-Object System.Windows.Controls.StackPanel
+            $buttonsPanel.Orientation = "Horizontal"
+            $buttonsPanel.HorizontalAlignment = "Right"
+
+            $btnCreate = New-Object System.Windows.Controls.Button
+            $btnCreate.Content = "Create"
+            $btnCreate.Width = 80
+            $btnCreate.Margin = "0,0,8,0"
+            $buttonsPanel.Children.Add($btnCreate) | Out-Null
+
+            $btnCancel = New-Object System.Windows.Controls.Button
+            $btnCancel.Content = "Cancel"
+            $btnCancel.Width = 80
+            $buttonsPanel.Children.Add($btnCancel) | Out-Null
+
+            $stack.Children.Add($buttonsPanel) | Out-Null
+            $dialog.Content = $stack
+
+            $btnCancel.Add_Click({ $dialog.DialogResult = $false })
+            $btnCreate.Add_Click({ $dialog.DialogResult = $true })
+
+            $result = $dialog.ShowDialog()
+            if (-not $result) { return }
+
+            $ticketName = ([string]$nameBox.Text).Trim()
+            if (-not $ticketName) {
+                [System.Windows.MessageBox]::Show(
+                    "Ticket name is required.",
+                    "Validation",
+                    [System.Windows.MessageBoxButton]::OK,
+                    [System.Windows.MessageBoxImage]::Warning
+                ) | Out-Null
+                return
+            }
+
+            $statusValue = "New"
+            if ($statusBox.SelectedItem) {
+                $statusValue = [string]$statusBox.SelectedItem
+            }
+
+            $initialNote = ([string]$noteBox.Text).Trim()
+
+            $ticket = & $newTicketCmd -Title $ticketName -TicketName $ticketName -Subject $ticketName -Status $statusValue -InitialNote $initialNote
             $null   = & $addTicketCmd -Ticket $ticket
 
             Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
@@ -601,7 +769,7 @@ function Initialize-QOTicketsUI {
             if ($confirm -ne "Yes") { return }
 
             $null = & $removeCmd -Id $ids
-            & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -Folder $script:TicketsCurrentFolder
+            & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -View $script:TicketsCurrentView
         }
         catch { }
     }.GetNewClosure()
@@ -622,7 +790,7 @@ function Initialize-QOTicketsUI {
             if ($ids.Count -eq 0) { return }
 
             $null = & $restoreCmd -Id $ids
-            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
+            Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
         }
         catch { }
     }.GetNewClosure()
@@ -637,7 +805,7 @@ function Initialize-QOTicketsUI {
             $script:TicketsAutoRefreshInProgress = $true
             try {
                 if (-not $grid.IsLoaded) { return }
-                & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -Folder $script:TicketsCurrentFolder
+                & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -View $script:TicketsCurrentView
             } catch { }
             finally {
                 $script:TicketsAutoRefreshInProgress = $false
@@ -646,7 +814,7 @@ function Initialize-QOTicketsUI {
         $script:TicketsAutoRefreshTimer.Start()
     }
 
-    Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -Folder $script:TicketsCurrentFolder
+    Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
 }
 
 Export-ModuleMember -Function Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh
