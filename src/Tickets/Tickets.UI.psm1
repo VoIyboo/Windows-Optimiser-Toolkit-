@@ -34,14 +34,24 @@ $script:TicketsCurrentView = "All"
 
 function Write-QOTicketsUILog {
     param(
-        [Parameter(Mandatory)][string]$Message,
-        [string]$Level = "INFO"
+        [Parameter(Mandatory=$true)][string]$Message,
+        [ValidateSet('INFO','WARN','ERROR')][string]$Level = 'INFO'
     )
+
     try {
+        switch ($Level) {
+            'ERROR' { if (Get-Command Write-QOTLogError -ErrorAction SilentlyContinue) { Write-QOTLogError $Message; return } }
+            'WARN'  { if (Get-Command Write-QOTLogWarn  -ErrorAction SilentlyContinue) { Write-QOTLogWarn  $Message; return } }
+            default { if (Get-Command Write-QOTLogInfo  -ErrorAction SilentlyContinue) { Write-QOTLogInfo  $Message; return } }
+        }
         if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
             Write-QLog $Message $Level
+            return
         }
     } catch { }
+
+    # absolute fallback, never crash the UI
+    try { Write-Host ("[Tickets.UI] " + $Level + ": " + $Message) } catch { }
 }
 
 Write-QOTicketsUILog "=== Tickets.UI.psm1 LOADED ==="
