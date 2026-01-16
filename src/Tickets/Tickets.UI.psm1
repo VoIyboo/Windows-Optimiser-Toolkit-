@@ -95,8 +95,22 @@ function Get-QOTicketsForGrid {
         return $list
     }
     catch {
-        Write-QOTicketsUILog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
-        [System.Windows.MessageBox]::Show("Tickets failed to load. Check the log for details.") | Out-Null
+        $msg = $_.Exception.Message
+        $stack = $_.Exception.StackTrace
+        $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { "" }
+
+        Write-QOTicketsUILog ("Tickets: Load failed. Error: " + $msg) "ERROR"
+        if ($inner) { Write-QOTicketsUILog ("Tickets: InnerException: " + $inner) "ERROR" }
+        if ($stack) { Write-QOTicketsUILog ("Tickets: StackTrace: " + $stack) "ERROR" }
+
+        $popupMessage = "Tickets failed to load.`n`nError: " + $msg
+        if ($inner) { $popupMessage += "`nInner: " + $inner }
+        [System.Windows.MessageBox]::Show(
+            $popupMessage,
+            "Quinn Optimiser Toolkit",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        ) | Out-Null
         return @()
     }
 }
@@ -124,8 +138,22 @@ function Refresh-QOTicketsGrid {
         Write-QOTicketsUILog "Tickets: Grid refresh completed."
     }
     catch {
-        Write-QOTicketsUILog ("Tickets: Grid refresh failed: " + $_.Exception.Message) "ERROR"
-        [System.Windows.MessageBox]::Show("Load tickets failed.`r`n$($_.Exception.Message)") | Out-Null
+        $msg = $_.Exception.Message
+        $stack = $_.Exception.StackTrace
+        $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { "" }
+
+        Write-QOTicketsUILog ("Tickets: Grid refresh failed. Error: " + $msg) "ERROR"
+        if ($inner) { Write-QOTicketsUILog ("Tickets: InnerException: " + $inner) "ERROR" }
+        if ($stack) { Write-QOTicketsUILog ("Tickets: StackTrace: " + $stack) "ERROR" }
+
+        $popupMessage = "Load tickets failed.`n`nError: " + $msg
+        if ($inner) { $popupMessage += "`nInner: " + $inner }
+        [System.Windows.MessageBox]::Show(
+            $popupMessage,
+            "Quinn Optimiser Toolkit",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        ) | Out-Null
     }
 }
 
