@@ -36,6 +36,10 @@ $script:TicketsFilterOpenCheckbox = $null
 $script:TicketsFilterClosedCheckbox = $null
 $script:TicketsFilterDeletedCheckbox = $null
 $script:TicketsFilterCheckboxHandler = $null
+$script:AllTickets = $null
+$script:ShowOpen = $true
+$script:ShowClosed = $true
+$script:ShowDeleted = $false
 
 function Write-QOTicketsUILog {
     param(
@@ -108,6 +112,46 @@ function Write-QOTicketsFilterLog {
     try { Write-Host ("[Tickets.UI] INFO: " + $message) } catch { }
 }
 
+function Get-QOTicketsAllItems {
+    try {
+        $items = $null
+        if (Get-Command Get-QOTickets -ErrorAction SilentlyContinue) {
+            $items = Get-QOTickets
+        }
+
+        if ($null -eq $items) { return @() }
+
+        if ($items.PSObject.Properties.Name -contains "Tickets") {
+            $tickets = @($items.Tickets)
+            Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (Tickets property)." -f $tickets.Count)
+            return $tickets
+        }
+
+        $list = @($items)
+        Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (direct)." -f $list.Count)
+        return $list
+    }
+    catch {
+        $msg = $_.Exception.Message
+        $stack = $_.Exception.StackTrace
+        $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { "" }
+
+        Write-QOTicketsUILog ("Tickets: Load failed. Error: " + $msg) "ERROR"
+        if ($inner) { Write-QOTicketsUILog ("Tickets: InnerException: " + $inner) "ERROR" }
+        if ($stack) { Write-QOTicketsUILog ("Tickets: StackTrace: " + $stack) "ERROR" }
+
+        $popupMessage = "Tickets failed to load.`n`nError: " + $msg
+        if ($inner) { $popupMessage += "`nInner: " + $inner }
+        [System.Windows.MessageBox]::Show(
+            $popupMessage,
+            "Quinn Optimiser Toolkit",
+            [System.Windows.MessageBoxButton]::OK,
+            [System.Windows.MessageBoxImage]::Error
+        ) | Out-Null
+        return @()
+    }
+}
+
 function Get-QOTicketsVisibleItems {
     param(
         [object[]]$Items,
@@ -155,56 +199,21 @@ function New-QOTicketsObservableCollection {
     return $collection
 }
 
-function Get-QOTicketsForGrid {
-    param(
-        [Parameter(Mandatory)]$GetTicketsCmd,
-        [Parameter(Mandatory)]$FilterState
-    )
+function Apply-TicketsFilter {
+    if (-not $script:TicketsGrid) { return }
 
-    try {
-        $storePath = ""
-        try { $storePath = Get-QOTicketsStorePath } catch { $storePath = "" }
-
-        Write-QOTicketsUILog ("Tickets: Load start. StorePath={0}" -f $storePath)
-
-        $items = $null
-        if (Get-Command Get-QOTickets -ErrorAction SilentlyContinue) {
-            $items = Get-QOTickets
-        } else {
-            $items = & $GetTicketsCmd
-        }
-
-        if ($null -eq $items) { return @() }
-
-        if ($items.PSObject.Properties.Name -contains "Tickets") {
-            $tickets = @($items.Tickets)
-            Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (Tickets property)." -f $tickets.Count)
-            return Get-QOTicketsVisibleItems -Items $tickets -FilterState $FilterState
-        }
-
-        $list = @($items)
-        Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (direct)." -f $list.Count)
-        return Get-QOTicketsVisibleItems -Items $list -FilterState $FilterState
+    if (-not $script:AllTickets) {
+        $script:AllTickets = @(Get-QOTicketsAllItems)
     }
-    catch {
-        $msg = $_.Exception.Message
-        $stack = $_.Exception.StackTrace
-        $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { "" }
-
-        Write-QOTicketsUILog ("Tickets: Load failed. Error: " + $msg) "ERROR"
-        if ($inner) { Write-QOTicketsUILog ("Tickets: InnerException: " + $inner) "ERROR" }
-        if ($stack) { Write-QOTicketsUILog ("Tickets: StackTrace: " + $stack) "ERROR" }
-
-        $popupMessage = "Tickets failed to load.`n`nError: " + $msg
-        if ($inner) { $popupMessage += "`nInner: " + $inner }
-        [System.Windows.MessageBox]::Show(
-            $popupMessage,
-            "Quinn Optimiser Toolkit",
-            [System.Windows.MessageBoxButton]::OK,
-            [System.Windows.MessageBoxImage]::Error
-        ) | Out-Null
-        return @()
+    $filterState = [pscustomobject]@{
+        ShowOpen    = [bool]$script:ShowOpen
+        ShowClosed  = [bool]$script:ShowClosed
+        ShowDeleted = [bool]$script:ShowDeleted
     }
+
+    $filtered = @(Get-QOTicketsVisibleItems -Items $script:AllTickets -FilterState $filterState)
+    $script:TicketsGrid.ItemsSource = (New-QOTicketsObservableCollection -Items $filtered)
+    $script:TicketsGrid.Items.Refresh()
 }
 
 function Refresh-QOTicketsGrid {
@@ -216,18 +225,15 @@ function Refresh-QOTicketsGrid {
 
     try {
         Write-QOTicketsUILog "Tickets: Grid refresh started."
-        $filterState = Get-QOTicketsFilterState
-        $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -FilterState $filterState)
-        $Grid.ItemsSource = (New-QOTicketsObservableCollection -Items $items)
-        $Grid.Items.Refresh()
-
+        $script:AllTickets = @(Get-QOTicketsAllItems)
+        Apply-TicketsFilter
         $sourceType = $null
         try { $sourceType = $Grid.ItemsSource.GetType().FullName } catch { }
 
         $gridCount = 0
         try { $gridCount = $Grid.Items.Count } catch { }
 
-        Write-QOTicketsUILog ("Tickets: ItemsSource set. Type={0}; Items={1}; GridCount={2}" -f $sourceType, $items.Count, $gridCount)
+        Write-QOTicketsUILog ("Tickets: ItemsSource set. Type={0}; Items={1}; GridCount={2}" -f $sourceType, $gridCount, $gridCount)
         Write-QOTicketsUILog "Tickets: Grid refresh completed."
     }
     catch {
@@ -540,49 +546,58 @@ function Initialize-QOTicketsUI {
     $btnFilterMenu.ContextMenu = $script:TicketsFilterMenu
 
     $filterState = Get-QOTicketsFilterState
+    $script:ShowOpen = [bool]$filterState.ShowOpen
+    $script:ShowClosed = [bool]$filterState.ShowClosed
+    $script:ShowDeleted = [bool]$filterState.ShowDeleted
 
     $script:TicketsFilterOpenCheckbox = New-Object System.Windows.Controls.MenuItem
     $script:TicketsFilterOpenCheckbox.Header = "Open"
     $script:TicketsFilterOpenCheckbox.IsCheckable = $true
-    $script:TicketsFilterOpenCheckbox.IsChecked = [bool]$filterState.ShowOpen
+    $script:TicketsFilterOpenCheckbox.IsChecked = [bool]$script:ShowOpen
+    $script:TicketsFilterOpenCheckbox.IsEnabled = $true
     $script:TicketsFilterMenu.Items.Add($script:TicketsFilterOpenCheckbox) | Out-Null
 
-    $script:TicketsFilterClosedCheckbox = New-Object System.Windows.Controls.CheckBox
-    $script:TicketsFilterClosedCheckbox.Content = "Closed"
-    $script:TicketsFilterClosedCheckbox.Margin = "8,2,8,2"
-    $script:TicketsFilterClosedCheckbox.IsChecked = [bool]$filterState.ShowClosed
+    $script:TicketsFilterClosedCheckbox = New-Object System.Windows.Controls.MenuItem
+    $script:TicketsFilterClosedCheckbox.Header = "Closed"
+    $script:TicketsFilterClosedCheckbox.IsCheckable = $true
+    $script:TicketsFilterClosedCheckbox.IsChecked = [bool]$script:ShowClosed
+    $script:TicketsFilterClosedCheckbox.IsEnabled = $true
     $script:TicketsFilterMenu.Items.Add($script:TicketsFilterClosedCheckbox) | Out-Null
 
     $script:TicketsFilterDeletedCheckbox = New-Object System.Windows.Controls.MenuItem
     $script:TicketsFilterDeletedCheckbox.Header = "Deleted"
     $script:TicketsFilterDeletedCheckbox.IsCheckable = $true
-    $script:TicketsFilterDeletedCheckbox.IsChecked = [bool]$filterState.ShowDeleted
+    $script:TicketsFilterDeletedCheckbox.IsChecked = [bool]$script:ShowDeleted
+    $script:TicketsFilterDeletedCheckbox.IsEnabled = $true
     $script:TicketsFilterMenu.Items.Add($script:TicketsFilterDeletedCheckbox) | Out-Null
 
     $updateFilterTooltip = {
-        $state = Get-QOTicketsFilterState
         $labels = @()
-        if ($state.ShowOpen) { $labels += "Open" }
-        if ($state.ShowClosed) { $labels += "Closed" }
-        if ($state.ShowDeleted) { $labels += "Deleted" }
+        if ($script:ShowOpen) { $labels += "Open" }
+        if ($script:ShowClosed) { $labels += "Closed" }
+        if ($script:ShowDeleted) { $labels += "Deleted" }
         $summary = if ($labels.Count -gt 0) { $labels -join ", " } else { "None" }
         $btnFilterMenu.ToolTip = ("Filter tickets ({0})" -f $summary)
     }.GetNewClosure()
 
     $applyFilterSelection = {
         param([bool]$LogChange = $false)
+        
+        $script:ShowOpen = [bool]$script:TicketsFilterOpenCheckbox.IsChecked
+        $script:ShowClosed = [bool]$script:TicketsFilterClosedCheckbox.IsChecked
+        $script:ShowDeleted = [bool]$script:TicketsFilterDeletedCheckbox.IsChecked
 
         $state = Get-QOTicketsFilterState
-        $state.ShowOpen = [bool]$script:TicketsFilterOpenCheckbox.IsChecked
-        $state.ShowClosed = [bool]$script:TicketsFilterClosedCheckbox.IsChecked
-        $state.ShowDeleted = [bool]$script:TicketsFilterDeletedCheckbox.IsChecked
+        $state.ShowOpen = $script:ShowOpen
+        $state.ShowClosed = $script:ShowClosed
+        $state.ShowDeleted = $script:ShowDeleted
 
         & $updateFilterTooltip
 
         if ($LogChange) {
-            Write-QOTicketsFilterLog -Open $state.ShowOpen -Closed $state.ShowClosed -Deleted $state.ShowDeleted
+            Write-QOTicketsFilterLog -Open $script:ShowOpen -Closed $script:ShowClosed -Deleted $script:ShowDeleted
         }
-        Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
+        Apply-TicketsFilter
     }.GetNewClosure()
 
     $script:TicketsFilterCheckboxHandler = [System.Windows.RoutedEventHandler]{
