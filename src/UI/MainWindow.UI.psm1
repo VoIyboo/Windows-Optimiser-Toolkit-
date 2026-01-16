@@ -176,6 +176,24 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1") -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1") -Force -ErrorAction Stop
 
+    if (-not (Get-Command Write-QOTicketsUILog -ErrorAction SilentlyContinue)) {
+        function global:Write-QOTicketsUILog {
+            param(
+                [Parameter(Mandatory = $true)][string]$Message,
+                [ValidateSet('INFO', 'WARN', 'ERROR')][string]$Level = 'INFO'
+            )
+
+            try {
+                if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                    Write-QLog $Message $Level
+                    return
+                }
+            } catch { }
+
+            try { Write-Host ("[Tickets.UI] " + $Level + ": " + $Message) } catch { }
+        }
+    }
+
     # ------------------------------------------------------------
     # Load MainWindow XAML
     # ------------------------------------------------------------
