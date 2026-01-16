@@ -80,8 +80,7 @@ function New-QODefaultTicketsFile {
     }
 
     if (-not (Test-Path -LiteralPath $Path)) {
-        New-QODefaultTicketDatabase | ConvertTo-Json -Depth 8 |
-            Set-Content -LiteralPath $Path -Encoding UTF8
+        "[]" | Set-Content -LiteralPath $Path -Encoding UTF8
     }
 }
 
@@ -382,15 +381,27 @@ function Initialize-QOTicketStorage {
 # Database IO
 # =====================================================================
 function Get-QOTickets {
-    Initialize-QOTicketStorage
-
     try {
-        Write-QOTicketsCoreLog ("Tickets: Load started. StorePath={0}" -f $script:TicketStorePath)
-        $db = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        Write-QOTicketsCoreLog "Tickets: Resolve ticket store path"
+        Initialize-QOTicketStorage
+        Write-QOTicketsCoreLog ("Tickets: Store path resolved. StorePath={0}" -f $script:TicketStorePath)
+        Write-QOTicketsCoreLog "Tickets: Read JSON file"
+        if (-not (Test-Path -LiteralPath $script:TicketStorePath)) {
+            Write-QOTicketsCoreLog ("Tickets: Store file missing. Creating new store at {0}." -f $script:TicketStorePath)
+            New-QODefaultTicketsFile -Path $script:TicketStorePath
+        }
+        $rawJson = Get-Content -LiteralPath $script:TicketStorePath -Raw -ErrorAction Stop
+        if ([string]::IsNullOrWhiteSpace($rawJson)) {
+            Write-QOTicketsCoreLog "Tickets: JSON file empty. Treating as empty array."
+            $rawJson = "[]"
+        }
+        Write-QOTicketsCoreLog "Tickets: Parse JSON"
+        $db = $rawJson | ConvertFrom-Json -ErrorAction Stop
         if (-not $db) {
             $db = New-QODefaultTicketDatabase
         }
 
+        Write-QOTicketsCoreLog "Tickets: Map to objects"
         $db = Normalize-QOTicketDatabase -Database $db
         $ticketCount = 0
         try { $ticketCount = @($db.Tickets).Count } catch { }
@@ -399,16 +410,18 @@ function Get-QOTickets {
         return $db
     }
     catch {
-        Write-QOTicketsCoreLog ("Tickets: Load failed: " + $_.Exception.Message) "ERROR"
+        $msg = $_.Exception.Message
+        $stack = $_.Exception.StackTrace
+        $inner = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { "" }
+
+        Write-QOTicketsCoreLog ("Tickets: Load failed. Error: " + $msg) "ERROR"
+        if ($inner) { Write-QOTicketsCoreLog ("Tickets: InnerException: " + $inner) "ERROR" }
+        if ($stack) { Write-QOTicketsCoreLog ("Tickets: StackTrace: " + $stack) "ERROR" }
         $ticketPath = $script:TicketStorePath
-        try {
-            [System.Windows.MessageBox]::Show(
-                "Tickets failed to load. Check the log for details.",
-                "Tickets load failed",
-                [System.Windows.MessageBoxButton]::OK,
-                [System.Windows.MessageBoxImage]::Warning
-            ) | Out-Null
-        } catch { }
+        $errorToThrow = [System.Exception]::new(
+            ("Tickets: Failed to load ticket store from {0}. Error: {1}" -f $ticketPath, $msg),
+            $_.Exception
+        )
         try {
             $backupPath = Get-QOLatestTicketBackupPath -TicketPath $ticketPath -BackupDirectory $script:TicketBackupPath
             if ($backupPath) {
@@ -434,7 +447,7 @@ function Get-QOTickets {
                     Set-Content -LiteralPath $ticketPath -Encoding UTF8
             }
         } catch { }
-        return (New-QODefaultTicketDatabase)
+        throw $errorToThrow
     }
 }
 
