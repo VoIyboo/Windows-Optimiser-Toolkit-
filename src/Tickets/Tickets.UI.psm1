@@ -21,7 +21,6 @@ $script:TicketsToggleDetailsHandler = $null
 $script:TicketsSelectionChangedHandler = $null
 $script:TicketsRowEditHandler = $null
 $script:TicketsSendReplyHandler = $null
-$script:TicketsFilterMenuHandler = $null
 $script:TicketsFilterButtonHandler = $null
 $script:TicketsUndeleteHandler = $null
 
@@ -30,7 +29,13 @@ $script:TicketsAutoRefreshInProgress = $false
 $script:TicketsFileWatcher = $null
 $script:TicketsFileWatcherEvents = @()
 $script:TicketsFileRefreshTimer = $null
-$script:TicketsCurrentView = "All"
+$script:TicketsCurrentView = "Filtered"
+$script:TicketsFilterState = $null
+$script:TicketsFilterMenu = $null
+$script:TicketsFilterOpenCheckbox = $null
+$script:TicketsFilterClosedCheckbox = $null
+$script:TicketsFilterDeletedCheckbox = $null
+$script:TicketsFilterCheckboxHandler = $null
 
 function Write-QOTicketsUILog {
     param(
@@ -56,6 +61,89 @@ function Write-QOTicketsUILog {
 
 Write-QOTicketsUILog "=== Tickets.UI.psm1 LOADED ==="
 
+function Get-QOTicketsDefaultFilterState {
+    return [pscustomobject]@{
+        ShowOpen    = $true
+        ShowClosed  = $true
+        ShowDeleted = $false
+    }
+}
+
+function Get-QOTicketsFilterState {
+    if (-not $script:TicketsFilterState) {
+        $script:TicketsFilterState = Get-QOTicketsDefaultFilterState
+    }
+
+    foreach ($prop in @("ShowOpen", "ShowClosed", "ShowDeleted")) {
+        if ($script:TicketsFilterState.PSObject.Properties.Name -notcontains $prop) {
+            $script:TicketsFilterState | Add-Member -NotePropertyName $prop -NotePropertyValue (Get-QOTicketsDefaultFilterState.$prop) -Force
+        }
+        if ($null -eq $script:TicketsFilterState.$prop) {
+            $script:TicketsFilterState.$prop = Get-QOTicketsDefaultFilterState.$prop
+        }
+    }
+
+    return $script:TicketsFilterState
+}
+
+function Write-QOTicketsFilterLog {
+    param(
+        [bool]$Open,
+        [bool]$Closed,
+        [bool]$Deleted
+    )
+
+    $message = ("Tickets filter updated: Open={0}, Closed={1}, Deleted={2}" -f $Open, $Closed, $Deleted)
+    try {
+        if (Get-Command Write-QOTLogInfo -ErrorAction SilentlyContinue) {
+            Write-QOTLogInfo $message
+            return
+        }
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog $message "INFO"
+            return
+        }
+    } catch { }
+
+    try { Write-Host ("[Tickets.UI] INFO: " + $message) } catch { }
+}
+
+function Get-QOTicketsVisibleItems {
+    param(
+        [object[]]$Items,
+        [Parameter(Mandatory)]$FilterState
+    )
+
+    $showOpen = [bool]$FilterState.ShowOpen
+    $showClosed = [bool]$FilterState.ShowClosed
+    $showDeleted = [bool]$FilterState.ShowDeleted
+
+    if (-not ($showOpen -or $showClosed -or $showDeleted)) {
+        return @()
+    }
+
+    return @(
+        $Items |
+            Where-Object {
+                if ($null -eq $_) { return $false }
+
+                $isDeleted = $false
+                try { $isDeleted = [bool]$_.IsDeleted } catch { $isDeleted = $false }
+                $statusValue = ""
+                try {
+                    if ($_.PSObject.Properties.Name -contains "Status") {
+                        $statusValue = [string]$_.Status
+                    }
+                } catch { }
+                $isClosed = ($statusValue -eq "Closed" -or $statusValue -eq "Completed")
+                $isOpen = (-not $isDeleted) -and (-not $isClosed)
+
+                ($showOpen -and $isOpen) -or
+                ($showClosed -and (-not $isDeleted) -and $isClosed) -or
+                ($showDeleted -and $isDeleted)
+            }
+    )
+}
 
 function New-QOTicketsObservableCollection {
     param([object[]]$Items)
@@ -70,30 +158,18 @@ function New-QOTicketsObservableCollection {
 function Get-QOTicketsForGrid {
     param(
         [Parameter(Mandatory)]$GetTicketsCmd,
-        [string]$View
+        [Parameter(Mandatory)]$FilterState
     )
 
     try {
         $storePath = ""
         try { $storePath = Get-QOTicketsStorePath } catch { $storePath = "" }
-        Write-QOTicketsUILog ("Tickets: Load start. View={0}; StorePath={1}" -f $View, $storePath)
-        $supportsFolder = $false
-        $supportsBucket = $false
-        try {
-            $supportsFolder = ($GetTicketsCmd.Parameters.Keys -contains "Folder")
-            $supportsBucket = ($GetTicketsCmd.Parameters.Keys -contains "Bucket")
-        } catch { }
-        if ($supportsBucket) {
-            $allowedBuckets = @("Open", "Closed", "Deleted", "All")
-            $bucketValue = if ([string]::IsNullOrWhiteSpace([string]$View)) { "All" } else { ([string]$View).Trim() }
-            if ($allowedBuckets -notcontains $bucketValue) {
-                Write-QOTicketsUILog ("Tickets: Invalid bucket '{0}' supplied. Falling back to All." -f $bucketValue) "WARN"
-                $bucketValue = "All"
-            }
-            $items = & $GetTicketsCmd -Bucket $bucketValue
-        } elseif ($supportsFolder) {
-            $folderValue = if ($View -eq "Deleted") { "Deleted" } else { "Active" }
-            $items = & $GetTicketsCmd -Folder $folderValue
+
+        Write-QOTicketsUILog ("Tickets: Load start. StorePath={0}" -f $storePath)
+
+        $items = $null
+        if (Get-Command Get-QOTickets -ErrorAction SilentlyContinue) {
+            $items = Get-QOTickets
         } else {
             $items = & $GetTicketsCmd
         }
@@ -103,12 +179,12 @@ function Get-QOTicketsForGrid {
         if ($items.PSObject.Properties.Name -contains "Tickets") {
             $tickets = @($items.Tickets)
             Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (Tickets property)." -f $tickets.Count)
-            return $tickets
+            return Get-QOTicketsVisibleItems -Items $tickets -FilterState $FilterState
         }
 
         $list = @($items)
         Write-QOTicketsUILog ("Tickets: Loaded {0} items for grid (direct)." -f $list.Count)
-        return $list
+        return Get-QOTicketsVisibleItems -Items $list -FilterState $FilterState
     }
     catch {
         $msg = $_.Exception.Message
@@ -139,8 +215,9 @@ function Refresh-QOTicketsGrid {
     )
 
     try {
-        Write-QOTicketsUILog ("Tickets: Grid refresh started. View={0}" -f $View)
-        $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -View $View)
+        Write-QOTicketsUILog "Tickets: Grid refresh started."
+        $filterState = Get-QOTicketsFilterState
+        $items = @(Get-QOTicketsForGrid -GetTicketsCmd $GetTicketsCmd -FilterState $filterState)
         $Grid.ItemsSource = (New-QOTicketsObservableCollection -Items $items)
         $Grid.Items.Refresh()
 
@@ -391,9 +468,10 @@ function Initialize-QOTicketsUI {
 
     try { if ($script:TicketsToggleDetailsHandler) { $btnToggleDetails.Remove_Click($script:TicketsToggleDetailsHandler) } } catch { }
     try {
-        if ($script:TicketsFilterMenuHandler -and $script:TicketsFilterMenu) {
-            foreach ($menuItem in @($script:TicketsFilterMenu.Items)) {
-                try { $menuItem.Remove_Click($script:TicketsFilterMenuHandler) } catch { }
+        if ($script:TicketsFilterCheckboxHandler) {
+            foreach ($checkbox in @($script:TicketsFilterOpenCheckbox, $script:TicketsFilterClosedCheckbox, $script:TicketsFilterDeletedCheckbox)) {
+                if (-not $checkbox) { continue }
+                try { $checkbox.RemoveHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, $script:TicketsFilterCheckboxHandler) } catch { }
             }
         }
     } catch { }
@@ -458,37 +536,65 @@ function Initialize-QOTicketsUI {
         $grid.ContextMenu = $null
     }
     $script:TicketsFilterMenu = New-Object System.Windows.Controls.ContextMenu
-    foreach ($viewName in @("Open", "Closed", "Deleted", "All")) {
-        $menuItem = New-Object System.Windows.Controls.MenuItem
-        $menuItem.Header = $viewName
-        $menuItem.Tag = $viewName
-        $script:TicketsFilterMenu.Items.Add($menuItem) | Out-Null
-    }
+    $script:TicketsFilterMenu.StaysOpen = $true
 
-    $setTicketsView = {
-        param([string]$ViewName)
-        $viewValue = if ([string]::IsNullOrWhiteSpace($ViewName)) { "All" } else { $ViewName }
-        $script:TicketsCurrentView = $viewValue
-        $btnDelete.IsEnabled = ($viewValue -ne "Deleted")
-        $btnFilterMenu.ToolTip = ("Filter tickets ({0})" -f $viewValue)
-        foreach ($menuItem in @($script:TicketsFilterMenu.Items)) {
-            try { $menuItem.IsChecked = ($menuItem.Tag -eq $viewValue) } catch { }
+    $filterState = Get-QOTicketsFilterState
+
+    $script:TicketsFilterOpenCheckbox = New-Object System.Windows.Controls.CheckBox
+    $script:TicketsFilterOpenCheckbox.Content = "Open"
+    $script:TicketsFilterOpenCheckbox.Margin = "8,6,8,2"
+    $script:TicketsFilterOpenCheckbox.IsChecked = [bool]$filterState.ShowOpen
+    $script:TicketsFilterMenu.Items.Add($script:TicketsFilterOpenCheckbox) | Out-Null
+
+    $script:TicketsFilterClosedCheckbox = New-Object System.Windows.Controls.CheckBox
+    $script:TicketsFilterClosedCheckbox.Content = "Closed"
+    $script:TicketsFilterClosedCheckbox.Margin = "8,2,8,2"
+    $script:TicketsFilterClosedCheckbox.IsChecked = [bool]$filterState.ShowClosed
+    $script:TicketsFilterMenu.Items.Add($script:TicketsFilterClosedCheckbox) | Out-Null
+
+    $script:TicketsFilterDeletedCheckbox = New-Object System.Windows.Controls.CheckBox
+    $script:TicketsFilterDeletedCheckbox.Content = "Deleted"
+    $script:TicketsFilterDeletedCheckbox.Margin = "8,2,8,6"
+    $script:TicketsFilterDeletedCheckbox.IsChecked = [bool]$filterState.ShowDeleted
+    $script:TicketsFilterMenu.Items.Add($script:TicketsFilterDeletedCheckbox) | Out-Null
+
+    $updateFilterTooltip = {
+        $state = Get-QOTicketsFilterState
+        $labels = @()
+        if ($state.ShowOpen) { $labels += "Open" }
+        if ($state.ShowClosed) { $labels += "Closed" }
+        if ($state.ShowDeleted) { $labels += "Deleted" }
+        $summary = if ($labels.Count -gt 0) { $labels -join ", " } else { "None" }
+        $btnFilterMenu.ToolTip = ("Filter tickets ({0})" -f $summary)
+    }.GetNewClosure()
+
+    $applyFilterSelection = {
+        param([bool]$LogChange = $false)
+
+        $state = Get-QOTicketsFilterState
+        $state.ShowOpen = [bool]$script:TicketsFilterOpenCheckbox.IsChecked
+        $state.ShowClosed = [bool]$script:TicketsFilterClosedCheckbox.IsChecked
+
+        & $updateFilterTooltip
+
+        if ($LogChange) {
+            Write-QOTicketsFilterLog -Open $state.ShowOpen -Closed $state.ShowClosed -Deleted $state.ShowDeleted
         }
         Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
     }.GetNewClosure()
 
-    $script:TicketsFilterMenuHandler = [System.Windows.RoutedEventHandler]{
+    $script:TicketsFilterCheckboxHandler = [System.Windows.RoutedEventHandler]{
         param($sender, $args)
         try {
-            $viewValue = [string]$sender.Tag
-            & $setTicketsView $viewValue
+             & $applyFilterSelection $true
         } catch {
             Write-QOTicketsUILog ("Tickets: Filter change failed: " + $_.Exception.Message) "ERROR"
         }
     }.GetNewClosure()
 
-    foreach ($menuItem in @($script:TicketsFilterMenu.Items)) {
-        try { $menuItem.Add_Click($script:TicketsFilterMenuHandler) } catch { }
+    foreach ($checkbox in @($script:TicketsFilterOpenCheckbox, $script:TicketsFilterClosedCheckbox, $script:TicketsFilterDeletedCheckbox)) {
+        if (-not $checkbox) { continue }
+        try { $checkbox.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, $script:TicketsFilterCheckboxHandler) } catch { }
     }
 
     $script:TicketsFilterButtonHandler = [System.Windows.RoutedEventHandler]{
@@ -599,8 +705,20 @@ function Initialize-QOTicketsUI {
             }
 
 
-            if ($script:TicketsCurrentView -eq "Deleted") {
-                $script:TicketsUndeleteMenuItem.IsEnabled = ($grid.SelectedItems.Count -gt 0)
+            $selectedItems = @($grid.SelectedItems)
+            $hasDeleted = $false
+            foreach ($item in $selectedItems) {
+                if ($null -eq $item) { continue }
+                try {
+                    if ($item.PSObject.Properties.Name -contains "IsDeleted" -and [bool]$item.IsDeleted) {
+                        $hasDeleted = $true
+                        break
+                    }
+                } catch { }
+            }
+
+            if ($hasDeleted) {
+                $script:TicketsUndeleteMenuItem.IsEnabled = ($selectedItems.Count -gt 0)
                 $script:TicketsRowContextMenu.PlacementTarget = $cell
                 $script:TicketsRowContextMenu.IsOpen = $true
                 $args.Handled = $true
@@ -686,7 +804,7 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
     $btnToggleDetails.Add_Click($script:TicketsToggleDetailsHandler)
-    & $setTicketsView "All"
+    & $applyFilterSelection $false
     
     # Selection changed handler typed
     $script:TicketsSelectionChangedHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
