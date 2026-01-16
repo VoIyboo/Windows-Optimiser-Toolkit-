@@ -37,6 +37,11 @@ $script:TicketsFilterClosedCheckbox = $null
 $script:TicketsFilterDeletedCheckbox = $null
 $script:TicketsFilterCheckboxHandler = $null
 $script:AllTickets = $null
+$script:TicketsFilterDefaults = [pscustomobject]@{
+    ShowOpen    = $true
+    ShowClosed  = $true
+    ShowDeleted = $false
+}
 $script:ShowOpen = $true
 $script:ShowClosed = $true
 $script:ShowDeleted = $false
@@ -67,9 +72,9 @@ Write-QOTicketsUILog "=== Tickets.UI.psm1 LOADED ==="
 
 function Get-QOTicketsDefaultFilterState {
     return [pscustomobject]@{
-        ShowOpen    = $true
-        ShowClosed  = $true
-        ShowDeleted = $false
+        ShowOpen    = [bool]$script:TicketsFilterDefaults.ShowOpen
+        ShowClosed  = [bool]$script:TicketsFilterDefaults.ShowClosed
+        ShowDeleted = [bool]$script:TicketsFilterDefaults.ShowDeleted
     }
 }
 
@@ -587,7 +592,24 @@ function Initialize-QOTicketsUI {
         $script:ShowClosed = [bool]$script:TicketsFilterClosedCheckbox.IsChecked
         $script:ShowDeleted = [bool]$script:TicketsFilterDeletedCheckbox.IsChecked
 
-        $state = Get-QOTicketsFilterState
+        if (-not $script:TicketsFilterState) {
+            $script:TicketsFilterState = [pscustomobject]@{
+                ShowOpen    = [bool]$script:TicketsFilterDefaults.ShowOpen
+                ShowClosed  = [bool]$script:TicketsFilterDefaults.ShowClosed
+                ShowDeleted = [bool]$script:TicketsFilterDefaults.ShowDeleted
+            }
+        }
+
+        foreach ($prop in @("ShowOpen", "ShowClosed", "ShowDeleted")) {
+            if ($script:TicketsFilterState.PSObject.Properties.Name -notcontains $prop) {
+                $script:TicketsFilterState | Add-Member -NotePropertyName $prop -NotePropertyValue ([bool]$script:TicketsFilterDefaults.$prop) -Force
+            }
+            if ($null -eq $script:TicketsFilterState.$prop) {
+                $script:TicketsFilterState.$prop = [bool]$script:TicketsFilterDefaults.$prop
+            }
+        }
+
+        $state = $script:TicketsFilterState
         $state.ShowOpen = $script:ShowOpen
         $state.ShowClosed = $script:ShowClosed
         $state.ShowDeleted = $script:ShowDeleted
