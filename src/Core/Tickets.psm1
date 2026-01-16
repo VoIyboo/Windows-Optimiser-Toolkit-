@@ -665,11 +665,15 @@ function Get-QOTicketStatuses {
 
 function Get-QOTicketsByBucket {
     param(
-        [ValidateSet("Open", "Closed", "Deleted", "All")]
-        [string]$Bucket = "Open"
+        [string]$Bucket = "All"
     )
 
-    $bucketValue = if ([string]::IsNullOrWhiteSpace([string]$Bucket)) { "Open" } else { [string]$Bucket }
+    $bucketValue = if ([string]::IsNullOrWhiteSpace([string]$Bucket)) { "All" } else { ([string]$Bucket).Trim() }
+    $allowedBuckets = @("Open", "Closed", "Deleted", "All")
+    if ($allowedBuckets -notcontains $bucketValue) {
+        Write-QOTicketsCoreLog ("Tickets: Invalid bucket '{0}' supplied. Falling back to All." -f $bucketValue) "WARN"
+        $bucketValue = "All"
+    }
     $db = Get-QOTickets
     $items = @($db.Tickets)
     $totalCount = 0
