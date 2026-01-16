@@ -471,7 +471,7 @@ function Initialize-QOTicketsUI {
         if ($script:TicketsFilterCheckboxHandler) {
             foreach ($checkbox in @($script:TicketsFilterOpenCheckbox, $script:TicketsFilterClosedCheckbox, $script:TicketsFilterDeletedCheckbox)) {
                 if (-not $checkbox) { continue }
-                try { $checkbox.RemoveHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, $script:TicketsFilterCheckboxHandler) } catch { }
+                try { $checkbox.Remove_Click($script:TicketsFilterCheckboxHandler) } catch { }
             }
         }
     } catch { }
@@ -537,12 +537,13 @@ function Initialize-QOTicketsUI {
     }
     $script:TicketsFilterMenu = New-Object System.Windows.Controls.ContextMenu
     $script:TicketsFilterMenu.StaysOpen = $true
+    $btnFilterMenu.ContextMenu = $script:TicketsFilterMenu
 
     $filterState = Get-QOTicketsFilterState
 
-    $script:TicketsFilterOpenCheckbox = New-Object System.Windows.Controls.CheckBox
-    $script:TicketsFilterOpenCheckbox.Content = "Open"
-    $script:TicketsFilterOpenCheckbox.Margin = "8,6,8,2"
+    $script:TicketsFilterOpenCheckbox = New-Object System.Windows.Controls.MenuItem
+    $script:TicketsFilterOpenCheckbox.Header = "Open"
+    $script:TicketsFilterOpenCheckbox.IsCheckable = $true
     $script:TicketsFilterOpenCheckbox.IsChecked = [bool]$filterState.ShowOpen
     $script:TicketsFilterMenu.Items.Add($script:TicketsFilterOpenCheckbox) | Out-Null
 
@@ -552,9 +553,9 @@ function Initialize-QOTicketsUI {
     $script:TicketsFilterClosedCheckbox.IsChecked = [bool]$filterState.ShowClosed
     $script:TicketsFilterMenu.Items.Add($script:TicketsFilterClosedCheckbox) | Out-Null
 
-    $script:TicketsFilterDeletedCheckbox = New-Object System.Windows.Controls.CheckBox
-    $script:TicketsFilterDeletedCheckbox.Content = "Deleted"
-    $script:TicketsFilterDeletedCheckbox.Margin = "8,2,8,6"
+    $script:TicketsFilterDeletedCheckbox = New-Object System.Windows.Controls.MenuItem
+    $script:TicketsFilterDeletedCheckbox.Header = "Deleted"
+    $script:TicketsFilterDeletedCheckbox.IsCheckable = $true
     $script:TicketsFilterDeletedCheckbox.IsChecked = [bool]$filterState.ShowDeleted
     $script:TicketsFilterMenu.Items.Add($script:TicketsFilterDeletedCheckbox) | Out-Null
 
@@ -574,6 +575,7 @@ function Initialize-QOTicketsUI {
         $state = Get-QOTicketsFilterState
         $state.ShowOpen = [bool]$script:TicketsFilterOpenCheckbox.IsChecked
         $state.ShowClosed = [bool]$script:TicketsFilterClosedCheckbox.IsChecked
+        $state.ShowDeleted = [bool]$script:TicketsFilterDeletedCheckbox.IsChecked
 
         & $updateFilterTooltip
 
@@ -594,14 +596,21 @@ function Initialize-QOTicketsUI {
 
     foreach ($checkbox in @($script:TicketsFilterOpenCheckbox, $script:TicketsFilterClosedCheckbox, $script:TicketsFilterDeletedCheckbox)) {
         if (-not $checkbox) { continue }
-        try { $checkbox.AddHandler([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent, $script:TicketsFilterCheckboxHandler) } catch { }
+        try { $checkbox.Add_Click($script:TicketsFilterCheckboxHandler) } catch { }
     }
 
     $script:TicketsFilterButtonHandler = [System.Windows.RoutedEventHandler]{
         param($sender, $args)
         try {
-            $script:TicketsFilterMenu.PlacementTarget = $btnFilterMenu
-            $script:TicketsFilterMenu.IsOpen = $true
+            $cm = $btnFilterMenu.ContextMenu
+            if (-not $cm) { throw "FilterButton.ContextMenu is null" }
+            if ($cm -is [System.Windows.Controls.ContextMenu]) {
+                $cm.PlacementTarget = $btnFilterMenu
+                $cm.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
+                $cm.IsOpen = $true
+            } else {
+                throw "Filter menu is not a ContextMenu"
+            }
         } catch {
             Write-QOTicketsUILog ("Tickets: Filter menu open failed: " + $_.Exception.Message) "ERROR"
         }
