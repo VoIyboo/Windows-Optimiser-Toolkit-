@@ -30,7 +30,7 @@ $script:TicketsAutoRefreshInProgress = $false
 $script:TicketsFileWatcher = $null
 $script:TicketsFileWatcherEvents = @()
 $script:TicketsFileRefreshTimer = $null
-$script:TicketsCurrentView = "Open"
+$script:TicketsCurrentView = "All"
 
 function Write-QOTicketsUILog {
     param(
@@ -74,7 +74,13 @@ function Get-QOTicketsForGrid {
             $supportsBucket = ($GetTicketsCmd.Parameters.Keys -contains "Bucket")
         } catch { }
         if ($supportsBucket) {
-            $items = & $GetTicketsCmd -Bucket $View
+            $allowedBuckets = @("Open", "Closed", "Deleted", "All")
+            $bucketValue = if ([string]::IsNullOrWhiteSpace([string]$View)) { "All" } else { ([string]$View).Trim() }
+            if ($allowedBuckets -notcontains $bucketValue) {
+                Write-QOTicketsUILog ("Tickets: Invalid bucket '{0}' supplied. Falling back to All." -f $bucketValue) "WARN"
+                $bucketValue = "All"
+            }
+            $items = & $GetTicketsCmd -Bucket $bucketValue
         } elseif ($supportsFolder) {
             $folderValue = if ($View -eq "Deleted") { "Deleted" } else { "Active" }
             $items = & $GetTicketsCmd -Folder $folderValue
@@ -451,7 +457,7 @@ function Initialize-QOTicketsUI {
 
     $setTicketsView = {
         param([string]$ViewName)
-        $viewValue = if ([string]::IsNullOrWhiteSpace($ViewName)) { "Open" } else { $ViewName }
+        $viewValue = if ([string]::IsNullOrWhiteSpace($ViewName)) { "All" } else { $ViewName }
         $script:TicketsCurrentView = $viewValue
         $btnDelete.IsEnabled = ($viewValue -ne "Deleted")
         $btnFilterMenu.ToolTip = ("Filter tickets ({0})" -f $viewValue)
@@ -670,7 +676,7 @@ function Initialize-QOTicketsUI {
         } catch { }
     }.GetNewClosure()
     $btnToggleDetails.Add_Click($script:TicketsToggleDetailsHandler)
-    & $setTicketsView "Open"
+    & $setTicketsView "All"
     
     # Selection changed handler typed
     $script:TicketsSelectionChangedHandler = [System.Windows.Controls.SelectionChangedEventHandler]{
