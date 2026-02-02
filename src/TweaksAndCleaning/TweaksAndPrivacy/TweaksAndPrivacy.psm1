@@ -8,39 +8,101 @@
 Import-Module "$PSScriptRoot\..\..\Core\Config\Config.psm1"   -Force
 Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force
 
+function Set-QOTRegistryValue {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)]$Value,
+        [Parameter()][ValidateSet("DWord","String","ExpandString")][string]$Type = "DWord"
+    )
+
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            New-Item -Path $Path -Force | Out-Null
+        }
+
+        New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
+        Write-QLog ("Tweaks: set {0}\\{1} = {2}" -f $Path, $Name, $Value)
+        return $true
+    }
+    catch {
+        Write-QLog ("Tweaks: failed to set {0}\\{1}: {2}" -f $Path, $Name, $_.Exception.Message) "ERROR"
+        return $false
+    }
+}
+
+function Set-QOTRegistryDefaultValue {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)]$Value
+    )
+
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            New-Item -Path $Path -Force | Out-Null
+        }
+
+        Set-ItemProperty -Path $Path -Name "(default)" -Value $Value -Force | Out-Null
+        Write-QLog ("Tweaks: set {0}\\(Default) = {1}" -f $Path, $Value)
+        return $true
+    }
+    catch {
+        Write-QLog ("Tweaks: failed to set default for {0}: {1}" -f $Path, $_.Exception.Message) "ERROR"
+        return $false
+    }
+}
 
 # ------------------------------
 # Start menu / recommendations
 # ------------------------------
 function Invoke-QTweakStartMenuRecommendations {
-    Write-QLog "Tweaks: Disable Start menu recommendations (placeholder)"
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
+    Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
+    Write-QLog "Tweaks: Start menu recommendations disabled."
 }
 
 function Invoke-QTweakSuggestedApps {
-    Write-QLog "Tweaks: Disable suggested apps / promos (placeholder)"
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
+    Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
+    Write-QLog "Tweaks: Start menu recommendations disabled."
 }
 
 function Invoke-QTweakTipsInStart {
-    Write-QLog "Tweaks: Disable tips and suggestions in Start (placeholder)"
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338389Enabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path $path -Name "SystemPaneSuggestionsEnabled" -Value 0 | Out-Null
+    Write-QLog "Tweaks: Tips and suggestions in Start disabled."
 }
 
 function Invoke-QTweakBingSearch {
-    Write-QLog "Tweaks: Disable Bing/web results in Start search (placeholder)"
+    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "CortanaConsent" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch" -Value 1 | Out-Null
+    Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "DisableSearchBoxSuggestions" -Value 1 | Out-Null
+    Write-QLog "Tweaks: Bing/web results in Start search disabled."
 }
 
 function Invoke-QTweakClassicContextMenu {
-    Write-QLog "Tweaks: Use classic context menu (placeholder)"
+    $path = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
+    Set-QOTRegistryDefaultValue -Path $path -Value "" | Out-Null
+    Write-QLog "Tweaks: Classic context menu enabled (restart Explorer for effect)."
 }
 
 # ------------------------------
 # Widgets / News & Interests
 # ------------------------------
 function Invoke-QTweakWidgets {
-    Write-QLog "Tweaks: Disable Widgets (placeholder)"
+    $path = "HKLM:\SOFTWARE\Policies\Microsoft\Dsh"
+    Set-QOTRegistryValue -Path $path -Name "AllowWidgets" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path $path -Name "AllowNewsAndInterests" -Value 0 | Out-Null
+    Write-QLog "Tweaks: Widgets disabled."
 }
 
 function Invoke-QTweakNewsAndInterests {
-    Write-QLog "Tweaks: Disable News & Interests (placeholder)"
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds" -Name "EnableFeeds" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2 | Out-Null
+    Write-QLog "Tweaks: News/taskbar content disabled."
 }
 
 # ------------------------------
@@ -58,15 +120,25 @@ function Invoke-QTweakAnimations {
 # Tips / advertising / feedback
 # ------------------------------
 function Invoke-QTweakOnlineTips {
-    Write-QLog "Tweaks: Turn off online tips & suggestions (placeholder)"
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353694Enabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353696Enabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353698Enabled" -Value 0 | Out-Null
+    Write-QLog "Tweaks: Online tips and suggestions disabled."
 }
 
 function Invoke-QTweakAdvertisingId {
-    Write-QLog "Tweaks: Disable advertising ID (placeholder)"
+    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy" -Value 1 | Out-Null
+    Write-QLog "Tweaks: Advertising ID disabled."
 }
 
 function Invoke-QTweakFeedbackHub {
-    Write-QLog "Tweaks: Disable Feedback Hub prompts (placeholder)"
+    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "NumberOfSIUFInPeriod" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "PeriodInNanoSeconds" -Value 0 | Out-Null
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "DoNotShowFeedbackNotifications" -Value 1 | Out-Null
+    Write-QLog "Tweaks: Feedback and survey prompts reduced."
 }
 
 function Invoke-QTweakTelemetrySafe {
@@ -77,7 +149,8 @@ function Invoke-QTweakTelemetrySafe {
 # Meet Now / Cortana / stock apps
 # ------------------------------
 function Invoke-QTweakMeetNow {
-    Write-QLog "Tweaks: Turn off Meet Now (placeholder)"
+    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideSCAMeetNow" -Value 1 | Out-Null
+    Write-QLog "Tweaks: Meet Now hidden."
 }
 
 function Invoke-QTweakCortanaLeftovers {
