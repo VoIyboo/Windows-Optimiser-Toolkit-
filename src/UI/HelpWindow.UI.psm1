@@ -19,16 +19,15 @@ function Get-QOTHelpSections {
         }
         [pscustomobject]@{
             Title = "Checkboxes map directly to actions"
-            Body  = "Each checkbox represents a specific action in the toolkit. Selecting a checkbox queues that action, and clearing it removes the action from the run list. You can mix actions across tabs—every checked item is included."
+            Body  = "Each checkbox represents a specific action in the toolkit. Selecting a checkbox queues that action, and clearing it removes the action from the run list. You can mix actions across tabs - every checked item is included."
         }
         [pscustomobject]@{
-            Title = "What “Run selected actions” does"
+            Title = "What \"Run selected actions\" does"
             Body  = "The Run selected actions button executes every checked item in sequence. It only runs what is selected at the time you click the button and leaves unchecked actions untouched."
         }
         [pscustomobject]@{
             Title = "Important safety notes"
-            Body  = "• Review selections before running any actions.`n• Close important apps to avoid file locks or conflicts.`n• Some actions change system settings—use a maintenance window when possible.`n• If you are unsure about an action, leave it unchecked and review it first."
-        }
+            Body  = "* Review selections before running any actions.`n* Close important apps to avoid file locks or conflicts.`n* Some actions change system settings - use a maintenance window when possible.`n* If you are unsure about an action, leave it unchecked and review it first."
     )
 }
 
