@@ -57,7 +57,7 @@ function Initialize-QOTAppsUI {
                 $installGridRef = $installGrid
                 $statusLabelRef = $Window.FindName("StatusLabel")
                 $items += [pscustomobject]@{
-                    Id = "Apps.RunSelected"
+                    ActionId = "Apps.RunSelected"
                     Label = "Run selected app actions"
                     IsSelected = ({
                         param($window)
@@ -67,7 +67,6 @@ function Initialize-QOTAppsUI {
                         $commonSelected = @($common | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false })
                         return (($installedSelected.Count + $commonSelected.Count) -gt 0)
                     }).GetNewClosure()
-                   Execute = ({ param($window) Invoke-QOTRunSelectedAppsActions -Window $window -AppsGrid $appsGridRef -InstallGrid $installGridRef -StatusLabel $statusLabelRef }).GetNewClosure()
                 }
             }
 
