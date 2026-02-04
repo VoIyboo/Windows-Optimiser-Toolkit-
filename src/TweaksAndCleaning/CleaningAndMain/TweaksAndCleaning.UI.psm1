@@ -10,28 +10,6 @@ Import-Module "$PSScriptRoot\..\..\Core\Actions\ActionRegistry.psm1" -Force -Err
 Import-Module "$PSScriptRoot\Cleaning.psm1"                          -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\..\TweaksAndPrivacy\TweaksAndPrivacy.psm1" -Force -ErrorAction Stop
 
-function Invoke-QOTAction {
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [Parameter(Mandatory)][string]$Label
-    )
-
-    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
-    if (-not $cmd) {
-        try { Write-QLog ("Tweaks/Cleaning action not found: {0}" -f $Name) "ERROR" } catch { }
-        return $false
-    }
-
-    try {
-        & $cmd
-        return $true
-    }
-    catch {
-        try { Write-QLog ("Tweaks/Cleaning action failed ({0}): {1}" -f $Label, $_.Exception.Message) "ERROR" } catch { }
-        return $false
-    }
-}
-
 function Get-QOTNamedElement {
     param(
         [Parameter(Mandatory)]
@@ -87,27 +65,27 @@ function Initialize-QOTTweaksAndCleaningUI {
         }
 
         $actions = @(
-            @{ Name = "CbCleanTempFiles";       Label = "Clear temporary files";                 Command = "Invoke-QCleanTemp" },
-            @{ Name = "CbEmptyRecycleBin";      Label = "Empty Recycle Bin";                      Command = "Invoke-QCleanRecycleBin" },
-            @{ Name = "CbCleanDoCache";         Label = "Clean Delivery Optimisation cache";      Command = "Invoke-QCleanDOCache" },
-            @{ Name = "CbCleanWuCache";         Label = "Clear Windows Update cache";             Command = "Invoke-QCleanWindowsUpdateCache" },
-            @{ Name = "CbCleanThumbCache";      Label = "Clean thumbnail cache";                  Command = "Invoke-QCleanThumbnailCache" },
-            @{ Name = "CbCleanErrorLogs";       Label = "Clean old error logs and crash dumps";   Command = "Invoke-QCleanErrorLogs" },
-            @{ Name = "CbCleanSetupLeftovers";  Label = "Remove safe setup / upgrade leftovers";  Command = "Invoke-QCleanSetupLeftovers" },
-            @{ Name = "CbClearStoreCache";      Label = "Clear Microsoft Store cache";            Command = "Invoke-QCleanStoreCache" },
-            @{ Name = "CbEdgeLightCleanup";     Label = "Light clean of Microsoft Edge cache";    Command = "Invoke-QCleanEdgeCache" },
-            @{ Name = "CbChromeLightCleanup";   Label = "Light clean of Chrome / Chromium cache"; Command = "Invoke-QCleanChromeCache" },
-            @{ Name = "CbDisableStartRecommended"; Label = "Hide Start menu recommended items";   Command = "Invoke-QTweakStartMenuRecommendations" },
-            @{ Name = "CbDisableSuggestedApps";    Label = "Turn off suggested apps and promotions"; Command = "Invoke-QTweakSuggestedApps" },
-            @{ Name = "CbDisableTipsStart";        Label = "Disable tips and suggestions in Start"; Command = "Invoke-QTweakTipsInStart" },
-            @{ Name = "CbDisableBingSearch";       Label = "Turn off Bing / web results in Start search"; Command = "Invoke-QTweakBingSearch" },
-            @{ Name = "CbClassicMoreOptions";      Label = "Use classic 'More options' right-click menu"; Command = "Invoke-QTweakClassicContextMenu" },
-            @{ Name = "CbDisableWidgets";          Label = "Turn off Widgets";                    Command = "Invoke-QTweakWidgets" },
-            @{ Name = "CbDisableTaskbarNews";      Label = "Turn off News / taskbar content";      Command = "Invoke-QTweakNewsAndInterests" },
-            @{ Name = "CbDisableMeetNow";          Label = "Hide legacy Meet Now button";          Command = "Invoke-QTweakMeetNow" },
-            @{ Name = "CbDisableAdvertisingId";    Label = "Turn off advertising ID";              Command = "Invoke-QTweakAdvertisingId" },
-            @{ Name = "CbLimitFeedbackPrompts";    Label = "Reduce feedback and survey prompts";   Command = "Invoke-QTweakFeedbackHub" },
-            @{ Name = "CbDisableOnlineTips";       Label = "Disable online tips and suggestions";  Command = "Invoke-QTweakOnlineTips" }
+            @{ Name = "CbCleanTempFiles";       Label = "Clear temporary files";                 ActionId = "Invoke-QCleanTemp" },
+            @{ Name = "CbEmptyRecycleBin";      Label = "Empty Recycle Bin";                      ActionId = "Invoke-QCleanRecycleBin" },
+            @{ Name = "CbCleanDoCache";         Label = "Clean Delivery Optimisation cache";      ActionId = "Invoke-QCleanDOCache" },
+            @{ Name = "CbCleanWuCache";         Label = "Clear Windows Update cache";             ActionId = "Invoke-QCleanWindowsUpdateCache" },
+            @{ Name = "CbCleanThumbCache";      Label = "Clean thumbnail cache";                  ActionId = "Invoke-QCleanThumbnailCache" },
+            @{ Name = "CbCleanErrorLogs";       Label = "Clean old error logs and crash dumps";   ActionId = "Invoke-QCleanErrorLogs" },
+            @{ Name = "CbCleanSetupLeftovers";  Label = "Remove safe setup / upgrade leftovers";  ActionId = "Invoke-QCleanSetupLeftovers" },
+            @{ Name = "CbClearStoreCache";      Label = "Clear Microsoft Store cache";            ActionId = "Invoke-QCleanStoreCache" },
+            @{ Name = "CbEdgeLightCleanup";     Label = "Light clean of Microsoft Edge cache";    ActionId = "Invoke-QCleanEdgeCache" },
+            @{ Name = "CbChromeLightCleanup";   Label = "Light clean of Chrome / Chromium cache"; ActionId = "Invoke-QCleanChromeCache" },
+            @{ Name = "CbDisableStartRecommended"; Label = "Hide Start menu recommended items";   ActionId = "Invoke-QTweakStartMenuRecommendations" },
+            @{ Name = "CbDisableSuggestedApps";    Label = "Turn off suggested apps and promotions"; ActionId = "Invoke-QTweakSuggestedApps" },
+            @{ Name = "CbDisableTipsStart";        Label = "Disable tips and suggestions in Start"; ActionId = "Invoke-QTweakTipsInStart" },
+            @{ Name = "CbDisableBingSearch";       Label = "Turn off Bing / web results in Start search"; ActionId = "Invoke-QTweakBingSearch" },
+            @{ Name = "CbClassicMoreOptions";      Label = "Use classic 'More options' right-click menu"; ActionId = "Invoke-QTweakClassicContextMenu" },
+            @{ Name = "CbDisableWidgets";          Label = "Turn off Widgets";                    ActionId = "Invoke-QTweakWidgets" },
+            @{ Name = "CbDisableTaskbarNews";      Label = "Turn off News / taskbar content";      ActionId = "Invoke-QTweakNewsAndInterests" },
+            @{ Name = "CbDisableMeetNow";          Label = "Hide legacy Meet Now button";          ActionId = "Invoke-QTweakMeetNow" },
+            @{ Name = "CbDisableAdvertisingId";    Label = "Turn off advertising ID";              ActionId = "Invoke-QTweakAdvertisingId" },
+            @{ Name = "CbLimitFeedbackPrompts";    Label = "Reduce feedback and survey prompts";   ActionId = "Invoke-QTweakFeedbackHub" },
+            @{ Name = "CbDisableOnlineTips";       Label = "Disable online tips and suggestions";  ActionId = "Invoke-QTweakOnlineTips" }
         )
         
         $actionsSnapshot = $actions
@@ -119,17 +97,16 @@ function Initialize-QOTTweaksAndCleaningUI {
             foreach ($action in $actionsSnapshot) {
                 $actionName = $action.Name
                 $actionLabel = $action.Label
-                $actionCommand = $action.Command
+                $actionId = $action.ActionId
 
                 $items += [pscustomobject]@{
-                    Id = $actionCommand
+                    ActionId = $actionId
                     Label = $actionLabel
                     IsSelected = ({
                         param($window)
                         $control = Get-QOTNamedElement -Root $window -Name $actionName
                         $control -and $control.IsChecked -eq $true
                     }).GetNewClosure()
-                    Execute = ({ param($window) Invoke-QOTAction -Name $actionCommand -Label $actionLabel | Out-Null }).GetNewClosure()
                 }
             }
             return $items
