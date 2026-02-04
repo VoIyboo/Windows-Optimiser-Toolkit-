@@ -11,6 +11,47 @@ function Initialize-QOTHelpUIAssemblies {
     $script:QOTHelp_AssembliesLoaded = $true
 }
 
+function Convert-HelpWindowToHostableRoot {
+    param([Parameter(Mandatory)][xml]$Doc)
+
+    $win = $Doc.DocumentElement
+    if (-not $win -or $win.LocalName -ne "Window") {
+        throw "HelpWindow.xaml root must be <Window>."
+    }
+
+    $ns   = $win.NamespaceURI
+    $grid = $Doc.CreateElement("Grid", $ns)
+
+    $removeAttrs = @(
+        "Title","Height","Width","Topmost","WindowStartupLocation",
+        "ResizeMode","SizeToContent","ShowInTaskbar","WindowStyle","AllowsTransparency"
+    )
+
+    foreach ($a in @($win.Attributes)) {
+        if ($removeAttrs -contains $a.Name) { continue }
+        $null = $grid.Attributes.Append($a.Clone())
+    }
+
+    foreach ($child in @($win.ChildNodes)) {
+        if ($child.NodeType -ne "Element") { continue }
+
+        if ($child.LocalName -eq "Window.Resources") {
+            $newRes = $Doc.CreateElement("Grid.Resources", $ns)
+            foreach ($rChild in @($child.ChildNodes)) {
+                $null = $newRes.AppendChild($rChild.Clone())
+            }
+            $null = $grid.AppendChild($newRes)
+        } else {
+            $null = $grid.AppendChild($child.Clone())
+        }
+    }
+
+    $null = $Doc.RemoveChild($win)
+    $null = $Doc.AppendChild($grid)
+
+    return $Doc
+}
+
 function Get-QOTHelpSections {
     return @(
         [pscustomobject]@{
@@ -32,11 +73,7 @@ function Get-QOTHelpSections {
     )
 }
 
-function Show-QOTHelpWindow {
-    param(
-        [System.Windows.Window]$Owner
-    )
-
+function New-QOTHelpView {
     Initialize-QOTHelpUIAssemblies
 
     $xamlPath = Join-Path $PSScriptRoot "HelpWindow.xaml"
@@ -44,24 +81,21 @@ function Show-QOTHelpWindow {
         throw "HelpWindow.xaml not found at $xamlPath"
     }
 
-    $xaml   = Get-Content -LiteralPath $xamlPath -Raw
-    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
-    $window = [System.Windows.Markup.XamlReader]::Load($reader)
+    $reader = New-Object System.Xml.XmlNodeReader ($doc)
+    $root = [System.Windows.Markup.XamlReader]::Load($reader)
 
-    if (-not $window) {
-        throw "Failed to load HelpWindow.xaml"
-    }
+    if (-not $root) { throw "Failed to load HelpWindow.xaml" }
 
     if ($Owner) {
         $window.Owner = $Owner
     }
 
-    $sectionsControl = $window.FindName("HelpSections")
+    $sectionsControl = $root.FindName("HelpSections")
     if ($sectionsControl) {
         $sectionsControl.ItemsSource = (Get-QOTHelpSections)
     }
 
-    $window.ShowDialog() | Out-Null
+    return $root
 }
 
-Export-ModuleMember -Function Show-QOTHelpWindow
+Export-ModuleMember -Function New-QOTHelpView
