@@ -155,7 +155,7 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
     Remove-Item Function:\New-QOTSettingsView   -ErrorAction SilentlyContinue
-    Remove-Item Function:\Show-QOTHelpWindow    -ErrorAction SilentlyContinue
+    Remove-Item Function:\New-QOTHelpView       -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTAppsUI  -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTAdvancedTweaksUI -ErrorAction SilentlyContinue
@@ -236,7 +236,7 @@ function Start-QOTMainWindow {
         $map = Get-QOTNamedElementsMap -Root $window
         $wanted = @(
             "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton",
-            "SettingsHost","BtnSettings","BtnHelp","MainTabControl","TabSettings",
+            "SettingsHost","HelpHost","BtnSettings","BtnHelp","MainTabControl","TabSettings","TabHelp",
             "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
         )
 
@@ -393,6 +393,33 @@ function Start-QOTMainWindow {
         $tb.Margin = "10"
         $settingsHost.Content = $tb
     }
+    # ------------------------------------------------------------
+    # Initialise Help UI (hosted in HelpHost)
+    # ------------------------------------------------------------
+    $helpHost = $window.FindName("HelpHost")
+    if (-not $helpHost) {
+        throw "HelpHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='HelpHost' />"
+    }
+
+    try {
+        $cmd = Get-Command New-QOTHelpView -ErrorAction SilentlyContinue
+        if (-not $cmd) {
+            throw "New-QOTHelpView not found. Check UI\HelpWindow.UI.psm1 exports it."
+        }
+
+        $helpView = New-QOTHelpView
+        if (-not $helpView) { throw "Help view returned null" }
+
+        $helpHost.Content = $helpView
+    }
+    catch {
+        $tb = New-Object System.Windows.Controls.TextBlock
+        $tb.Text = "Help failed to load.`r`n$($_.Exception.Message)"
+        $tb.Foreground = [System.Windows.Media.Brushes]::White
+        $tb.Margin = "10"
+        $helpHost.Content = $tb
+    }
+
 
     # ------------------------------------------------------------
     # Gear icon switches to Settings tab (tab is hidden)
@@ -408,11 +435,9 @@ function Start-QOTMainWindow {
         })
     }
 
-    if ($btnHelp) {
+    if ($btnHelp -and $tabs -and $tabHelp) {
         $btnHelp.Add_Click({
-            if (Get-Command Show-QOTHelpWindow -ErrorAction SilentlyContinue) {
-                Show-QOTHelpWindow -Owner $window
-            }
+            $tabs.SelectedItem = $tabHelp
         })
     }
     
