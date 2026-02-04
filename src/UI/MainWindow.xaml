@@ -523,6 +523,17 @@
                     </Grid>
                 </TabItem>
 
+                <!-- Help (HIDDEN TAB, BUTTON ONLY) -->
+                <TabItem x:Name="TabHelp"
+                         Header="Help"
+                         Visibility="Collapsed">
+                    <Grid Margin="5,10,5,5">
+                        <GroupBox Header="Help" Margin="0">
+                            <ContentControl x:Name="HelpHost" />
+                        </GroupBox>
+                    </Grid>
+                </TabItem>
+
                 <!-- Settings (HIDDEN TAB, GEAR ONLY) -->
                 <TabItem x:Name="TabSettings"
                          Header="Settings"
