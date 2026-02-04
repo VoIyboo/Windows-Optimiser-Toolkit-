@@ -6,10 +6,82 @@ $ErrorActionPreference = "Stop"
 Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction SilentlyContinue
 
 $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
+$script:QOT_ActionDefinitions = @{}
 
 function Initialize-QOTActionGroups {
     if (-not $script:QOT_ActionGroups -or -not ($script:QOT_ActionGroups -is [System.Collections.Generic.List[object]])) {
         $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
+    }
+}
+
+function Clear-QOTActionDefinitions {
+    $script:QOT_ActionDefinitions = @{}
+}
+
+function Register-QOTActionDefinition {
+    param(
+        [Parameter(Mandatory)][string]$ActionId,
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][scriptblock]$Execute
+    )
+
+    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
+        $script:QOT_ActionDefinitions = @{}
+    }
+
+    $script:QOT_ActionDefinitions[$ActionId] = [pscustomobject]@{
+        ActionId = $ActionId
+        Label    = $Label
+        Execute  = $Execute
+    }
+
+    try { Write-QLog ("Registered action definition: {0}" -f $ActionId) "DEBUG" } catch { }
+}
+
+function Get-QOTActionDefinition {
+    param(
+        [Parameter(Mandatory)][string]$ActionId
+    )
+
+    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
+        $script:QOT_ActionDefinitions = @{}
+    }
+
+    if ($script:QOT_ActionDefinitions.ContainsKey($ActionId)) {
+        return $script:QOT_ActionDefinitions[$ActionId]
+    }
+
+    return $null
+}
+
+function Invoke-QOTActionById {
+    param(
+        [Parameter(Mandatory)][string]$ActionId,
+        [Parameter(Mandatory)]$Window
+    )
+
+    $definition = Get-QOTActionDefinition -ActionId $ActionId
+    if (-not $definition) {
+        try { Write-QLog ("Action definition not found for ActionId '{0}'." -f $ActionId) "WARN" } catch { }
+        return $false
+    }
+
+    $label = $definition.Label
+    $executor = $definition.Execute
+    if (-not $executor -or -not ($executor -is [scriptblock])) {
+        try { Write-QLog ("Action definition missing script for '{0}'." -f $ActionId) "WARN" } catch { }
+        return $false
+    }
+
+    try { Write-QLog ("Running action: {0} ({1})" -f $label, $ActionId) "INFO" } catch { }
+    try {
+        Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label) | Out-Null
+        try { Write-QLog ("Action complete: {0} ({1})" -f $label, $ActionId) "INFO" } catch { }
+        return $true
+    }
+    catch {
+        try { Write-QLog ("Action failed ({0}): {1}" -f $label, $_.Exception.Message) "ERROR" } catch { }
+        return $false
     }
 }
 
@@ -142,21 +214,31 @@ function Invoke-QOTRegisteredActions {
             try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
         }
     }
-
+    
+    $actionIds = New-Object System.Collections.Generic.List[string]
     foreach ($entry in $selectedItems) {
         $item = $entry.Item
-        $label = $null
-        $executor = $null
-        try { $label = $item.Label } catch { $label = "Unknown action" }
-        try { $executor = $item.Execute } catch { $executor = $null }
-        if ($executor -is [scriptblock]) {
-            try {
-                Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label)
-            }
-            catch {
-                try { Write-QLog ("Action failed ({0}): {1}" -f $label, $_.Exception.Message) "ERROR" } catch { }
-            }
+        $actionId = $null
+        try { $actionId = $item.ActionId } catch { $actionId = $null }
+        if ([string]::IsNullOrWhiteSpace($actionId)) {
+            try { $actionId = $item.Id } catch { $actionId = $null }
         }
+        if (-not [string]::IsNullOrWhiteSpace($actionId)) {
+            $actionIds.Add($actionId)
+        } else {
+            try { Write-QLog ("Skipping selected entry in group '{0}' because ActionId is missing." -f $entry.Group) "WARN" } catch { }
+        }
+    }
+
+    if ($actionIds.Count -eq 0) {
+        try { Write-QLog "No valid ActionIds found for selected actions." "WARN" } catch { }
+        return
+    }
+
+    try { Write-QLog ("Executing ActionIds: {0}" -f ($actionIds -join ", ")) "DEBUG" } catch { }
+
+    foreach ($actionId in $actionIds) {
+        [void](Invoke-QOTActionById -ActionId $actionId -Window $Window)
     }
 }
 
@@ -233,9 +315,15 @@ function Get-QOTSelectedActions {
             }
 
             if ($isSelected) {
+                $actionId = $null
+                try { $actionId = $item.ActionId } catch { $actionId = $null }
+                if ([string]::IsNullOrWhiteSpace($actionId)) {
+                    try { $actionId = $item.Id } catch { $actionId = $null }
+                }
                 $selectedItems.Add([pscustomobject]@{
-                    Group = $group.Name
-                    Item  = $item
+                    Group    = $group.Name
+                    ActionId = $actionId
+                    Item     = $item
                 })
             }
         }
@@ -269,4 +357,4 @@ function Test-QOTAnyActionsSelected {
     }
 }
 
-Export-ModuleMember -Function Clear-QOTActionGroups, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Test-QOTAnyActionsSelected
+Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Test-QOTAnyActionsSelected
