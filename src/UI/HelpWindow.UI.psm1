@@ -22,7 +22,7 @@ function Get-QOTHelpSections {
             Body  = "Each checkbox represents a specific action in the toolkit. Selecting a checkbox queues that action, and clearing it removes the action from the run list. You can mix actions across tabs - every checked item is included."
         }
         [pscustomobject]@{
-            Title = "What \"Run selected actions\" does"
+            Title = 'What "Run selected actions" does'
             Body  = "The Run selected actions button executes every checked item in sequence. It only runs what is selected at the time you click the button and leaves unchecked actions untouched."
         }
         [pscustomobject]@{
