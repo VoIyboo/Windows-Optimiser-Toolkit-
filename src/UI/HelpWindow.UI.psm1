@@ -28,6 +28,7 @@ function Get-QOTHelpSections {
         [pscustomobject]@{
             Title = "Important safety notes"
             Body  = "* Review selections before running any actions.`n* Close important apps to avoid file locks or conflicts.`n* Some actions change system settings - use a maintenance window when possible.`n* If you are unsure about an action, leave it unchecked and review it first."
+        }
     )
 }
 
