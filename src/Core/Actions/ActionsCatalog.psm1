@@ -31,6 +31,7 @@ function Initialize-QOTActionCatalog {
     Import-Module (Join-Path $basePath "Advanced\AdvancedTweaks\AdvancedTweaks.psm1") -Force -ErrorAction SilentlyContinue
     Import-Module (Join-Path $basePath "Advanced\AdvancedCleaning\AdvancedCleaning.psm1") -Force -ErrorAction SilentlyContinue
     Import-Module (Join-Path $basePath "Advanced\NetworkAndServices\NetworkAndServices.psm1") -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $basePath "Apps\Apps.Actions.psm1") -Force -ErrorAction SilentlyContinue
 
     $actionDefinitions = @(
         @{ ActionId = "Invoke-QCleanTemp"; Label = "Clear temporary files" },
