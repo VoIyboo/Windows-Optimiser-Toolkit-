@@ -22,7 +22,7 @@ function Register-QOTActionDefinition {
     param(
         [Parameter(Mandatory)][string]$ActionId,
         [Parameter(Mandatory)][string]$Label,
-        [Parameter(Mandatory)][scriptblock]$Execute
+        [Parameter(Mandatory)][string]$ScriptPath
     )
 
     if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
@@ -32,10 +32,10 @@ function Register-QOTActionDefinition {
     $script:QOT_ActionDefinitions[$ActionId] = [pscustomobject]@{
         ActionId = $ActionId
         Label    = $Label
-        Execute  = $Execute
+        ScriptPath  = $ScriptPath
     }
 
-    try { Write-QLog ("Registered action definition: {0}" -f $ActionId) "DEBUG" } catch { }
+    try { Write-QLog ("Registered action definition: {0} -> {1}" -f $ActionId, $ScriptPath) "DEBUG" } catch { }
 }
 
 function Get-QOTActionDefinition {
@@ -67,22 +67,45 @@ function Invoke-QOTActionById {
     }
 
     $label = $definition.Label
-    $executor = $definition.Execute
-    if (-not $executor -or -not ($executor -is [scriptblock])) {
-        try { Write-QLog ("Action definition missing script for '{0}'." -f $ActionId) "WARN" } catch { }
+    $scriptPath = $definition.ScriptPath
+    if ([string]::IsNullOrWhiteSpace($scriptPath)) {
+        try { Write-QLog ("Action definition missing script path for '{0}'." -f $ActionId) "WARN" } catch { }
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath $scriptPath)) {
+        try { Write-QLog ("Script path not found for '{0}': {1}" -f $ActionId, $scriptPath) "ERROR" } catch { }
+        Write-QOTActionConsoleLog -ActionId $ActionId -Status "ERROR" -Message "Script not found."
         return $false
     }
 
+    Write-QOTActionConsoleLog -ActionId $ActionId -Status "START" -Message $label
     try { Write-QLog ("Running action: {0} ({1})" -f $label, $ActionId) "INFO" } catch { }
     try {
-        Invoke-QOTScriptBlockSafely -Script $executor -Window $Window -Context ("Action '{0}'" -f $label) | Out-Null
+        & $scriptPath -Window $Window
         try { Write-QLog ("Action complete: {0} ({1})" -f $label, $ActionId) "INFO" } catch { }
+        Write-QOTActionConsoleLog -ActionId $ActionId -Status "SUCCESS" -Message $label
         return $true
     }
     catch {
         try { Write-QLog ("Action failed ({0}): {1}" -f $label, $_.Exception.Message) "ERROR" } catch { }
+        Write-QOTActionConsoleLog -ActionId $ActionId -Status "ERROR" -Message $_.Exception.Message
         return $false
     }
+}
+
+function Write-QOTActionConsoleLog {
+    param(
+        [Parameter(Mandatory)][string]$ActionId,
+        [Parameter(Mandatory)][string]$Status,
+        [string]$Message
+    )
+
+    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    $entry = "[{0}] [{1}] {2}" -f $timestamp, $ActionId, $Status
+    if (-not [string]::IsNullOrWhiteSpace($Message)) {
+        $entry = "{0} - {1}" -f $entry, $Message
+    }
+    try { Write-Host $entry } catch { }
 }
 
 function Clear-QOTActionGroups {
