@@ -154,23 +154,27 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
     Remove-Item Function:\New-QOTSettingsView   -ErrorAction SilentlyContinue
+    Remove-Item Function:\Show-QOTHelpWindow    -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTAppsUI  -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue
     Remove-Item Function:\Initialize-QOTAdvancedTweaksUI -ErrorAction SilentlyContinue
 
     Get-Module -Name "Tickets.UI"   -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module -Name "HelpWindow.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "Settings.UI"  -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "Apps.UI"      -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "TweaksAndCleaning.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module -Name "AdvancedTweaks.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
 
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" }            | Remove-Module -Force -ErrorAction SilentlyContinue
+    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\UI\HelpWindow.UI.psm1" }              | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" }     | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" }                  | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
     Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
 
     Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -Global -ErrorAction Stop
+    Import-Module (Join-Path $basePath "UI\HelpWindow.UI.psm1")           -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")               -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1") -Force -ErrorAction Stop
@@ -376,6 +380,7 @@ function Start-QOTMainWindow {
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
     $btnSettings = $window.FindName("BtnSettings")
+    $btnHelp     = $window.FindName("BtnHelp")
     $tabSettings = $window.FindName("TabSettings")
     $tabTickets  = $window.FindName("TabTickets")
 
@@ -385,6 +390,14 @@ function Start-QOTMainWindow {
         })
     }
 
+    if ($btnHelp) {
+        $btnHelp.Add_Click({
+            if (Get-Command Show-QOTHelpWindow -ErrorAction SilentlyContinue) {
+                Show-QOTHelpWindow -Owner $window
+            }
+        })
+    }
+    
     # ------------------------------------------------------------
     # Initialise Apps UI after window render, forcing Apps tab to build (tab content is lazy-loaded)
     # ------------------------------------------------------------
