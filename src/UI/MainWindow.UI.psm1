@@ -142,7 +142,7 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "Core\Settings.psm1")         -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Tickets.psm1")          -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Actions\ActionRegistry.psm1") -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Actions\ActionCatalog.psm1") -Force -ErrorAction SilentlyContinue
+    Import-Module (Join-Path $basePath "Core\Actions\ActionsCatalog.psm1") -Force -ErrorAction SilentlyContinue
 
     # ------------------------------------------------------------
     # Apps modules (data + engine)
