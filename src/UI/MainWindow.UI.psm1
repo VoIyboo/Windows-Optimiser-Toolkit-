@@ -142,6 +142,7 @@ function Start-QOTMainWindow {
     Import-Module (Join-Path $basePath "Core\Settings.psm1")         -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Tickets.psm1")          -Force -ErrorAction Stop
     Import-Module (Join-Path $basePath "Core\Actions\ActionRegistry.psm1") -Force -ErrorAction Stop
+    Import-Module (Join-Path $basePath "Core\Actions\ActionCatalog.psm1") -Force -ErrorAction SilentlyContinue
 
     # ------------------------------------------------------------
     # Apps modules (data + engine)
@@ -224,6 +225,9 @@ function Start-QOTMainWindow {
     if (Get-Command Clear-QOTActionGroups -ErrorAction SilentlyContinue) {
         Clear-QOTActionGroups
     }
+    if (Get-Command Clear-QOTActionDefinitions -ErrorAction SilentlyContinue) {
+        Clear-QOTActionDefinitions
+    }
 
     # ------------------------------------------------------------
     # Optional: log key names present in LOADED XAML
@@ -303,6 +307,20 @@ function Start-QOTMainWindow {
     catch {
         try { Write-QLog ("Advanced UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
     }
+
+    # ------------------------------------------------------------
+    # Register action catalog (central ActionId mappings)
+    # ------------------------------------------------------------
+    try {
+        if (Get-Command Initialize-QOTActionCatalog -ErrorAction SilentlyContinue) {
+            Initialize-QOTActionCatalog
+        }
+    }
+    catch {
+        try { Write-QLog ("Action catalog failed to initialise: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+
+
 
     # ------------------------------------------------------------
     # Wire Run button (global action registry)
