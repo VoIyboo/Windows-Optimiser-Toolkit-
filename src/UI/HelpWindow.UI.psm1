@@ -80,15 +80,14 @@ function New-QOTHelpView {
     if (-not (Test-Path -LiteralPath $xamlPath)) {
         throw "HelpWindow.xaml not found at $xamlPath"
     }
-
+    
+    [xml]$doc = Get-Content -LiteralPath $xamlPath -Raw
+    $doc = Convert-HelpWindowToHostableRoot -Doc $doc
+    
     $reader = New-Object System.Xml.XmlNodeReader ($doc)
     $root = [System.Windows.Markup.XamlReader]::Load($reader)
 
     if (-not $root) { throw "Failed to load HelpWindow.xaml" }
-
-    if ($Owner) {
-        $window.Owner = $Owner
-    }
 
     $sectionsControl = $root.FindName("HelpSections")
     if ($sectionsControl) {
