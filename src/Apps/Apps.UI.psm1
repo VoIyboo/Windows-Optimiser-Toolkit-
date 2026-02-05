@@ -19,12 +19,10 @@ function Initialize-QOTAppsUI {
         # Find controls from XAML
         $AppsGrid        = $Window.FindName("AppsGrid")
         $InstallGrid     = $Window.FindName("InstallGrid")
-        $RunButton       = $Window.FindName("RunButton")
         $StatusLabel     = $Window.FindName("StatusLabel")
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return $false }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return $false }
-        if (-not $RunButton)   { try { Write-QLog "Apps UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }; return $false }
 
         Initialize-QOTAppsCollections
 
