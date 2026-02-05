@@ -426,6 +426,7 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     $btnSettings = $window.FindName("BtnSettings")
     $btnHelp     = $window.FindName("BtnHelp")
+    $tabHelp     = $window.FindName("TabHelp")
     $tabSettings = $window.FindName("TabSettings")
     $tabTickets  = $window.FindName("TabTickets")
 
