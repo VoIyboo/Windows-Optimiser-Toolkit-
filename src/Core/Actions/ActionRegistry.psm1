@@ -211,31 +211,14 @@ function Invoke-QOTScriptBlockSafely {
 
 function Invoke-QOTRegisteredActions {
     param(
-        [Parameter(Mandatory)]$Window
+        [Parameter(Mandatory)]$Window,
+        [scriptblock]$OnProgress
     )
- $selectedItems = Get-QOTSelectedActions -Window $Window
+    $selectedItems = Get-QOTSelectedActionsInExecutionOrder -Window $Window
 
     if ($selectedItems.Count -eq 0) {
         try { Write-QLog "No actions selected." "INFO" } catch { }
-        return
-    }
-
-    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
-    if ($selectedItems -is [System.Collections.IEnumerable]) {
-        $firstSelected = $selectedItems | Select-Object -First 1
-        if ($firstSelected) {
-            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
-            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
-        }
-    }
-
-    try { Write-QLog ("Selected actions collection type: {0}" -f $selectedItems.GetType().FullName) "DEBUG" } catch { }
-    if ($selectedItems -is [System.Collections.IEnumerable]) {
-        $firstSelected = $selectedItems | Select-Object -First 1
-        if ($firstSelected) {
-            try { Write-QLog ("First selected entry type: {0}" -f $firstSelected.GetType().FullName) "DEBUG" } catch { }
-            try { Write-QLog ("First selected entry value: {0}" -f (($firstSelected | Out-String).Trim())) "DEBUG" } catch { }
-        }
+        return [pscustomobject]@{ Success = $true; Executed = 0; FailedActionId = $null; ErrorMessage = $null }
     }
     
     $actionIds = New-Object System.Collections.Generic.List[string]
@@ -255,15 +238,51 @@ function Invoke-QOTRegisteredActions {
 
     if ($actionIds.Count -eq 0) {
         try { Write-QLog "No valid ActionIds found for selected actions." "WARN" } catch { }
-        return
+        return [pscustomobject]@{ Success = $false; Executed = 0; FailedActionId = $null; ErrorMessage = "No valid actions selected." }
     }
 
     try { Write-QLog ("Executing ActionIds: {0}" -f ($actionIds -join ", ")) "DEBUG" } catch { }
+    $executed = 0
+    for ($i = 0; $i -lt $actionIds.Count; $i++) {
+        $actionId = $actionIds[$i]
 
-    foreach ($actionId in $actionIds) {
-        [void](Invoke-QOTActionById -ActionId $actionId -Window $Window)
+        if ($OnProgress) {
+            try { & $OnProgress ($i + 1) $actionIds.Count $actionId } catch { }
+        }
+
+        $ok = Invoke-QOTActionById -ActionId $actionId -Window $Window
+        if (-not $ok) {
+            return [pscustomobject]@{ Success = $false; Executed = $executed; FailedActionId = $actionId; ErrorMessage = "Action failed." }
+        }
+
+        $executed++
     }
+
+    return [pscustomobject]@{ Success = $true; Executed = $executed; FailedActionId = $null; ErrorMessage = $null }
 }
+
+function Get-QOTSelectedActionsInExecutionOrder {
+    param(
+        [Parameter(Mandatory)]$Window
+    )
+
+    $selectedItems = @(Get-QOTSelectedActions -Window $Window)
+    if ($selectedItems.Count -eq 0) { return $selectedItems }
+
+    $groupOrder = @{
+        "Tweaks & Cleaning" = 1
+        "Apps" = 2
+        "Advanced" = 3
+    }
+
+    $ordered = $selectedItems | Sort-Object @{ Expression = {
+        if ($groupOrder.ContainsKey($_.Group)) { $groupOrder[$_.Group] } else { 999 }
+    } }, @{ Expression = { $_.Group } }
+
+    return @($ordered)
+}
+    
+
 
 function Get-QOTSelectedActions {
     param(
@@ -380,4 +399,4 @@ function Test-QOTAnyActionsSelected {
     }
 }
 
-Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Test-QOTAnyActionsSelected
+Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Get-QOTSelectedActionsInExecutionOrder, Test-QOTAnyActionsSelected
