@@ -15,13 +15,6 @@ function Initialize-QOTAdvancedTweaksUI {
         [System.Windows.Window]$Window
     )
 
-    try {
-        $runButton = $Window.FindName("RunButton")
-        if (-not $runButton) {
-            try { Write-QLog "Advanced UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }
-            return
-        }
-
         $actions = @(
             @{ Name = "CbAdvAdobeNetworkBlock"; Label = "Adobe network block"; ActionId = "Invoke-QAdvancedAdobeNetworkBlock" },
             @{ Name = "CbAdvBlockRazerInstalls"; Label = "Block Razer software installs"; ActionId = "Invoke-QAdvancedBlockRazerInstalls" },
