@@ -206,7 +206,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
@@ -221,6 +220,30 @@
                 <StackPanel DockPanel.Dock="Right"
                             Orientation="Horizontal"
                             Margin="0,0,6,0">
+                    <Button x:Name="BtnPlay"
+                            Width="36"
+                            Height="36"
+                            Margin="0,0,6,0"
+                            VerticalAlignment="Top"
+                            Background="Transparent"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            ToolTip="Run selected actions">
+                        <Grid Width="16" Height="16">
+                            <Path Data="M2,1 L2,15 L14,8 Z"
+                                  Fill="{StaticResource TextSubtle}"
+                                  Stretch="Fill" />
+                            <Path x:Name="BtnPlayProgressPath"
+                                  Data="M2,1 L2,15 L14,8 Z"
+                                  Fill="{StaticResource AccentBrush}"
+                                  Stretch="Fill">
+                                <Path.Clip>
+                                    <RectangleGeometry x:Name="BtnPlayProgressClip"
+                                                       Rect="0,16,16,0" />
+                                </Path.Clip>
+                            </Path>
+                        </Grid>
+                    </Button>
+
                     <Button x:Name="BtnHelp"
                             Width="36"
                             Height="36"
@@ -266,6 +289,11 @@
                                Text="System summary will appear here"
                                Foreground="{StaticResource TextSubtle}"
                                FontSize="11" />
+                    <TextBlock x:Name="ExecutionMessage"
+                               Text=""
+                               Foreground="#FCA5A5"
+                               FontSize="11"
+                               Visibility="Collapsed" />
                 </StackPanel>
 
             </DockPanel>
@@ -772,58 +800,6 @@
 
             </TabControl>
         </ContentControl>
-
-        <!-- Status bar -->
-        <Border Grid.Row="2"
-                Background="#020617"
-                Padding="8,6"
-                BorderBrush="#111827"
-                BorderThickness="1,1,1,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <Grid Grid.Column="0"
-                      Margin="0,0,12,0"
-                      VerticalAlignment="Center">
-                    <ProgressBar x:Name="MainProgress"
-                                 Height="28"
-                                 Minimum="0"
-                                 Maximum="100"
-                                 Value="0"
-                                 Foreground="#2563EB"
-                                 Background="#1E293B" />
-                    <TextBlock x:Name="StatusLabel"
-                               Text="Idle"
-                               Foreground="White"
-                               FontSize="12"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Left"
-                               Margin="10,0,0,0"
-                               IsHitTestVisible="False" />
-                </Grid>
-
-                <StackPanel Grid.Column="1"
-                            Orientation="Vertical"
-                            VerticalAlignment="Center">
-                    <Button x:Name="RunButton"
-                            Content="Run selected actions"
-                            Width="190"
-                            Margin="0,0,0,2"
-                            Style="{StaticResource PrimaryButton}" />
-                    <TextBlock x:Name="SelectedActionsText"
-                               Text="Selected actions: summary coming soon"
-                               Foreground="{StaticResource TextSubtle}"
-                               FontSize="11"
-                               HorizontalAlignment="Right" />
-                </StackPanel>
-
-            </Grid>
-        </Border>
-
     </Grid>
 
 </Window>
