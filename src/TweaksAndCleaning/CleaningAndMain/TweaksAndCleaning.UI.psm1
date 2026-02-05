@@ -58,12 +58,6 @@ function Initialize-QOTTweaksAndCleaningUI {
     )
 
     try {
-        $runButton = $Window.FindName("RunButton")
-        if (-not $runButton) {
-            try { Write-QLog "Tweaks/Cleaning UI: RunButton not found in XAML (x:Name='RunButton')." "ERROR" } catch { }
-            return
-        }
-
         $actions = @(
             @{ Name = "CbCleanTempFiles";       Label = "Clear temporary files";                 ActionId = "Invoke-QCleanTemp" },
             @{ Name = "CbEmptyRecycleBin";      Label = "Empty Recycle Bin";                      ActionId = "Invoke-QCleanRecycleBin" },
