@@ -9,7 +9,8 @@ $script:AppsUIInitialised = $false
 $script:MainWindow = $null
 $script:SummaryTextBlock = $null
 $script:SummaryTimer = $null
-$script:RunButtonTimer = $null
+$script:PlayButtonTimer = $null
+$script:IsPlayRunning = $false
 
 function Get-QOTDriveSummary {
     $drives = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
@@ -84,6 +85,31 @@ function Set-QOTSummary {
     if (-not $script:SummaryTextBlock) { return }
     if ([string]::IsNullOrWhiteSpace($Text)) { return }
     $script:SummaryTextBlock.Text = $Text
+}
+
+function Set-QOTPlayProgress {
+    param(
+        [System.Windows.Shapes.Path]$ProgressPath,
+        [System.Windows.Media.RectangleGeometry]$ProgressClip,
+        [double]$Percent
+    )
+
+    if (-not $ProgressPath -or -not $ProgressClip) { return }
+    $safePercent = [math]::Max(0, [math]::Min(100, $Percent))
+    $height = 16.0
+    $filled = ($height * $safePercent / 100.0)
+    $top = $height - $filled
+    $ProgressClip.Rect = New-Object System.Windows.Rect(0, $top, 16, $filled)
+}
+
+function Invoke-QOTPlayCompletionSound {
+    try {
+        [console]::Beep(880, 120)
+        [console]::Beep(1245, 140)
+    }
+    catch {
+        try { [System.Media.SystemSounds]::Asterisk.Play() } catch { }
+    }
 }
 
 
@@ -235,7 +261,7 @@ function Start-QOTMainWindow {
     try {
         $map = Get-QOTNamedElementsMap -Root $window
         $wanted = @(
-            "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","RunButton",
+            "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","BtnPlay",
             "SettingsHost","HelpHost","BtnSettings","BtnHelp","MainTabControl","TabSettings","TabHelp",
             "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
         )
@@ -323,46 +349,89 @@ function Start-QOTMainWindow {
 
 
     # ------------------------------------------------------------
-    # Wire Run button (global action registry)
+   # Wire Play button (global action registry)
     # ------------------------------------------------------------
-    $runButton = $window.FindName("RunButton")
-    if ($runButton) {
-        $runButton.Add_Click({
+    $btnPlay = $window.FindName("BtnPlay")
+    $playProgressPath = $window.FindName("BtnPlayProgressPath")
+    $playProgressClip = $window.FindName("BtnPlayProgressClip")
+    $executionMessage = $window.FindName("ExecutionMessage")
+
+    if ($btnPlay) {
+        Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
+
+        $btnPlay.Add_Click({
+            if (-not (Get-Command Invoke-QOTRegisteredActions -ErrorAction SilentlyContinue)) { return }
             try {
-                if (Get-Command Invoke-QOTRegisteredActions -ErrorAction SilentlyContinue) {
-                    Invoke-QOTRegisteredActions -Window $window
+                if ($executionMessage) {
+                    $executionMessage.Visibility = [System.Windows.Visibility]::Collapsed
+                    $executionMessage.Text = ""
                 }
+
+                $selected = @()
+                if (Get-Command Get-QOTSelectedActionsInExecutionOrder -ErrorAction SilentlyContinue) {
+                    $selected = @(Get-QOTSelectedActionsInExecutionOrder -Window $window)
+                }
+
+                if ($selected.Count -eq 0) {
+                    try { Write-QLog "Play clicked with no selected actions." "INFO" } catch { }
+                    return
+                }
+
+                                $script:IsPlayRunning = $true
+                $btnPlay.IsEnabled = $false
+                Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
+
+                $result = Invoke-QOTRegisteredActions -Window $window -OnProgress {
+                    param($index, $total, $actionId)
+                    $pct = [math]::Round(($index / [double]$total) * 100, 0)
+                    Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent $pct
+                    try { Write-QLog (("Running {0}/{1}: {2}") -f $index, $total, $actionId) "INFO" } catch { }
+                }
+
+                if (-not $result.Success) {
+                    $message = "Execution failed."
+                    if ($result.FailedActionId) {
+                        $message = "Execution failed on action: $($result.FailedActionId)"
+                    }
+                    if ($executionMessage) {
+                        $executionMessage.Text = $message
+                        $executionMessage.Visibility = [System.Windows.Visibility]::Visible
+                    }
+                    try { Write-QLog $message "ERROR" } catch { }
+                    return
+                }
+
+                Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 100
+                Invoke-QOTPlayCompletionSound
+                try { Write-QLog "All selected actions completed successfully." "INFO" } catch { }
             }
             catch {
                 $ex = $_.Exception
-                try { Write-QLog ("Run selected actions failed: {0}" -f $ex.Message) "ERROR" } catch { }
-                try { Write-QLog ("Exception Type: {0}" -f $ex.GetType().FullName) "ERROR" } catch { }
-                if ($ex.InnerException) {
-                    try { Write-QLog ("Inner Type: {0}" -f $ex.InnerException.GetType().FullName) "ERROR" } catch { }
-                    try { Write-QLog ("Inner Msg : {0}" -f $ex.InnerException.Message) "ERROR" } catch { }
+                $message = "Run selected actions failed: $($ex.Message)"
+                if ($executionMessage) {
+                    $executionMessage.Text = $message
+                    $executionMessage.Visibility = [System.Windows.Visibility]::Visible
                 }
-                if ($_.InvocationInfo) {
-                    try { Write-QLog ("Script: {0}" -f $_.InvocationInfo.ScriptName) "ERROR" } catch { }
-                    try { Write-QLog ("Line  : {0}" -f $_.InvocationInfo.ScriptLineNumber) "ERROR" } catch { }
-                    try { Write-QLog ("Code  : {0}" -f $_.InvocationInfo.Line.Trim()) "ERROR" } catch { }
-                }
-                if ($ex.StackTrace) {
-                    try { Write-QLog "StackTrace:" "ERROR" } catch { }
-                    try { Write-QLog $ex.StackTrace "ERROR" } catch { }
-                }
+                try { Write-QLog $message "ERROR" } catch { }
+            }
+            finally {
+                Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
+                $script:IsPlayRunning = $false
+                $btnPlay.IsEnabled = (Test-QOTAnyActionsSelected -Window $window)
             }
         })
 
         if (Get-Command Test-QOTAnyActionsSelected -ErrorAction SilentlyContinue) {
-            $runButton.IsEnabled = Test-QOTAnyActionsSelected -Window $window
-            $script:RunButtonTimer = New-Object System.Windows.Threading.DispatcherTimer
-            $script:RunButtonTimer.Interval = [TimeSpan]::FromMilliseconds(500)
-            $script:RunButtonTimer.Add_Tick({
+            $btnPlay.IsEnabled = Test-QOTAnyActionsSelected -Window $window
+            $script:PlayButtonTimer = New-Object System.Windows.Threading.DispatcherTimer
+            $script:PlayButtonTimer.Interval = [TimeSpan]::FromMilliseconds(500)
+            $script:PlayButtonTimer.Add_Tick({
                 try {
-                    $runButton.IsEnabled = Test-QOTAnyActionsSelected -Window $window
+                    if ($script:IsPlayRunning) { return }
+                    $btnPlay.IsEnabled = Test-QOTAnyActionsSelected -Window $window
                 } catch { }
             })
-            $script:RunButtonTimer.Start()
+            $script:PlayButtonTimer.Start()
         }
     }
 
