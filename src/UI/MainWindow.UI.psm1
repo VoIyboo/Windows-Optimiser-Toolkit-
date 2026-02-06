@@ -434,59 +434,25 @@ function Start-QOTMainWindow {
         Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
 
         $btnPlay.Add_Click({
-            if (-not (Get-Command Invoke-QOTRegisteredActions -ErrorAction SilentlyContinue)) { return }
+            Write-Host "User clicked Play button"
             try {
                 if ($executionMessage) {
                     $executionMessage.Visibility = [System.Windows.Visibility]::Collapsed
                     $executionMessage.Text = ""
                 }
 
-                $selected = @()
-                if (Get-Command Get-QOTSelectedActionsInExecutionOrder -ErrorAction SilentlyContinue) {
-                    $selected = @(Get-QOTSelectedActionsInExecutionOrder -Window $window)
-                }
-
-                if ($selected.Count -eq 0) {
-                    try { Write-QLog "Play clicked with no selected actions." "INFO" } catch { }
-                    return
-                }
-
-                                $script:IsPlayRunning = $true
+                $script:IsPlayRunning = $true
                 $btnPlay.IsEnabled = $false
                 Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
 
-                $result = Invoke-QOTRegisteredActions -Window $window -OnProgress {
-                    param($index, $total, $actionId)
-                    $pct = [math]::Round(($index / [double]$total) * 100, 0)
-                    Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent $pct
-                    try { Write-QLog (("Running {0}/{1}: {2}") -f $index, $total, $actionId) "INFO" } catch { }
-                }
 
-                if (-not $result.Success) {
-                    $message = "Execution failed."
-                    if ($result.FailedActionId) {
-                        $message = "Execution failed on action: $($result.FailedActionId)"
-                    }
-                    if ($executionMessage) {
-                        $executionMessage.Text = $message
-                        $executionMessage.Visibility = [System.Windows.Visibility]::Visible
-                    }
-                    try { Write-QLog $message "ERROR" } catch { }
-                    return
-                }
 
-                Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 100
+                Run-QOTSelectedTasks -Window $window -ProgressPath $playProgressPath -ProgressClip $playProgressClip
+
                 Invoke-QOTPlayCompletionSound
-                try { Write-QLog "All selected actions completed successfully." "INFO" } catch { }
             }
             catch {
-                $ex = $_.Exception
-                $message = "Run selected actions failed: $($ex.Message)"
-                if ($executionMessage) {
-                    $executionMessage.Text = $message
-                    $executionMessage.Visibility = [System.Windows.Visibility]::Visible
-                }
-                try { Write-QLog $message "ERROR" } catch { }
+                Write-Host "Play button handler failed: $($_.Exception.Message)"
             }
             finally {
                 Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
