@@ -119,16 +119,72 @@ function Run-QOTSelectedTasks {
         [System.Windows.Media.RectangleGeometry]$ProgressClip
     )
 
-    # Example task mapping pattern (checkbox/action/script) for fast fallback.
-    $taskScriptMap = @{
-        "Invoke-QCleanTemp" = "Cleanup\\Invoke-QCleanTemp.ps1"
-        "Invoke-QCleanRecycleBin" = "Cleanup\\Invoke-QCleanRecycleBin.ps1"
-        "Invoke-QTweakWidgets" = "Tweaks\\Invoke-QTweakWidgets.ps1"
+    $scriptsRoot = Join-Path (Join-Path $PSScriptRoot "..") "Scripts"
+
+    $checkboxNamesInUiOrder = @(
+        "CbCleanTempFiles",
+        "CbEmptyRecycleBin",
+        "CbCleanDoCache",
+        "CbCleanWuCache",
+        "CbCleanThumbCache",
+        "CbCleanErrorLogs",
+        "CbCleanSetupLeftovers",
+        "CbClearStoreCache",
+        "CbEdgeLightCleanup",
+        "CbChromeLightCleanup",
+        "CbDisableStartRecommended",
+        "CbDisableSuggestedApps",
+        "CbDisableTipsStart",
+        "CbDisableBingSearch",
+        "CbClassicMoreOptions",
+        "CbDisableWidgets",
+        "CbDisableTaskbarNews",
+        "CbDisableMeetNow",
+        "CbDisableAdvertisingId",
+        "CbLimitFeedbackPrompts",
+        "CbDisableOnlineTips"
+    )
+
+    $checkboxControlsInUiOrder = New-Object System.Collections.Generic.List[object]
+    foreach ($checkboxName in $checkboxNamesInUiOrder) {
+        $checkbox = $Window.FindName($checkboxName)
+        if ($checkbox -is [System.Windows.Controls.CheckBox]) {
+            $checkboxControlsInUiOrder.Add($checkbox) | Out-Null
+        }
     }
 
-    $selectedTasks = @()
-    if (Get-Command Get-QOTSelectedActionsInExecutionOrder -ErrorAction SilentlyContinue) {
-        $selectedTasks = @(Get-QOTSelectedActionsInExecutionOrder -Window $Window)
+    $actionMap = @{}
+    $actionMap[$Window.FindName("CbCleanTempFiles")] = @{ Name = "Clear temporary files"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanTemp.ps1" }
+    $actionMap[$Window.FindName("CbEmptyRecycleBin")] = @{ Name = "Empty Recycle Bin"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanRecycleBin.ps1" }
+    $actionMap[$Window.FindName("CbCleanDoCache")] = @{ Name = "Clean Delivery Optimisation cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanDOCache.ps1" }
+    $actionMap[$Window.FindName("CbCleanWuCache")] = @{ Name = "Clear Windows Update cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanWindowsUpdateCache.ps1" }
+    $actionMap[$Window.FindName("CbCleanThumbCache")] = @{ Name = "Clean thumbnail cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanThumbnailCache.ps1" }
+    $actionMap[$Window.FindName("CbCleanErrorLogs")] = @{ Name = "Clean old error logs and crash dumps"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanErrorLogs.ps1" }
+    $actionMap[$Window.FindName("CbCleanSetupLeftovers")] = @{ Name = "Remove safe setup / upgrade leftovers"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanSetupLeftovers.ps1" }
+    $actionMap[$Window.FindName("CbClearStoreCache")] = @{ Name = "Clear Microsoft Store cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanStoreCache.ps1" }
+    $actionMap[$Window.FindName("CbEdgeLightCleanup")] = @{ Name = "Light clean of Microsoft Edge cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanEdgeCache.ps1" }
+    $actionMap[$Window.FindName("CbChromeLightCleanup")] = @{ Name = "Light clean of Chrome / Chromium cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanChromeCache.ps1" }
+    $actionMap[$Window.FindName("CbDisableStartRecommended")] = @{ Name = "Hide Start menu recommended items"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakStartMenuRecommendations.ps1" }
+    $actionMap[$Window.FindName("CbDisableSuggestedApps")] = @{ Name = "Turn off suggested apps and promotions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakSuggestedApps.ps1" }
+    $actionMap[$Window.FindName("CbDisableTipsStart")] = @{ Name = "Disable tips and suggestions in Start"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakTipsInStart.ps1" }
+    $actionMap[$Window.FindName("CbDisableBingSearch")] = @{ Name = "Turn off Bing / web results in Start search"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakBingSearch.ps1" }
+    $actionMap[$Window.FindName("CbClassicMoreOptions")] = @{ Name = "Use classic 'More options' right-click menu"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakClassicContextMenu.ps1" }
+    $actionMap[$Window.FindName("CbDisableWidgets")] = @{ Name = "Turn off Widgets"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakWidgets.ps1" }
+    $actionMap[$Window.FindName("CbDisableTaskbarNews")] = @{ Name = "Turn off News / taskbar content"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakNewsAndInterests.ps1" }
+    $actionMap[$Window.FindName("CbDisableMeetNow")] = @{ Name = "Hide legacy Meet Now button"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakMeetNow.ps1" }
+    $actionMap[$Window.FindName("CbDisableAdvertisingId")] = @{ Name = "Turn off advertising ID"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakAdvertisingId.ps1" }
+    $actionMap[$Window.FindName("CbLimitFeedbackPrompts")] = @{ Name = "Reduce feedback and survey prompts"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakFeedbackHub.ps1" }
+    $actionMap[$Window.FindName("CbDisableOnlineTips")] = @{ Name = "Disable online tips and suggestions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakOnlineTips.ps1" }
+
+    $selectedTasks = New-Object System.Collections.Generic.List[object]
+    foreach ($checkbox in $checkboxControlsInUiOrder) {
+        if (-not $checkbox.IsChecked) { continue }
+        if (-not $actionMap.ContainsKey($checkbox)) { continue }
+
+        $task = $actionMap[$checkbox]
+        if ($task) {
+            $selectedTasks.Add($task) | Out-Null
+        }
     }
 
     if ($selectedTasks.Count -eq 0) {
@@ -138,43 +194,30 @@ function Run-QOTSelectedTasks {
     }
 
     for ($i = 0; $i -lt $selectedTasks.Count; $i++) {
-        $entry = $selectedTasks[$i]
-        $item = $entry.Item
-        $actionId = $null
-        $taskName = $null
-
-        try { $actionId = $item.ActionId } catch { $actionId = $null }
-        try { $taskName = $item.Label } catch { $taskName = $null }
-        if ([string]::IsNullOrWhiteSpace($taskName)) { $taskName = $actionId }
+        $task = $selectedTasks[$i]
+        $taskName = $task.Name
+        $scriptPath = $task.ScriptPath
         if ([string]::IsNullOrWhiteSpace($taskName)) { $taskName = "UnknownTask" }
 
         Write-Host "Now doing task: $taskName"
 
         try {
-            $scriptPath = $null
-            if (-not [string]::IsNullOrWhiteSpace($actionId) -and (Get-Command Get-QOTActionDefinition -ErrorAction SilentlyContinue)) {
-                $definition = Get-QOTActionDefinition -ActionId $actionId
-                if ($definition -and -not [string]::IsNullOrWhiteSpace($definition.ScriptPath)) {
-                    $scriptPath = $definition.ScriptPath
-                }
-            }
-
-            if (-not $scriptPath -and -not [string]::IsNullOrWhiteSpace($actionId) -and $taskScriptMap.ContainsKey($actionId)) {
-                $scriptPath = Join-Path (Join-Path $PSScriptRoot "..\\Scripts") $taskScriptMap[$actionId]
-            }
-
             if ([string]::IsNullOrWhiteSpace($scriptPath)) {
-                throw "No script path found for action '$actionId'."
+                throw "No script path found for task '$taskName'."
+
             }
             if (-not (Test-Path -LiteralPath $scriptPath)) {
                 throw "Script path does not exist: $scriptPath"
             }
 
-            & $scriptPath -Window $Window -ErrorAction Stop
+            & {
+                $ErrorActionPreference = 'Stop'
+                & $scriptPath
+            }
             Write-Host "Completed task: $taskName"
         }
         catch {
-            Write-Host "Task failed: $taskName - $($_.Exception.Message)"
+            Write-Host "Task failed: $taskName | $($_.Exception.Message)"
         }
         finally {
             if ($ProgressPath -and $ProgressClip) {
