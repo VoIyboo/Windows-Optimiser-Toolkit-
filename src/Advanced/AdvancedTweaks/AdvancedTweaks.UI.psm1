@@ -14,7 +14,7 @@ function Initialize-QOTAdvancedTweaksUI {
         [Parameter(Mandatory)]
         [System.Windows.Window]$Window
     )
-
+    try {
         $actions = @(
             @{ Name = "CbAdvAdobeNetworkBlock"; Label = "Adobe network block"; ActionId = "Invoke-QAdvancedAdobeNetworkBlock" },
             @{ Name = "CbAdvBlockRazerInstalls"; Label = "Block Razer software installs"; ActionId = "Invoke-QAdvancedBlockRazerInstalls" },
