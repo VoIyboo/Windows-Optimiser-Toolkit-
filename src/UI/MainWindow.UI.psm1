@@ -12,6 +12,19 @@ $script:SummaryTimer = $null
 $script:PlayButtonTimer = $null
 $script:IsPlayRunning = $false
 
+function Test-IsAdmin {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        if (-not $identity) { return $false }
+
+        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-QOTDriveSummary {
     $drives = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue
     if (-not $drives) { return "n/a" }
@@ -164,16 +177,16 @@ function Run-QOTSelectedTasks {
     $actionMap[$Window.FindName("CbClearStoreCache")] = @{ Name = "Clear Microsoft Store cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanStoreCache.ps1" }
     $actionMap[$Window.FindName("CbEdgeLightCleanup")] = @{ Name = "Light clean of Microsoft Edge cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanEdgeCache.ps1" }
     $actionMap[$Window.FindName("CbChromeLightCleanup")] = @{ Name = "Light clean of Chrome / Chromium cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanChromeCache.ps1" }
-    $actionMap[$Window.FindName("CbDisableStartRecommended")] = @{ Name = "Hide Start menu recommended items"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakStartMenuRecommendations.ps1" }
-    $actionMap[$Window.FindName("CbDisableSuggestedApps")] = @{ Name = "Turn off suggested apps and promotions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakSuggestedApps.ps1" }
+    $actionMap[$Window.FindName("CbDisableStartRecommended")] = @{ Name = "Hide Start menu recommended items"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakStartMenuRecommendations.ps1"; RequiresAdmin = $true }
+    $actionMap[$Window.FindName("CbDisableSuggestedApps")] = @{ Name = "Turn off suggested apps and promotions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakSuggestedApps.ps1"; RequiresAdmin = $true }
     $actionMap[$Window.FindName("CbDisableTipsStart")] = @{ Name = "Disable tips and suggestions in Start"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakTipsInStart.ps1" }
-    $actionMap[$Window.FindName("CbDisableBingSearch")] = @{ Name = "Turn off Bing / web results in Start search"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakBingSearch.ps1" }
+    $actionMap[$Window.FindName("CbDisableBingSearch")] = @{ Name = "Turn off Bing / web results in Start search"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakBingSearch.ps1"; RequiresAdmin = $true }
     $actionMap[$Window.FindName("CbClassicMoreOptions")] = @{ Name = "Use classic 'More options' right-click menu"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakClassicContextMenu.ps1" }
-    $actionMap[$Window.FindName("CbDisableWidgets")] = @{ Name = "Turn off Widgets"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakWidgets.ps1" }
-    $actionMap[$Window.FindName("CbDisableTaskbarNews")] = @{ Name = "Turn off News / taskbar content"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakNewsAndInterests.ps1" }
-    $actionMap[$Window.FindName("CbDisableMeetNow")] = @{ Name = "Hide legacy Meet Now button"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakMeetNow.ps1" }
-    $actionMap[$Window.FindName("CbDisableAdvertisingId")] = @{ Name = "Turn off advertising ID"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakAdvertisingId.ps1" }
-    $actionMap[$Window.FindName("CbLimitFeedbackPrompts")] = @{ Name = "Reduce feedback and survey prompts"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakFeedbackHub.ps1" }
+    $actionMap[$Window.FindName("CbDisableWidgets")] = @{ Name = "Turn off Widgets"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakWidgets.ps1"; RequiresAdmin = $true }
+    $actionMap[$Window.FindName("CbDisableTaskbarNews")] = @{ Name = "Turn off News / taskbar content"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakNewsAndInterests.ps1"; RequiresAdmin = $true }
+    $actionMap[$Window.FindName("CbDisableMeetNow")] = @{ Name = "Hide legacy Meet Now button"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakMeetNow.ps1"; RequiresAdmin = $true }
+    $actionMap[$Window.FindName("CbDisableAdvertisingId")] = @{ Name = "Turn off advertising ID"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakAdvertisingId.ps1"; RequiresAdmin = $true }
+    $actionMap[$Window.FindName("CbLimitFeedbackPrompts")] = @{ Name = "Reduce feedback and survey prompts"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakFeedbackHub.ps1"; RequiresAdmin = $true }
     $actionMap[$Window.FindName("CbDisableOnlineTips")] = @{ Name = "Disable online tips and suggestions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakOnlineTips.ps1" }
 
     $selectedTasks = New-Object System.Collections.Generic.List[object]
@@ -193,14 +206,27 @@ function Run-QOTSelectedTasks {
         return
     }
 
+    $isAdmin = Test-IsAdmin
+    $successCount = 0
+    $failedCount = 0
+
     for ($i = 0; $i -lt $selectedTasks.Count; $i++) {
         $task = $selectedTasks[$i]
         $taskName = $task.Name
         $scriptPath = $task.ScriptPath
+        $requiresAdmin = $false
+        if ($task.ContainsKey("RequiresAdmin")) {
+            $requiresAdmin = [bool]$task.RequiresAdmin
+        }
         if ([string]::IsNullOrWhiteSpace($taskName)) { $taskName = "UnknownTask" }
 
         Write-Host "Now doing task: $taskName"
+        if ($requiresAdmin -and -not $isAdmin) {
+            Write-Host "WARN: Task requires admin rights. Some changes may be blocked."
+        }
 
+        $taskSucceeded = $false
+        
         try {
             if ([string]::IsNullOrWhiteSpace($scriptPath)) {
                 throw "No script path found for task '$taskName'."
@@ -214,19 +240,27 @@ function Run-QOTSelectedTasks {
                 $ErrorActionPreference = 'Stop'
                 & $scriptPath
             }
-            Write-Host "Completed task: $taskName"
+            $taskSucceeded = $true
         }
         catch {
-            Write-Host "Task failed: $taskName | $($_.Exception.Message)"
+            Write-Host "ERROR: Task failed: $taskName | $($_.Exception.Message)"
         }
         finally {
+            if ($taskSucceeded) {
+                $successCount++
+                Write-Host "Completed task: $taskName (SUCCESS)"
+            }
+            else {
+                $failedCount++
+                Write-Host "Completed task: $taskName (FAILED)"
+            }
             if ($ProgressPath -and $ProgressClip) {
                 $pct = [math]::Round((($i + 1) / [double]$selectedTasks.Count) * 100, 0)
                 Set-QOTPlayProgress -ProgressPath $ProgressPath -ProgressClip $ProgressClip -Percent $pct
             }
         }
     }
-
+    Write-Host "Summary: Success=$successCount Failed=$failedCount"
     Write-Host "No more tasks to do."
 }
 
