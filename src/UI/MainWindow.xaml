@@ -261,11 +261,14 @@
                 <!-- Help + Settings buttons (top right) -->
                 <StackPanel DockPanel.Dock="Right"
                             Orientation="Horizontal"
-                            Margin="0,0,6,0">
+                            Margin="0,0,6,0"
+                            Panel.ZIndex="10"
+                            IsHitTestVisible="True">
                     <Button x:Name="BtnPlay"
                             Style="{StaticResource ToolbarIconButton}"
                             Margin="0,0,6,0"
-
+                            IsEnabled="True"
+                            IsHitTestVisible="True"
                             ToolTip="Run selected actions">
                         <Grid Width="16" Height="16">
                             <Path Data="M2,1 L2,15 L14,8 Z"
