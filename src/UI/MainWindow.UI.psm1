@@ -431,18 +431,21 @@ function Start-QOTMainWindow {
     $executionMessage = $window.FindName("ExecutionMessage")
 
     if ($btnPlay) {
+        $btnPlay.IsEnabled = $true
+        $btnPlay.IsHitTestVisible = $true
         Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
 
         $btnPlay.Add_Click({
             Write-Host "User clicked Play button"
             try {
+                if ($script:IsPlayRunning) { return }
+                
                 if ($executionMessage) {
                     $executionMessage.Visibility = [System.Windows.Visibility]::Collapsed
                     $executionMessage.Text = ""
                 }
 
                 $script:IsPlayRunning = $true
-                $btnPlay.IsEnabled = $false
                 Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
 
 
@@ -457,22 +460,10 @@ function Start-QOTMainWindow {
             finally {
                 Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
                 $script:IsPlayRunning = $false
-                $btnPlay.IsEnabled = (Test-QOTAnyActionsSelected -Window $window)
+                $btnPlay.IsEnabled = $true
+                $btnPlay.IsHitTestVisible = $true
             }
         })
-
-        if (Get-Command Test-QOTAnyActionsSelected -ErrorAction SilentlyContinue) {
-            $btnPlay.IsEnabled = Test-QOTAnyActionsSelected -Window $window
-            $script:PlayButtonTimer = New-Object System.Windows.Threading.DispatcherTimer
-            $script:PlayButtonTimer.Interval = [TimeSpan]::FromMilliseconds(500)
-            $script:PlayButtonTimer.Add_Tick({
-                try {
-                    if ($script:IsPlayRunning) { return }
-                    $btnPlay.IsEnabled = Test-QOTAnyActionsSelected -Window $window
-                } catch { }
-            })
-            $script:PlayButtonTimer.Start()
-        }
     }
 
 
