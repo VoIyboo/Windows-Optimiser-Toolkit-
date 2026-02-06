@@ -112,6 +112,80 @@ function Invoke-QOTPlayCompletionSound {
     }
 }
 
+function Run-QOTSelectedTasks {
+    param(
+        [Parameter(Mandatory)]$Window,
+        [System.Windows.Shapes.Path]$ProgressPath,
+        [System.Windows.Media.RectangleGeometry]$ProgressClip
+    )
+
+    # Example task mapping pattern (checkbox/action/script) for fast fallback.
+    $taskScriptMap = @{
+        "Invoke-QCleanTemp" = "Cleanup\\Invoke-QCleanTemp.ps1"
+        "Invoke-QCleanRecycleBin" = "Cleanup\\Invoke-QCleanRecycleBin.ps1"
+        "Invoke-QTweakWidgets" = "Tweaks\\Invoke-QTweakWidgets.ps1"
+    }
+
+    $selectedTasks = @()
+    if (Get-Command Get-QOTSelectedActionsInExecutionOrder -ErrorAction SilentlyContinue) {
+        $selectedTasks = @(Get-QOTSelectedActionsInExecutionOrder -Window $Window)
+    }
+
+    if ($selectedTasks.Count -eq 0) {
+        Write-Host "No tasks selected."
+        Write-Host "No more tasks to do."
+        return
+    }
+
+    for ($i = 0; $i -lt $selectedTasks.Count; $i++) {
+        $entry = $selectedTasks[$i]
+        $item = $entry.Item
+        $actionId = $null
+        $taskName = $null
+
+        try { $actionId = $item.ActionId } catch { $actionId = $null }
+        try { $taskName = $item.Label } catch { $taskName = $null }
+        if ([string]::IsNullOrWhiteSpace($taskName)) { $taskName = $actionId }
+        if ([string]::IsNullOrWhiteSpace($taskName)) { $taskName = "UnknownTask" }
+
+        Write-Host "Now doing task: $taskName"
+
+        try {
+            $scriptPath = $null
+            if (-not [string]::IsNullOrWhiteSpace($actionId) -and (Get-Command Get-QOTActionDefinition -ErrorAction SilentlyContinue)) {
+                $definition = Get-QOTActionDefinition -ActionId $actionId
+                if ($definition -and -not [string]::IsNullOrWhiteSpace($definition.ScriptPath)) {
+                    $scriptPath = $definition.ScriptPath
+                }
+            }
+
+            if (-not $scriptPath -and -not [string]::IsNullOrWhiteSpace($actionId) -and $taskScriptMap.ContainsKey($actionId)) {
+                $scriptPath = Join-Path (Join-Path $PSScriptRoot "..\\Scripts") $taskScriptMap[$actionId]
+            }
+
+            if ([string]::IsNullOrWhiteSpace($scriptPath)) {
+                throw "No script path found for action '$actionId'."
+            }
+            if (-not (Test-Path -LiteralPath $scriptPath)) {
+                throw "Script path does not exist: $scriptPath"
+            }
+
+            & $scriptPath -Window $Window -ErrorAction Stop
+            Write-Host "Completed task: $taskName"
+        }
+        catch {
+            Write-Host "Task failed: $taskName - $($_.Exception.Message)"
+        }
+        finally {
+            if ($ProgressPath -and $ProgressClip) {
+                $pct = [math]::Round((($i + 1) / [double]$selectedTasks.Count) * 100, 0)
+                Set-QOTPlayProgress -ProgressPath $ProgressPath -ProgressClip $ProgressClip -Percent $pct
+            }
+        }
+    }
+
+    Write-Host "No more tasks to do."
+}
 
 function Get-QOTNamedElementsMap {
     param(
