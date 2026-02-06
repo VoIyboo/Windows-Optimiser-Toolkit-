@@ -72,6 +72,48 @@
             </Setter>
         </Style>
 
+        <!-- Shared toolbar icon button (Play / Help / Settings) -->
+        <Style x:Key="ToolbarIconButton"
+               TargetType="Button"
+               BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextSubtle}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="buttonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="buttonBorder" Property="Background" Value="#1F2937" />
+                                <Setter TargetName="buttonBorder" Property="BorderBrush" Value="#4B5563" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="buttonBorder" Property="Background" Value="#111827" />
+                                <Setter TargetName="buttonBorder" Property="BorderBrush" Value="#6B7280" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="buttonBorder" Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- GroupBox style -->
         <Style TargetType="GroupBox">
             <Setter Property="Margin" Value="10" />
@@ -221,16 +263,13 @@
                             Orientation="Horizontal"
                             Margin="0,0,6,0">
                     <Button x:Name="BtnPlay"
-                            Width="36"
-                            Height="36"
+                            Style="{StaticResource ToolbarIconButton}"
                             Margin="0,0,6,0"
-                            VerticalAlignment="Top"
-                            Background="Transparent"
-                            BorderBrush="{StaticResource BorderBrush}"
+
                             ToolTip="Run selected actions">
                         <Grid Width="16" Height="16">
                             <Path Data="M2,1 L2,15 L14,8 Z"
-                                  Fill="{StaticResource TextSubtle}"
+                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                   Stretch="Fill" />
                             <Path x:Name="BtnPlayProgressPath"
                                   Data="M2,1 L2,15 L14,8 Z"
@@ -245,12 +284,8 @@
                     </Button>
 
                     <Button x:Name="BtnHelp"
-                            Width="36"
-                            Height="36"
+                            Style="{StaticResource ToolbarIconButton}"
                             Margin="0,0,6,0"
-                            VerticalAlignment="Top"
-                            Background="Transparent"
-                            BorderBrush="{StaticResource BorderBrush}"
                             ToolTip="Help">
                         <TextBlock x:Name="BtnHelpIcon"
                                    FontFamily="Segoe MDL2 Assets"
@@ -262,12 +297,8 @@
                     </Button>
 
                     <Button x:Name="BtnSettings"
-                            Width="36"
-                            Height="36"
+                            Style="{StaticResource ToolbarIconButton}"
                             Margin="0"
-                            VerticalAlignment="Top"
-                            Background="Transparent"
-                            BorderBrush="{StaticResource BorderBrush}"
                             ToolTip="Settings">
                         <TextBlock x:Name="BtnSettingsIcon"
                                    FontFamily="Segoe MDL2 Assets"
