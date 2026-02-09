@@ -11,25 +11,55 @@ Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force
 function New-QOTTaskResult {
     param(
         [Parameter(Mandatory)][string]$Name,
-        [int]$Succeeded = 0,
-        [int]$Failed = 0
+        [Parameter(Mandatory)][ValidateSet("Success","Skipped","Failed")][string]$Status,
+        [string]$Reason,
+        [string]$Error
     )
 
-    $status = "Failed"
-    if ($Succeeded -gt 0 -and $Failed -eq 0) {
-        $status = "Success"
+    [pscustomobject]@{
+        Name   = $Name
+        Status = $Status
+        Reason = $Reason
+        Error  = $Error
     }
-    elseif ($Succeeded -gt 0 -and $Failed -gt 0) {
-        $status = "Partial"
-    }
+}
+
+function New-QOTOperationResult {
+    param(
+        [Parameter(Mandatory)][ValidateSet("Success","Skipped","Failed")][string]$Status,
+        [string]$Reason,
+        [string]$Error
+    )
 
     [pscustomobject]@{
-        Name               = $Name
-        Status             = $status
-        SuccessfulOpsCount = $Succeeded
-        FailedOpsCount     = $Failed
-        TotalOpsCount      = ($Succeeded + $Failed)
+        Status = $Status
+        Reason = $Reason
+        Error  = $Error
     }
+}
+
+function Resolve-QOTTaskResult {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][object[]]$Operations
+    )
+
+    $failed = @($Operations | Where-Object { $_.Status -eq "Failed" })
+    if ($failed.Count -gt 0) {
+        return New-QOTTaskResult -Name $Name -Status "Failed" -Reason $failed[0].Reason -Error $failed[0].Error
+    }
+
+    $success = @($Operations | Where-Object { $_.Status -eq "Success" })
+    if ($success.Count -gt 0) {
+        return New-QOTTaskResult -Name $Name -Status "Success"
+    }
+
+    $skipped = @($Operations | Where-Object { $_.Status -eq "Skipped" })
+    if ($skipped.Count -gt 0) {
+        return New-QOTTaskResult -Name $Name -Status "Skipped" -Reason $skipped[0].Reason
+    }
+
+    return New-QOTTaskResult -Name $Name -Status "Skipped" -Reason "Not applicable"
 }
 
 function Invoke-QCleanPath {
@@ -38,13 +68,21 @@ function Invoke-QCleanPath {
         [string]$Label
     )
 
+    if ($Label -and $Label -isnot [string]) {
+        $Label = [string]$Label
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return New-QOTOperationResult -Status "Skipped" -Reason "Invalid path in task definition"
+    }
+
     if (-not (Test-Path -LiteralPath $Path)) {
         if ($Label) {
             Write-QLog ("Cleaning: {0} (skip, not found)" -f $Label)
         } else {
             Write-QLog ("Cleaning: Path not found: {0}" -f $Path)
         }
-        return $false
+        return New-QOTOperationResult -Status "Skipped" -Reason "Not found"
     }
 
     try {
@@ -61,7 +99,10 @@ function Invoke-QCleanPath {
         } else {
             Write-QLog ("Cleaning: Cleared {0}" -f $Path)
         }
-        return $removedAny
+        if ($removedAny) {
+            return New-QOTOperationResult -Status "Success"
+        }
+        return New-QOTOperationResult -Status "Skipped" -Reason "Already done"
     }
     catch {
         if ($Label) {
@@ -69,7 +110,7 @@ function Invoke-QCleanPath {
         } else {
             Write-QLog ("Cleaning: {0} failed: {1}" -f $Path, $_.Exception.Message) "ERROR"
         }
-        return $false
+        return New-QOTOperationResult -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
     }
 }
 
@@ -80,13 +121,21 @@ function Invoke-QCleanPathFiles {
         [string]$Label
     )
 
+    if ($Label -and $Label -isnot [string]) {
+        $Label = [string]$Label
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return New-QOTOperationResult -Status "Skipped" -Reason "Invalid path in task definition"
+    }
+
     if (-not (Test-Path -LiteralPath $Path)) {
         if ($Label) {
             Write-QLog ("Cleaning: {0} (skip, not found)" -f $Label)
         } else {
             Write-QLog ("Cleaning: Path not found: {0}" -f $Path)
         }
-        return $false
+        return New-QOTOperationResult -Status "Skipped" -Reason "Not found"
     }
 
     try {
@@ -103,7 +152,10 @@ function Invoke-QCleanPathFiles {
         } else {
             Write-QLog ("Cleaning: Cleared {0}\\{1}" -f $Path, $Filter)
         }
-        return $removedAny
+        if ($removedAny) {
+            return New-QOTOperationResult -Status "Success"
+        }
+        return New-QOTOperationResult -Status "Skipped" -Reason "Not found"
     }
     catch {
         if ($Label) {
@@ -111,7 +163,7 @@ function Invoke-QCleanPathFiles {
         } else {
             Write-QLog ("Cleaning: {0}\\{1} failed: {2}" -f $Path, $Filter, $_.Exception.Message) "ERROR"
         }
-        return $false
+        return New-QOTOperationResult -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
     }
 }
 
@@ -124,9 +176,9 @@ function Invoke-QCleanWindowsUpdateCache {
     Write-QLog "Cleaning: Windows Update cache"
     $serviceName = "wuauserv"
     try { Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue } catch { }
-    $ok = Invoke-QCleanPath -Path "$env:SystemRoot\SoftwareDistribution\Download" -Label "Windows Update cache"
+    $op = Invoke-QCleanPath -Path "$env:SystemRoot\SoftwareDistribution\Download" -Label "Windows Update cache"
     try { Start-Service -Name $serviceName -ErrorAction SilentlyContinue } catch { }
-    return New-QOTTaskResult -Name "Windows Update cache" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
+    return Resolve-QOTTaskResult -Name "Windows Update cache" -Operations @($op)
 }
 
 # ------------------------------
@@ -134,8 +186,8 @@ function Invoke-QCleanWindowsUpdateCache {
 # ------------------------------
 function Invoke-QCleanDOCache {
     Write-QLog "Cleaning: Delivery Optimisation cache"
-    $ok = Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\DeliveryOptimization\Cache" -Label "Delivery Optimisation cache"
-    return New-QOTTaskResult -Name "Delivery Optimisation cache" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
+    $op = Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\DeliveryOptimization\Cache" -Label "Delivery Optimisation cache"
+    return Resolve-QOTTaskResult -Name "Delivery Optimisation cache" -Operations @($op)
 }
 
 # ------------------------------
@@ -148,7 +200,7 @@ function Invoke-QCleanTemp {
         Invoke-QCleanPath -Path $env:TMP -Label "User tmp files",
         Invoke-QCleanPath -Path "$env:SystemRoot\Temp" -Label "Windows temp files"
     )
-    return New-QOTTaskResult -Name "Temp folders" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Resolve-QOTTaskResult -Name "Temp folders" -Operations $ops
 }
 
 # ------------------------------
@@ -159,11 +211,11 @@ function Invoke-QCleanRecycleBin {
     try {
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue | Out-Null
         Write-QLog "Cleaning: Recycle Bin (done)"
-        return New-QOTTaskResult -Name "Recycle Bin" -Succeeded 1 -Failed 0
+        return New-QOTTaskResult -Name "Recycle Bin" -Status "Success"
     }
     catch {
         Write-QLog ("Cleaning: Recycle Bin failed: {0}" -f $_.Exception.Message) "ERROR"
-        return New-QOTTaskResult -Name "Recycle Bin" -Succeeded 0 -Failed 1
+        return New-QOTTaskResult -Name "Recycle Bin" -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
     }
 }
 
@@ -177,7 +229,7 @@ function Invoke-QCleanThumbnailCache {
         Invoke-QCleanPathFiles -Path $thumbPath -Filter "thumbcache*.db" -Label "Thumbnail cache",
         Invoke-QCleanPathFiles -Path $thumbPath -Filter "iconcache*.db" -Label "Icon cache"
     )
-    return New-QOTTaskResult -Name "Thumbnail cache" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Resolve-QOTTaskResult -Name "Thumbnail cache" -Operations $ops
 }
 
 # ------------------------------
@@ -190,7 +242,7 @@ function Invoke-QCleanErrorLogs {
         Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\WER\ReportQueue" -Label "Windows Error Reporting queue",
         Invoke-QCleanPath -Path "$env:LOCALAPPDATA\CrashDumps" -Label "User crash dumps"
     )
-    return New-QOTTaskResult -Name "Error logs" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Resolve-QOTTaskResult -Name "Error logs" -Operations $ops
 }
 
 # ------------------------------
@@ -205,7 +257,7 @@ function Invoke-QCleanSetupLeftovers {
         Invoke-QCleanPath -Path "$env:SystemDrive\ESD" -Label "Windows ESD",
         Invoke-QCleanPath -Path "$env:SystemRoot\Panther" -Label "Setup log files"
     )
-    return New-QOTTaskResult -Name "Setup leftovers" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Resolve-QOTTaskResult -Name "Setup leftovers" -Operations $ops
 }
 
 # ------------------------------
@@ -216,11 +268,11 @@ function Invoke-QCleanStoreCache {
     try {
         Start-Process -FilePath "wsreset.exe" -Wait -WindowStyle Hidden
         Write-QLog "Cleaning: Microsoft Store cache (done)"
-        return New-QOTTaskResult -Name "Store cache" -Succeeded 1 -Failed 0
+        return New-QOTTaskResult -Name "Store cache" -Status "Success"
     }
     catch {
         Write-QLog ("Cleaning: Microsoft Store cache failed: {0}" -f $_.Exception.Message) "ERROR"
-        return New-QOTTaskResult -Name "Store cache" -Succeeded 0 -Failed 1
+        return New-QOTTaskResult -Name "Store cache" -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
     }
 }
 
@@ -235,7 +287,7 @@ function Invoke-QCleanEdgeCache {
         Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\Code Cache") -Label "Edge Code Cache",
         Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\GPUCache") -Label "Edge GPU Cache"
     )
-    return New-QOTTaskResult -Name "Edge cache" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Resolve-QOTTaskResult -Name "Edge cache" -Operations $ops
 }
 
 # ------------------------------
@@ -249,7 +301,7 @@ function Invoke-QCleanChromeCache {
         Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\Code Cache") -Label "Chrome Code Cache",
         Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\GPUCache") -Label "Chrome GPU Cache"
     )
-    return New-QOTTaskResult -Name "Chrome cache" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Resolve-QOTTaskResult -Name "Chrome cache" -Operations $ops
 }
 
 
