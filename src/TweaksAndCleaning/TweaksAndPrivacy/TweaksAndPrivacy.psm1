@@ -8,6 +8,30 @@
 Import-Module "$PSScriptRoot\..\..\Core\Config\Config.psm1"   -Force
 Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force
 
+function New-QOTTaskResult {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [int]$Succeeded = 0,
+        [int]$Failed = 0
+    )
+
+    $status = "Failed"
+    if ($Succeeded -gt 0 -and $Failed -eq 0) {
+        $status = "Success"
+    }
+    elseif ($Succeeded -gt 0 -and $Failed -gt 0) {
+        $status = "Partial"
+    }
+
+    [pscustomobject]@{
+        Name               = $Name
+        Status             = $status
+        SuccessfulOpsCount = $Succeeded
+        FailedOpsCount     = $Failed
+        TotalOpsCount      = ($Succeeded + $Failed)
+    }
+}
+
 function Set-QOTRegistryValue {
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -56,37 +80,54 @@ function Set-QOTRegistryDefaultValue {
 # Start menu / recommendations
 # ------------------------------
 function Invoke-QTweakStartMenuRecommendations {
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
-    Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1,
+        Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1
+    )
     Write-QLog "Tweaks: Start menu recommendations disabled."
+    return New-QOTTaskResult -Name "Start menu recommendations" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakSuggestedApps {
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
-    Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1 | Out-Null
-    Write-QLog "Tweaks: Start menu recommendations disabled."
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    $ops = @(
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338388Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338389Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353698Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353694Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SilentInstalledAppsEnabled" -Value 0,
+        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsConsumerFeatures" -Value 1
+    )
+    Write-QLog "Tweaks: Suggested apps and promotions disabled."
+    return New-QOTTaskResult -Name "Suggested apps and promotions" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakTipsInStart {
-    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338389Enabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path $path -Name "SystemPaneSuggestionsEnabled" -Value 0 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338389Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SystemPaneSuggestionsEnabled" -Value 0
+    )
     Write-QLog "Tweaks: Tips and suggestions in Start disabled."
+    return New-QOTTaskResult -Name "Tips in Start" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakBingSearch {
-    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "CortanaConsent" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch" -Value 1 | Out-Null
-    Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "DisableSearchBoxSuggestions" -Value 1 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 0,
+        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "CortanaConsent" -Value 0,
+        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch" -Value 1,
+        Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "DisableSearchBoxSuggestions" -Value 1
+    )
     Write-QLog "Tweaks: Bing/web results in Start search disabled."
+    return New-QOTTaskResult -Name "Bing search" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakClassicContextMenu {
     $path = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
-    Set-QOTRegistryDefaultValue -Path $path -Value "" | Out-Null
+    $ok = Set-QOTRegistryDefaultValue -Path $path -Value ""
     Write-QLog "Tweaks: Classic context menu enabled (restart Explorer for effect)."
+    return New-QOTTaskResult -Name "Classic context menu" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
 }
 
 # ------------------------------
@@ -94,15 +135,21 @@ function Invoke-QTweakClassicContextMenu {
 # ------------------------------
 function Invoke-QTweakWidgets {
     $path = "HKLM:\SOFTWARE\Policies\Microsoft\Dsh"
-    Set-QOTRegistryValue -Path $path -Name "AllowWidgets" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path $path -Name "AllowNewsAndInterests" -Value 0 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path $path -Name "AllowWidgets" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "AllowNewsAndInterests" -Value 0
+    )
     Write-QLog "Tweaks: Widgets disabled."
+    return New-QOTTaskResult -Name "Widgets" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakNewsAndInterests {
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds" -Name "EnableFeeds" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds" -Name "EnableFeeds" -Value 0,
+        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2
+    )
     Write-QLog "Tweaks: News/taskbar content disabled."
+    return New-QOTTaskResult -Name "News and interests" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 # ------------------------------
@@ -121,24 +168,33 @@ function Invoke-QTweakAnimations {
 # ------------------------------
 function Invoke-QTweakOnlineTips {
     $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
-    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353694Enabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353696Enabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353698Enabled" -Value 0 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353694Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353696Enabled" -Value 0,
+        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353698Enabled" -Value 0
+    )
     Write-QLog "Tweaks: Online tips and suggestions disabled."
+    return New-QOTTaskResult -Name "Online tips" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakAdvertisingId {
-    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy" -Value 1 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0,
+        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy" -Value 1
+    )
     Write-QLog "Tweaks: Advertising ID disabled."
+    return New-QOTTaskResult -Name "Advertising ID" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakFeedbackHub {
-    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "NumberOfSIUFInPeriod" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "PeriodInNanoSeconds" -Value 0 | Out-Null
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "DoNotShowFeedbackNotifications" -Value 1 | Out-Null
+    $ops = @(
+        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "NumberOfSIUFInPeriod" -Value 0,
+        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "PeriodInNanoSeconds" -Value 0,
+        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "DoNotShowFeedbackNotifications" -Value 1
+    )
     Write-QLog "Tweaks: Feedback and survey prompts reduced."
+    return New-QOTTaskResult -Name "Feedback hub" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
 }
 
 function Invoke-QTweakTelemetrySafe {
@@ -149,8 +205,9 @@ function Invoke-QTweakTelemetrySafe {
 # Meet Now / Cortana / stock apps
 # ------------------------------
 function Invoke-QTweakMeetNow {
-    Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideSCAMeetNow" -Value 1 | Out-Null
+    $ok = Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideSCAMeetNow" -Value 1
     Write-QLog "Tweaks: Meet Now hidden."
+    return New-QOTTaskResult -Name "Meet now" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
 }
 
 function Invoke-QTweakCortanaLeftovers {
