@@ -208,7 +208,7 @@ function Run-QOTSelectedTasks {
 
     $isAdmin = Test-IsAdmin
     $successCount = 0
-    $partialCount = 0
+    $skippedCount = 0
     $failedCount = 0
 
     for ($i = 0; $i -lt $selectedTasks.Count; $i++) {
@@ -227,6 +227,7 @@ function Run-QOTSelectedTasks {
         }
 
         $taskStatus = "FAILED"
+        $taskReason = $null
         
         try {
             if ([string]::IsNullOrWhiteSpace($scriptPath)) {
@@ -239,6 +240,8 @@ function Run-QOTSelectedTasks {
 
             $result = & {
                 $ErrorActionPreference = 'Stop'
+                $resultReason = $null
+                $resultError = $null
                 & $scriptPath
             }
             $resultStatus = $null
@@ -247,6 +250,12 @@ function Run-QOTSelectedTasks {
                     if ($null -eq $entry) { continue }
                     if ($entry.PSObject.Properties.Name -contains "Status") {
                         $resultStatus = [string]$entry.Status
+                        if ($entry.PSObject.Properties.Name -contains "Reason") {
+                            $resultReason = [string]$entry.Reason
+                        }
+                        if ($entry.PSObject.Properties.Name -contains "Error") {
+                            $resultError = [string]$entry.Error
+                        }
                         break
                     }
                 }
@@ -255,12 +264,15 @@ function Run-QOTSelectedTasks {
             if ($resultStatus) {
                 switch ($resultStatus.ToLowerInvariant()) {
                     "success" { $taskStatus = "SUCCESS" }
-                    "partial" { $taskStatus = "PARTIAL" }
-                    "failed"  { $taskStatus = "FAILED" }
+                    "skipped" { $taskStatus = "SKIPPED"; $taskReason = $resultReason }
+                    "failed"  { $taskStatus = "FAILED"; $taskReason = $resultReason }
                     default {
                         Write-Host "WARN: Unknown task result status '$resultStatus' for '$taskName'. Treating as FAILED."
                         $taskStatus = "FAILED"
                     }
+                }
+                if (-not $taskReason -and $resultError) {
+                    $taskReason = $resultError
                 }
             }
             else {
@@ -270,22 +282,27 @@ function Run-QOTSelectedTasks {
         catch {
             Write-Host "ERROR: Task failed: $taskName | $($_.Exception.Message)"
             $taskStatus = "FAILED"
+            $taskReason = $_.Exception.Message
         }
         finally {
             switch ($taskStatus) {
                 "SUCCESS" { $successCount++ }
-                "PARTIAL" { $partialCount++ }
+                "SKIPPED" { $skippedCount++ }
                 default { $failedCount++ }
             }
 
-            Write-Host "Completed task: $taskName ($taskStatus)"
+            $reasonSuffix = ""
+            if ($taskStatus -ne "SUCCESS" -and -not [string]::IsNullOrWhiteSpace($taskReason)) {
+                $reasonSuffix = " - $taskReason"
+            }
+            Write-Host "Completed task: $taskName ($taskStatus)$reasonSuffix"
             if ($ProgressPath -and $ProgressClip) {
                 $pct = [math]::Round((($i + 1) / [double]$selectedTasks.Count) * 100, 0)
                 Set-QOTPlayProgress -ProgressPath $ProgressPath -ProgressClip $ProgressClip -Percent $pct
             }
         }
     }
-    Write-Host "Summary: Success=$successCount Partial=$partialCount Failed=$failedCount"
+    Write-Host "Summary: Success=$successCount Skipped=$skippedCount Failed=$failedCount"
     Write-Host "No more tasks to do."
 }
 
