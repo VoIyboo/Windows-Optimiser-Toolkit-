@@ -279,7 +279,6 @@ function Run-QOTSelectedTasks {
             }
 
             Write-Host "Completed task: $taskName ($taskStatus)"
-            }
             if ($ProgressPath -and $ProgressClip) {
                 $pct = [math]::Round((($i + 1) / [double]$selectedTasks.Count) * 100, 0)
                 Set-QOTPlayProgress -ProgressPath $ProgressPath -ProgressClip $ProgressClip -Percent $pct
