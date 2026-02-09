@@ -128,7 +128,6 @@ function Invoke-QCleanWindowsUpdateCache {
     try { Start-Service -Name $serviceName -ErrorAction SilentlyContinue } catch { }
     return New-QOTTaskResult -Name "Windows Update cache" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
 }
-}
 
 # ------------------------------
 # Public: Clean Delivery Optimisation cache
