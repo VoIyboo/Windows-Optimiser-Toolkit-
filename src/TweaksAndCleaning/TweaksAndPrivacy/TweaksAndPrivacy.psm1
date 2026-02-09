@@ -11,25 +11,144 @@ Import-Module "$PSScriptRoot\..\..\Core\Logging\Logging.psm1" -Force
 function New-QOTTaskResult {
     param(
         [Parameter(Mandatory)][string]$Name,
-        [int]$Succeeded = 0,
-        [int]$Failed = 0
+        [Parameter(Mandatory)][ValidateSet("Success","Skipped","Failed")][string]$Status,
+        [string]$Reason,
+        [string]$Error
+    )
+    [pscustomobject]@{
+        Name   = $Name
+        Status = $Status
+        Reason = $Reason
+        Error  = $Error
+    }
+}
+
+function Test-QOTIsAdmin {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        if (-not $identity) { return $false }
+        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-QOTRegistryAdminRequired {
+    param(
+        [string]$Path
     )
 
-    $status = "Failed"
-    if ($Succeeded -gt 0 -and $Failed -eq 0) {
-        $status = "Success"
-    }
-    elseif ($Succeeded -gt 0 -and $Failed -gt 0) {
-        $status = "Partial"
-    }
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    if ($Path -match '^(?i)HKLM:' ) { return $true }
+    if ($Path -match '(?i)\\Policies\\') { return $true }
+    return $false
+}
+
+function New-QOTOperationResult {
+    param(
+        [Parameter(Mandatory)][ValidateSet("Success","Skipped","Failed")][string]$Status,
+        [string]$Reason,
+        [string]$Error
+    )
 
     [pscustomobject]@{
-        Name               = $Name
-        Status             = $status
-        SuccessfulOpsCount = $Succeeded
-        FailedOpsCount     = $Failed
-        TotalOpsCount      = ($Succeeded + $Failed)
+        Status = $Status
+        Reason = $Reason
+        Error  = $Error
     }
+}
+
+function Set-QOTRegistryValueInternal {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)]$Value,
+        [Parameter()][ValidateSet("DWord","String","ExpandString")][string]$Type = "DWord",
+        [switch]$DefaultValue
+    )
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return New-QOTOperationResult -Status "Skipped" -Reason "Invalid path in task definition"
+    }
+
+    if (-not (Test-QOTIsAdmin) -and (Test-QOTRegistryAdminRequired -Path $Path)) {
+        return New-QOTOperationResult -Status "Skipped" -Reason "Admin required"
+    }
+    try {
+        if (Test-Path -LiteralPath $Path) {
+            try {
+                $current = Get-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
+                if ($null -ne $current) {
+                    $currentValue = $current.$Name
+                    if ($currentValue -eq $Value) {
+                        return New-QOTOperationResult -Status "Skipped" -Reason "Already set"
+                    }
+                }
+            } catch { }
+        }
+        if (-not (Test-Path -LiteralPath $Path)) {
+            New-Item -Path $Path -Force | Out-Null
+        }
+
+        if ($DefaultValue) {
+            Set-ItemProperty -Path $Path -Name $Name -Value $Value -Force | Out-Null
+        } else {
+            New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
+        }
+        Write-QLog ("Tweaks: set {0}\\{1} = {2}" -f $Path, $Name, $Value)
+        return New-QOTOperationResult -Status "Success"
+    }
+    catch {
+        Write-QLog ("Tweaks: failed to set {0}\\{1}: {2}" -f $Path, $Name, $_.Exception.Message) "ERROR"
+        return New-QOTOperationResult -Status "Failed" -Reason "Registry update failed" -Error $_.Exception.Message
+    }
+}
+
+function Invoke-QOTRegistryTask {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][hashtable[]]$Operations
+    )
+
+    if (-not (Test-QOTIsAdmin)) {
+        foreach ($operation in $Operations) {
+            if (Test-QOTRegistryAdminRequired -Path $operation.Path) {
+                return New-QOTTaskResult -Name $Name -Status "Skipped" -Reason "Admin required"
+            }
+        }
+    }
+
+    $results = foreach ($operation in $Operations) {
+        $path = $operation.Path
+        $value = $operation.Value
+        $type = $operation.Type
+        if ($operation.DefaultValue) {
+            Set-QOTRegistryValueInternal -Path $path -Name "(default)" -Value $value -DefaultValue
+        } else {
+            if ($null -ne $type -and -not [string]::IsNullOrWhiteSpace($type)) {
+                Set-QOTRegistryValueInternal -Path $path -Name $operation.Name -Value $value -Type $type
+            } else {
+                Set-QOTRegistryValueInternal -Path $path -Name $operation.Name -Value $value
+            }
+        }
+    }
+    $failed = @($results | Where-Object { $_.Status -eq "Failed" })
+    if ($failed.Count -gt 0) {
+        return New-QOTTaskResult -Name $Name -Status "Failed" -Reason $failed[0].Reason -Error $failed[0].Error
+    }
+
+    $success = @($results | Where-Object { $_.Status -eq "Success" })
+    if ($success.Count -gt 0) {
+        return New-QOTTaskResult -Name $Name -Status "Success"
+    }
+
+    $skipped = @($results | Where-Object { $_.Status -eq "Skipped" })
+    if ($skipped.Count -gt 0) {
+        return New-QOTTaskResult -Name $Name -Status "Skipped" -Reason $skipped[0].Reason
+    }
+
+    return New-QOTTaskResult -Name $Name -Status "Skipped" -Reason "Not applicable"
 }
 
 function Set-QOTRegistryValue {
@@ -40,19 +159,7 @@ function Set-QOTRegistryValue {
         [Parameter()][ValidateSet("DWord","String","ExpandString")][string]$Type = "DWord"
     )
 
-    try {
-        if (-not (Test-Path -LiteralPath $Path)) {
-            New-Item -Path $Path -Force | Out-Null
-        }
-
-        New-ItemProperty -Path $Path -Name $Name -Value $Value -PropertyType $Type -Force | Out-Null
-        Write-QLog ("Tweaks: set {0}\\{1} = {2}" -f $Path, $Name, $Value)
-        return $true
-    }
-    catch {
-        Write-QLog ("Tweaks: failed to set {0}\\{1}: {2}" -f $Path, $Name, $_.Exception.Message) "ERROR"
-        return $false
-    }
+    Set-QOTRegistryValueInternal -Path $Path -Name $Name -Value $Value -Type $Type
 }
 
 function Set-QOTRegistryDefaultValue {
@@ -61,73 +168,63 @@ function Set-QOTRegistryDefaultValue {
         [Parameter(Mandatory)]$Value
     )
 
-    try {
-        if (-not (Test-Path -LiteralPath $Path)) {
-            New-Item -Path $Path -Force | Out-Null
-        }
-
-        Set-ItemProperty -Path $Path -Name "(default)" -Value $Value -Force | Out-Null
-        Write-QLog ("Tweaks: set {0}\\(Default) = {1}" -f $Path, $Value)
-        return $true
-    }
-    catch {
-        Write-QLog ("Tweaks: failed to set default for {0}: {1}" -f $Path, $_.Exception.Message) "ERROR"
-        return $false
-    }
+    Set-QOTRegistryValueInternal -Path $Path -Name "(default)" -Value $Value -DefaultValue
 }
-
 # ------------------------------
 # Start menu / recommendations
 # ------------------------------
 function Invoke-QTweakStartMenuRecommendations {
     $ops = @(
-        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1,
-        Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideRecommendedSection" -Value 1
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"; Name = "HideRecommendedSection"; Value = 1 },
+        @{ Path = "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer"; Name = "HideRecommendedSection"; Value = 1 }
     )
     Write-QLog "Tweaks: Start menu recommendations disabled."
-    return New-QOTTaskResult -Name "Start menu recommendations" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Start menu recommendations" -Operations $ops
 }
 
 function Invoke-QTweakSuggestedApps {
     $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
     $ops = @(
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338388Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338389Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353698Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353694Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SilentInstalledAppsEnabled" -Value 0,
-        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsConsumerFeatures" -Value 1
+        @{ Path = $path; Name = "SubscribedContent-338388Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-338389Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-353698Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-353694Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SilentInstalledAppsEnabled"; Value = 0 },
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent"; Name = "DisableWindowsConsumerFeatures"; Value = 1 }
     )
     Write-QLog "Tweaks: Suggested apps and promotions disabled."
-    return New-QOTTaskResult -Name "Suggested apps and promotions" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Suggested apps and promotions" -Operations $ops
 }
 
 function Invoke-QTweakTipsInStart {
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
     $ops = @(
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338389Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SystemPaneSuggestionsEnabled" -Value 0
+        @{ Path = $path; Name = "SubscribedContent-338389Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-338393Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SystemPaneSuggestionsEnabled"; Value = 0 }
     )
     Write-QLog "Tweaks: Tips and suggestions in Start disabled."
-    return New-QOTTaskResult -Name "Tips in Start" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Tips in Start" -Operations $ops
 }
 
 function Invoke-QTweakBingSearch {
     $ops = @(
-        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "BingSearchEnabled" -Value 0,
-        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" -Name "CortanaConsent" -Value 0,
-        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "DisableWebSearch" -Value 1,
-        Set-QOTRegistryValue -Path "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "DisableSearchBoxSuggestions" -Value 1
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search"; Name = "BingSearchEnabled"; Value = 0 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search"; Name = "CortanaConsent"; Value = 0 },
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search"; Name = "DisableWebSearch"; Value = 1 },
+        @{ Path = "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer"; Name = "DisableSearchBoxSuggestions"; Value = 1 }
     )
     Write-QLog "Tweaks: Bing/web results in Start search disabled."
-    return New-QOTTaskResult -Name "Bing search" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Bing search" -Operations $ops
 }
 
 function Invoke-QTweakClassicContextMenu {
     $path = "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
-    $ok = Set-QOTRegistryDefaultValue -Path $path -Value ""
+    $ops = @(
+        @{ Path = $path; Value = ""; DefaultValue = $true }
+    )
     Write-QLog "Tweaks: Classic context menu enabled (restart Explorer for effect)."
-    return New-QOTTaskResult -Name "Classic context menu" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
+    return Invoke-QOTRegistryTask -Name "Classic context menu" -Operations $ops
 }
 
 # ------------------------------
@@ -136,20 +233,20 @@ function Invoke-QTweakClassicContextMenu {
 function Invoke-QTweakWidgets {
     $path = "HKLM:\SOFTWARE\Policies\Microsoft\Dsh"
     $ops = @(
-        Set-QOTRegistryValue -Path $path -Name "AllowWidgets" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "AllowNewsAndInterests" -Value 0
+        @{ Path = $path; Name = "AllowWidgets"; Value = 0 },
+        @{ Path = $path; Name = "AllowNewsAndInterests"; Value = 0 }
     )
     Write-QLog "Tweaks: Widgets disabled."
-    return New-QOTTaskResult -Name "Widgets" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Widgets" -Operations $ops
 }
 
 function Invoke-QTweakNewsAndInterests {
     $ops = @(
-        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds" -Name "EnableFeeds" -Value 0,
-        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds" -Name "ShellFeedsTaskbarViewMode" -Value 2
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds"; Name = "EnableFeeds"; Value = 0 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Feeds"; Name = "ShellFeedsTaskbarViewMode"; Value = 2 }
     )
     Write-QLog "Tweaks: News/taskbar content disabled."
-    return New-QOTTaskResult -Name "News and interests" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "News and interests" -Operations $ops
 }
 
 # ------------------------------
@@ -169,32 +266,32 @@ function Invoke-QTweakAnimations {
 function Invoke-QTweakOnlineTips {
     $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
     $ops = @(
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-338393Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353694Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353696Enabled" -Value 0,
-        Set-QOTRegistryValue -Path $path -Name "SubscribedContent-353698Enabled" -Value 0
+        @{ Path = $path; Name = "SubscribedContent-338393Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-353694Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-353696Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-353698Enabled"; Value = 0 }
     )
     Write-QLog "Tweaks: Online tips and suggestions disabled."
-    return New-QOTTaskResult -Name "Online tips" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Online tips" -Operations $ops
 }
 
 function Invoke-QTweakAdvertisingId {
     $ops = @(
-        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" -Name "Enabled" -Value 0,
-        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo" -Name "DisabledByGroupPolicy" -Value 1
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo"; Name = "Enabled"; Value = 0 },
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo"; Name = "DisabledByGroupPolicy"; Value = 1 }
     )
     Write-QLog "Tweaks: Advertising ID disabled."
-    return New-QOTTaskResult -Name "Advertising ID" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Advertising ID" -Operations $ops
 }
 
 function Invoke-QTweakFeedbackHub {
     $ops = @(
-        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "NumberOfSIUFInPeriod" -Value 0,
-        Set-QOTRegistryValue -Path "HKCU:\Software\Microsoft\Siuf\Rules" -Name "PeriodInNanoSeconds" -Value 0,
-        Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" -Name "DoNotShowFeedbackNotifications" -Value 1
+        @{ Path = "HKCU:\Software\Microsoft\Siuf\Rules"; Name = "NumberOfSIUFInPeriod"; Value = 0 },
+        @{ Path = "HKCU:\Software\Microsoft\Siuf\Rules"; Name = "PeriodInNanoSeconds"; Value = 0 },
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"; Name = "DoNotShowFeedbackNotifications"; Value = 1 }
     )
     Write-QLog "Tweaks: Feedback and survey prompts reduced."
-    return New-QOTTaskResult -Name "Feedback hub" -Succeeded (($ops | Where-Object { $_ }).Count) -Failed (($ops | Where-Object { -not $_ }).Count)
+    return Invoke-QOTRegistryTask -Name "Feedback hub" -Operations $ops
 }
 
 function Invoke-QTweakTelemetrySafe {
@@ -205,9 +302,11 @@ function Invoke-QTweakTelemetrySafe {
 # Meet Now / Cortana / stock apps
 # ------------------------------
 function Invoke-QTweakMeetNow {
-    $ok = Set-QOTRegistryValue -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer" -Name "HideSCAMeetNow" -Value 1
+    $ops = @(
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"; Name = "HideSCAMeetNow"; Value = 1 }
+    )
     Write-QLog "Tweaks: Meet Now hidden."
-    return New-QOTTaskResult -Name "Meet now" -Succeeded ([int][bool]$ok) -Failed ([int](-not $ok))
+    return Invoke-QOTRegistryTask -Name "Meet now" -Operations $ops
 }
 
 function Invoke-QTweakCortanaLeftovers {
