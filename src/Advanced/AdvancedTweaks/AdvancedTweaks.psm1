@@ -96,18 +96,18 @@ function Set-QOTRegistryValueInternal {
         return New-QOTOperationResult -Status "Skipped" -Reason "Admin required"
     }
 
-    try {
-        if (Test-Path -LiteralPath $Path) {
-            try {
-                $current = Get-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
-                if ($null -ne $current) {
-                    $currentValue = $current.$Name
-                    if ($currentValue -eq $Value) {
-                        return New-QOTOperationResult -Status "Skipped" -Reason "Already set"
-                    }
+    if (Test-Path -LiteralPath $Path) {
+        try {
+            $current = Get-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction SilentlyContinue
+            if ($null -ne $current) {
+                $currentValue = $current.$Name
+                if ($currentValue -eq $Value) {
+                    return New-QOTOperationResult -Status "Skipped" -Reason "Already set"
                 }
-            } catch { }
+            }
         }
+        catch { }
+    }
 
     try {
         if (-not (Test-Path -LiteralPath $Path)) {
