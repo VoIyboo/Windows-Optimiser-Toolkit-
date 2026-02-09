@@ -208,6 +208,7 @@ function Run-QOTSelectedTasks {
 
     $isAdmin = Test-IsAdmin
     $successCount = 0
+    $partialCount = 0
     $failedCount = 0
 
     for ($i = 0; $i -lt $selectedTasks.Count; $i++) {
@@ -225,7 +226,7 @@ function Run-QOTSelectedTasks {
             Write-Host "WARN: Task requires admin rights. Some changes may be blocked."
         }
 
-        $taskSucceeded = $false
+        $taskStatus = "FAILED"
         
         try {
             if ([string]::IsNullOrWhiteSpace($scriptPath)) {
@@ -236,23 +237,48 @@ function Run-QOTSelectedTasks {
                 throw "Script path does not exist: $scriptPath"
             }
 
-            & {
+            $result = & {
                 $ErrorActionPreference = 'Stop'
                 & $scriptPath
             }
-            $taskSucceeded = $true
+            $resultStatus = $null
+            if ($null -ne $result) {
+                foreach ($entry in @($result)) {
+                    if ($null -eq $entry) { continue }
+                    if ($entry.PSObject.Properties.Name -contains "Status") {
+                        $resultStatus = [string]$entry.Status
+                        break
+                    }
+                }
+            }
+
+            if ($resultStatus) {
+                switch ($resultStatus.ToLowerInvariant()) {
+                    "success" { $taskStatus = "SUCCESS" }
+                    "partial" { $taskStatus = "PARTIAL" }
+                    "failed"  { $taskStatus = "FAILED" }
+                    default {
+                        Write-Host "WARN: Unknown task result status '$resultStatus' for '$taskName'. Treating as FAILED."
+                        $taskStatus = "FAILED"
+                    }
+                }
+            }
+            else {
+                $taskStatus = "SUCCESS"
+            }
         }
         catch {
             Write-Host "ERROR: Task failed: $taskName | $($_.Exception.Message)"
+            $taskStatus = "FAILED"
         }
         finally {
-            if ($taskSucceeded) {
-                $successCount++
-                Write-Host "Completed task: $taskName (SUCCESS)"
+            switch ($taskStatus) {
+                "SUCCESS" { $successCount++ }
+                "PARTIAL" { $partialCount++ }
+                default { $failedCount++ }
             }
-            else {
-                $failedCount++
-                Write-Host "Completed task: $taskName (FAILED)"
+
+            Write-Host "Completed task: $taskName ($taskStatus)"
             }
             if ($ProgressPath -and $ProgressClip) {
                 $pct = [math]::Round((($i + 1) / [double]$selectedTasks.Count) * 100, 0)
@@ -260,7 +286,7 @@ function Run-QOTSelectedTasks {
             }
         }
     }
-    Write-Host "Summary: Success=$successCount Failed=$failedCount"
+    Write-Host "Summary: Success=$successCount Partial=$partialCount Failed=$failedCount"
     Write-Host "No more tasks to do."
 }
 
