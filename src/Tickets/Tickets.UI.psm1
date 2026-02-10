@@ -10,11 +10,14 @@ Import-Module (Join-Path $PSScriptRoot "..\Core\Logging\Logging.psm1") -Force -E
 # State
 # -------------------------
 $script:TicketsGrid = $null
-$script:TicketsEmailSyncRan = $false
 $script:TicketsEmailSyncInProgress = $false
 $script:TicketsContentRenderedHandler = $null
 $script:TicketsSyncStatusText = $null
-$script:TicketsSyncButton = $null
+$script:TicketsSyncWorkerStarted = $false
+$script:TicketsSyncFailureCount = 0
+$script:TicketsSyncNextAttemptUtc = [datetime]::MinValue
+$script:TicketsLastSuccessfulSyncUtc = $null
+$script:TicketsSyncTimer = $null
 
 # Stored handlers to avoid double wiring
 $script:TicketsLoadedHandler  = $null
@@ -25,11 +28,9 @@ $script:TicketsSelectionChangedHandler = $null
 $script:TicketsRowEditHandler = $null
 $script:TicketsSendReplyHandler = $null
 $script:TicketsFilterButtonHandler = $null
-$script:TicketsSyncButtonHandler = $null
+$script:TicketsSyncWorkerTickHandler = $null
 $script:TicketsUndeleteHandler = $null
 
-$script:TicketsAutoRefreshTimer = $null
-$script:TicketsAutoRefreshInProgress = $false
 $script:TicketsFileWatcher = $null
 $script:TicketsFileWatcherEvents = @()
 $script:TicketsFileRefreshTimer = $null
@@ -387,41 +388,114 @@ function Set-QOTicketsSyncStatus {
     } catch { }
 }
 
+function Get-QOTicketDedupKey {
+    param([Parameter(Mandatory)]$Ticket)
+
+    try {
+        if ($Ticket.PSObject.Properties.Name -contains "SourceMessageId") {
+            $id = ([string]$Ticket.SourceMessageId).Trim()
+            if ($id) { return ("msg:" + $id.ToLowerInvariant()) }
+        }
+    } catch { }
+
+    try {
+        if ($Ticket.PSObject.Properties.Name -contains "EmailMessageId") {
+            $id = ([string]$Ticket.EmailMessageId).Trim()
+            if ($id) { return ("msg:" + $id.ToLowerInvariant()) }
+        }
+    } catch { }
+
+    $subject = ""
+    $received = ""
+    try { if ($Ticket.PSObject.Properties.Name -contains "Subject") { $subject = ([string]$Ticket.Subject).Trim().ToLowerInvariant() } } catch { }
+    try {
+        if ($Ticket.PSObject.Properties.Name -contains "EmailReceived") {
+            $received = ([string]$Ticket.EmailReceived).Trim().ToLowerInvariant()
+        } elseif ($Ticket.PSObject.Properties.Name -contains "CreatedAt") {
+            $received = ([string]$Ticket.CreatedAt).Trim().ToLowerInvariant()
+        }
+    } catch { }
+
+    if (-not $subject -and -not $received) { return "" }
+    return ("hash:{0}|{1}" -f $subject, $received)
+}
+
+function Merge-QOTicketsIntoGridCollection {
+    param(
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
+        [object[]]$IncomingTickets
+    )
+
+    if (-not $Grid -or -not $IncomingTickets -or $IncomingTickets.Count -eq 0) { return 0 }
+
+    if (-not $script:AllTickets) {
+        $script:AllTickets = @(Get-QOTicketsAllItems)
+    }
+
+    $existingKeys = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($ticket in @($script:AllTickets)) {
+        if (-not $ticket) { continue }
+        $key = Get-QOTicketDedupKey -Ticket $ticket
+        if ($key) { [void]$existingKeys.Add($key) }
+    }
+
+    $addedCount = 0
+    foreach ($ticket in @($IncomingTickets)) {
+        if (-not $ticket) { continue }
+        $key = Get-QOTicketDedupKey -Ticket $ticket
+        if ($key -and $existingKeys.Contains($key)) { continue }
+
+        $script:AllTickets += @($ticket)
+        if ($key) { [void]$existingKeys.Add($key) }
+
+        $visible = @(Get-QOTicketsVisibleItems -Items @($ticket) -FilterState ([pscustomobject]@{
+            ShowOpen    = [bool]$script:ShowOpen
+            ShowClosed  = [bool]$script:ShowClosed
+            ShowDeleted = [bool]$script:ShowDeleted
+        }))
+
+        if ($visible.Count -gt 0) {
+            $itemsSource = $Grid.ItemsSource
+            if ($itemsSource -is [System.Collections.ObjectModel.ObservableCollection[object]]) {
+                $itemsSource.Add($ticket) | Out-Null
+            } else {
+                Apply-TicketsFilter
+            }
+        }
+        $addedCount++
+    }
+
+    if ($addedCount -gt 0) {
+        try { $Grid.Items.Refresh() } catch { }
+    }
+
+    return $addedCount
+}
+
+function Get-QOTicketsSyncBackoffSeconds {
+    param([int]$FailureCount)
+
+    switch ($FailureCount) {
+        { $_ -le 1 } { return 120 }
+        2 { return 300 }
+        3 { return 600 }
+        default { return 900 }
+    }
+}
+
 function Start-TicketsEmailSyncAsync {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
         [Parameter(Mandatory)]$GetTicketsCmd,
         [Parameter(Mandatory)]$SyncCmd,
         [AllowNull()][System.Windows.Controls.TextBlock]$StatusText,
-        [int]$TimeoutSeconds = 10,
-        [switch]$Force
+        [int]$TimeoutSeconds = 20
     )
 
     if ($script:TicketsEmailSyncInProgress) { return }
-    if ((-not $Force) -and $script:TicketsEmailSyncRan) { return }
 
-    if (Test-QOTProcessElevated) {
-        $script:TicketsEmailSyncRan = $true
-        Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Email sync skipped (elevated). Run app without admin to sync Outlook."
-        Write-QOTicketsUILog "Email sync skipped (elevated)" "WARN"
-        if ($script:TicketsSyncButton) {
-            try {
-                $script:TicketsSyncButton.ToolTip = "Run app without admin to sync Outlook"
-            } catch { }
-        }
-        return
-    }
-
-    if (-not $SyncCmd) {
-        $script:TicketsEmailSyncRan = $true
-        Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Sync failed: Outlook unavailable"
-        Write-QOTicketsUILog "Tickets: Sync command not available (skipping)" "WARN"
-        return
-    }
-
-    $script:TicketsEmailSyncRan = $true
     $script:TicketsEmailSyncInProgress = $true
-    Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Syncing tickets..."
+    Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Background sync running..."
 
     $worker = [System.ComponentModel.BackgroundWorker]::new()
     $worker.WorkerSupportsCancellation = $false
@@ -430,32 +504,39 @@ function Start-TicketsEmailSyncAsync {
         param($sender, $args)
 
         $syncScript = {
-            param($syncCmdName)
+            param($syncCmdName, $isElevated)
+            if ($isElevated) {
+                return [pscustomobject]@{ Success = $false; Note = "Elevated session - Outlook COM unavailable"; Added = 0; AddedTickets = @() }
+            }
+            
             try {
                 $syncResult = & $syncCmdName
                 if (-not $syncResult) {
-                    return [pscustomobject]@{ Success = $false; Note = "Outlook sync returned nothing."; Added = 0 }
+                    return [pscustomobject]@{ Success = $false; Note = "Outlook sync returned nothing."; Added = 0; AddedTickets = @() }
                 }
 
                 $note = ""
                 $added = 0
+                $addedTickets = @()
                 try { if ($syncResult.PSObject.Properties.Name -contains "Note") { $note = [string]$syncResult.Note } } catch { }
                 try { if ($syncResult.PSObject.Properties.Name -contains "Added") { $added = [int]$syncResult.Added } } catch { }
+                try { if ($syncResult.PSObject.Properties.Name -contains "AddedTickets") { $addedTickets = @($syncResult.AddedTickets) } } catch { }
 
-                return [pscustomobject]@{ Success = $true; Note = $note; Added = $added }
+                return [pscustomobject]@{ Success = $true; Note = $note; Added = $added; AddedTickets = @($addedTickets) }
             } catch {
-                return [pscustomobject]@{ Success = $false; Note = $_.Exception.Message; Added = 0 }
+                return [pscustomobject]@{ Success = $false; Note = $_.Exception.Message; Added = 0; AddedTickets = @() }
             }
         }
 
         $ps = [powershell]::Create()
         try {
-            $null = $ps.AddScript($syncScript).AddArgument($SyncCmd.Name)
+            $isElevated = Test-QOTProcessElevated
+            $null = $ps.AddScript($syncScript).AddArgument($SyncCmd.Name).AddArgument($isElevated)
             $async = $ps.BeginInvoke()
 
             if (-not $async.AsyncWaitHandle.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds))) {
                 try { $ps.Stop() } catch { }
-                $args.Result = [pscustomobject]@{ TimedOut = $true; Success = $false; Note = "Outlook unavailable"; Added = 0 }
+                $args.Result = [pscustomobject]@{ TimedOut = $true; Success = $false; Note = "Outlook unavailable"; Added = 0; AddedTickets = @() }
                 return
             }
 
@@ -463,7 +544,7 @@ function Start-TicketsEmailSyncAsync {
             if ($out -and $out.Count -gt 0) {
                 $args.Result = $out[-1]
             } else {
-                $args.Result = [pscustomobject]@{ TimedOut = $false; Success = $false; Note = "Outlook sync returned nothing."; Added = 0 }
+                $args.Result = [pscustomobject]@{ TimedOut = $false; Success = $false; Note = "Outlook sync returned nothing."; Added = 0; AddedTickets = @() }
             }
         } finally {
             try { $ps.Dispose() } catch { }
@@ -474,42 +555,78 @@ function Start-TicketsEmailSyncAsync {
 
         $script:TicketsEmailSyncInProgress = $false
 
-        if ($args.Error) {
-            Write-QOTicketsUILog ("Tickets: Email sync failed: " + $args.Error.Exception.Message) "ERROR"
-            Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Sync failed: Outlook unavailable"
-            return
-        }
-
         $result = $args.Result
         $timedOut = $false
         $success = $false
         $added = 0
         $note = ""
+        $addedTickets = @()
 
+        try { if ($args.Error) { $note = [string]$args.Error.Exception.Message } } catch { }
         try { if ($result.PSObject.Properties.Name -contains "TimedOut") { $timedOut = [bool]$result.TimedOut } } catch { }
         try { if ($result.PSObject.Properties.Name -contains "Success") { $success = [bool]$result.Success } } catch { }
         try { if ($result.PSObject.Properties.Name -contains "Added") { $added = [int]$result.Added } } catch { }
         try { if ($result.PSObject.Properties.Name -contains "Note") { $note = [string]$result.Note } } catch { }
 
-        if ($timedOut) {
-            Write-QOTicketsUILog "Tickets: Email sync timed out." "WARN"
-            Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Sync failed: Outlook unavailable"
+        try { if ($result.PSObject.Properties.Name -contains "AddedTickets") { $addedTickets = @($result.AddedTickets) } } catch { }
+
+        if ($timedOut -or (-not $success) -or $args.Error) {
+            $script:TicketsSyncFailureCount = [int]$script:TicketsSyncFailureCount + 1
+            $backoff = Get-QOTicketsSyncBackoffSeconds -FailureCount $script:TicketsSyncFailureCount
+            $script:TicketsSyncNextAttemptUtc = (Get-Date).ToUniversalTime().AddSeconds($backoff)
+            Write-QOTicketsUILog ("Tickets: Background email sync failed. Next retry in {0}s. Reason: {1}" -f $backoff, $note) "WARN"
+            Set-QOTicketsSyncStatus -StatusText $StatusText -Message ("Background sync retrying in {0}m" -f [math]::Ceiling($backoff / 60.0))
             return
         }
 
-        if (-not $success) {
-            Write-QOTicketsUILog ("Tickets: Email sync failed: " + $note) "WARN"
-            Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Sync failed: Outlook unavailable"
-            return
-        }
+        $script:TicketsSyncFailureCount = 0
+        $script:TicketsLastSuccessfulSyncUtc = (Get-Date).ToUniversalTime()
+        $nextPollSeconds = Get-Random -Minimum 30 -Maximum 61
+        $script:TicketsSyncNextAttemptUtc = $script:TicketsLastSuccessfulSyncUtc.AddSeconds($nextPollSeconds)
 
-        Write-QOTicketsUILog ("Tickets: Email sync finished. Added=$added. Note=$note")
-        Invoke-QOTicketsGridRefresh -Grid $Grid -GetTicketsCmd $GetTicketsCmd
+        $mergedCount = Merge-QOTicketsIntoGridCollection -Grid $Grid -IncomingTickets @($addedTickets)
+        Write-QOTicketsUILog ("Tickets: Background email sync finished. Added=$added Merged=$mergedCount. Note=$note")
         Set-QOTicketsSyncStatus -StatusText $StatusText -Message (("Last sync: {0}" -f (Get-Date).ToString("HH:mm:ss")))
     }
 
     $worker.RunWorkerAsync()
 }
+
+function Start-QOTicketsAutoSyncWorker {
+    param(
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
+        [Parameter(Mandatory)]$GetTicketsCmd,
+        [AllowNull()]$SyncCmd,
+        [AllowNull()][System.Windows.Controls.TextBlock]$StatusText
+    )
+
+    if ($script:TicketsSyncWorkerStarted) { return }
+    $script:TicketsSyncWorkerStarted = $true
+
+    if (-not $SyncCmd) {
+        Write-QOTicketsUILog "Tickets: Sync command not available. Auto-sync disabled." "WARN"
+        Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Tickets ready (sync unavailable)"
+        return
+    }
+
+    $script:TicketsSyncNextAttemptUtc = [datetime]::MinValue
+    Set-QOTicketsSyncStatus -StatusText $StatusText -Message "Background sync scheduled"
+
+    $script:TicketsSyncTimer = [System.Windows.Threading.DispatcherTimer]::new()
+    $script:TicketsSyncTimer.Interval = [TimeSpan]::FromSeconds(5)
+    $script:TicketsSyncWorkerTickHandler = {
+        if ($script:TicketsEmailSyncInProgress) { return }
+
+        $nowUtc = (Get-Date).ToUniversalTime()
+        if ($nowUtc -lt $script:TicketsSyncNextAttemptUtc) { return }
+
+        Start-TicketsEmailSyncAsync -Grid $Grid -GetTicketsCmd $GetTicketsCmd -SyncCmd $SyncCmd -StatusText $StatusText
+    }.GetNewClosure()
+
+    $script:TicketsSyncTimer.Add_Tick($script:TicketsSyncWorkerTickHandler)
+    $script:TicketsSyncTimer.Start()
+}
+
 
 function Invoke-QOTicketsEmailSyncAndRefresh {
     param(
@@ -520,7 +637,7 @@ function Invoke-QOTicketsEmailSyncAndRefresh {
         [switch]$Force
     )
 
-    Start-TicketsEmailSyncAsync -Grid $Grid -GetTicketsCmd $GetTicketsCmd -SyncCmd $SyncCmd -StatusText $StatusText -Force:$Force
+    Start-TicketsEmailSyncAsync -Grid $Grid -GetTicketsCmd $GetTicketsCmd -SyncCmd $SyncCmd -StatusText $StatusText
 }
 
 function Invoke-QOTicketsGridRefresh {
@@ -569,7 +686,7 @@ function Initialize-QOTicketsUI {
     try { $syncCmd = Get-Command Sync-QOTicketsFromEmail -ErrorAction Stop } catch { $syncCmd = $null }
 
     # Capture UI local function commands
-    $emailSyncAndRefreshCmd = Get-Command Invoke-QOTicketsEmailSyncAndRefresh -ErrorAction Stop
+    
 
     # Capture stable local references
     $grid       = $Window.FindName("TicketsGrid")
@@ -577,7 +694,7 @@ function Initialize-QOTicketsUI {
     $btnNew     = $Window.FindName("BtnNewTicket")
     $btnDelete  = $Window.FindName("BtnDeleteTicket")
     $btnFilterMenu = $Window.FindName("BtnTicketsFilterMenu")
-    $btnSync = $Window.FindName("BtnSyncTickets")
+
     $syncStatusText = $Window.FindName("TicketsSyncStatusText")
     $btnToggleDetails = $Window.FindName("BtnToggleTicketDetails")
     $detailsPanel = $Window.FindName("TicketDetailsPanel")
@@ -592,7 +709,7 @@ function Initialize-QOTicketsUI {
     if (-not $btnNew)     { [System.Windows.MessageBox]::Show("Missing XAML control: BtnNewTicket") | Out-Null; return }
     if (-not $btnDelete)  { [System.Windows.MessageBox]::Show("Missing XAML control: BtnDeleteTicket") | Out-Null; return }
     if (-not $btnFilterMenu) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnTicketsFilterMenu") | Out-Null; return }
-    if (-not $btnSync) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnSyncTickets") | Out-Null; return }
+
     if (-not $syncStatusText) { [System.Windows.MessageBox]::Show("Missing XAML control: TicketsSyncStatusText") | Out-Null; return }
     
     if (-not $btnToggleDetails) { [System.Windows.MessageBox]::Show("Missing XAML control: BtnToggleTicketDetails") | Out-Null; return }
@@ -605,14 +722,11 @@ function Initialize-QOTicketsUI {
 
     $script:TicketsGrid = $grid
     $script:TicketsSyncStatusText = $syncStatusText
-    $script:TicketsSyncButton = $btnSync
-    $script:TicketsEmailSyncRan = $false
     $script:TicketsEmailSyncInProgress = $false
 
     # Remove previous handlers safely (now that handlers are typed delegates, Remove_ should match)
 
     try { if ($script:TicketsRefreshHandler) { $btnRefresh.Remove_Click($script:TicketsRefreshHandler) } } catch { }
-    try { if ($script:TicketsSyncButtonHandler) { $btnSync.Remove_Click($script:TicketsSyncButtonHandler) } } catch { }
     try { if ($script:TicketsNewHandler)     { $btnNew.Remove_Click($script:TicketsNewHandler) } } catch { }
     try { if ($script:TicketsDeleteHandler)  { $btnDelete.Remove_Click($script:TicketsDeleteHandler) } } catch { }
 
@@ -654,11 +768,15 @@ function Initialize-QOTicketsUI {
     } catch { }
 
     try {
-        if ($script:TicketsAutoRefreshTimer) {
-            $script:TicketsAutoRefreshTimer.Stop()
-            $script:TicketsAutoRefreshTimer = $null
+        if ($script:TicketsSyncTimer) {
+            if ($script:TicketsSyncWorkerTickHandler) {
+                $script:TicketsSyncTimer.Remove_Tick($script:TicketsSyncWorkerTickHandler)
+            }
+            $script:TicketsSyncTimer.Stop()
+            $script:TicketsSyncTimer = $null
         }
     } catch { }
+    $script:TicketsSyncWorkerStarted = $false
 
     try {
         if ($script:TicketsFileRefreshTimer) {
@@ -960,11 +1078,11 @@ function Initialize-QOTicketsUI {
 
     $grid.AddHandler([System.Windows.UIElement]::PreviewMouseRightButtonDownEvent, $script:TicketsStatusContextMenuHandler)
 
-    # ContentRendered handler: trigger async email sync only after first render
+    # ContentRendered handler: start background auto-sync worker after first render
     $script:TicketsContentRenderedHandler = [System.EventHandler]{
         param($sender, $args)
         try {
-            & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusText $syncStatusText
+            Start-QOTicketsAutoSyncWorker -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusText $syncStatusText
         } catch { }
     }.GetNewClosure()
     $Window.Add_ContentRendered($script:TicketsContentRenderedHandler)
@@ -975,13 +1093,6 @@ function Initialize-QOTicketsUI {
         Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
     }.GetNewClosure()
     $btnRefresh.Add_Click($script:TicketsRefreshHandler)
-
-    # Manual sync button (safe background sync)
-    $script:TicketsSyncButtonHandler = [System.Windows.RoutedEventHandler]{
-        param($sender, $args)
-        & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusText $syncStatusText -Force
-    }.GetNewClosure()
-    $btnSync.Add_Click($script:TicketsSyncButtonHandler)
 
     # Toggle details click handler typed
     $script:TicketsToggleDetailsHandler = [System.Windows.RoutedEventHandler]{
@@ -1216,30 +1327,9 @@ function Initialize-QOTicketsUI {
     }.GetNewClosure()
     $btnDelete.Add_Click($script:TicketsDeleteHandler)
 
-    if ($syncCmd) {
-        $script:TicketsAutoRefreshTimer = [System.Windows.Threading.DispatcherTimer]::new()
-        $script:TicketsAutoRefreshTimer.Interval = [TimeSpan]::FromSeconds(60)
-        $script:TicketsAutoRefreshTimer.Add_Tick({
-            if ($script:TicketsAutoRefreshInProgress) { return }
-            $script:TicketsAutoRefreshInProgress = $true
-            try {
-                if (-not $grid.IsLoaded) { return }
-                & $emailSyncAndRefreshCmd -Grid $grid -GetTicketsCmd $getTicketsCmd -SyncCmd $syncCmd -StatusText $syncStatusText
-            } catch { }
-            finally {
-                $script:TicketsAutoRefreshInProgress = $false
-            }
-        })
-        $script:TicketsAutoRefreshTimer.Start()
-    }
 
     Invoke-QOTicketsGridRefresh -Grid $grid -GetTicketsCmd $getTicketsCmd -View $script:TicketsCurrentView
-    if (Test-QOTProcessElevated) {
-        Set-QOTicketsSyncStatus -StatusText $syncStatusText -Message "Email sync skipped (elevated). Run app without admin to sync Outlook."
-        try { $btnSync.ToolTip = "Run app without admin to sync Outlook" } catch { }
-    } else {
-        Set-QOTicketsSyncStatus -StatusText $syncStatusText -Message "Tickets ready"
-    }
+    Set-QOTicketsSyncStatus -StatusText $syncStatusText -Message "Tickets ready"
 }
 
 Export-ModuleMember -Function Write-QOTicketsUILog, Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh, Start-TicketsEmailSyncAsync
