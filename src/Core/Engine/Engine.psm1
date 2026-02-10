@@ -141,7 +141,10 @@ function Start-QOTMain {
         [string]$RootPath,
 
         [Parameter(Mandatory = $false)]
-        [System.Windows.Window]$SplashWindow
+        [System.Windows.Window]$SplashWindow,
+
+        [switch]$WarmupOnly,
+        [switch]$PassThru
     )
 
     try {
@@ -181,6 +184,9 @@ function Start-QOTMain {
     }
 
     # This call blocks (ShowDialog) and keeps the app alive, while ContentRendered can still close the splash.
+    if ($WarmupOnly) {
+        return Start-QOTMainWindow -SplashWindow $SplashWindow -WarmupOnly -PassThru:$PassThru
+    }
     Start-QOTMainWindow -SplashWindow $SplashWindow
 }
 
