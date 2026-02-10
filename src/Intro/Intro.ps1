@@ -162,7 +162,7 @@ try {
             if (Test-Path $engineModule) {
                 Import-Module $engineModule -Force -ErrorAction Stop
                 if (Get-Command Invoke-QOTStartupWarmup -ErrorAction SilentlyContinue) {
-                    Invoke-QOTStartupWarmup
+                    Invoke-QOTStartupWarmup -RootPath $RootPath
                 }
             }
 
