@@ -12,6 +12,67 @@ $script:SummaryTimer = $null
 $script:PlayButtonTimer = $null
 $script:IsPlayRunning = $false
 
+function Write-QOTStartupTrace {
+    param(
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet('INFO','WARN','ERROR','DEBUG')][string]$Level = 'INFO'
+    )
+
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+    $line = "[$ts] [STARTUP] $Message"
+
+    try {
+        if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+            Write-QLog $line $Level
+        }
+    } catch { }
+
+    try { Write-Host $line } catch { }
+}
+
+function Invoke-QOTStartupStep {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [int]$WarnThresholdMs = 200
+    )
+
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    Write-QOTStartupTrace "$Name start"
+    & $Action
+    $sw.Stop()
+
+    $durationMs = [math]::Round($sw.Elapsed.TotalMilliseconds)
+    $level = if ($durationMs -ge $WarnThresholdMs) { 'WARN' } else { 'INFO' }
+    Write-QOTStartupTrace ("{0} end ({1} ms)" -f $Name, $durationMs) $level
+}
+
+function Import-QOTModuleIfNeeded {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [switch]$Global,
+        [switch]$Optional
+    )
+
+    $resolvedPath = [System.IO.Path]::GetFullPath($Path)
+    if (-not (Test-Path -LiteralPath $resolvedPath)) {
+        if ($Optional) { return }
+        throw "Module path not found: $resolvedPath"
+    }
+
+    $alreadyLoaded = Get-Module | Where-Object { $_.Path -and ([System.IO.Path]::GetFullPath($_.Path) -eq $resolvedPath) }
+    if ($alreadyLoaded) {
+        Write-QOTStartupTrace ("Module already loaded: {0}" -f (Split-Path -Leaf $resolvedPath)) 'DEBUG'
+        return
+    }
+
+    if ($Global) {
+        Import-Module $resolvedPath -Global -ErrorAction Stop
+    } else {
+        Import-Module $resolvedPath -ErrorAction Stop
+    }
+}
+
 function Test-IsAdmin {
     try {
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -359,49 +420,34 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Core modules
     # ------------------------------------------------------------
-    Import-Module (Join-Path $basePath "Core\Config\Config.psm1")    -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Logging\Logging.psm1")  -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Settings.psm1")         -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Tickets.psm1")          -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Actions\ActionRegistry.psm1") -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Actions\ActionsCatalog.psm1") -Force -ErrorAction SilentlyContinue
+    Invoke-QOTStartupStep "Core module imports" {
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Config\Config.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Logging\Logging.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Settings.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Tickets.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Actions\ActionRegistry.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Actions\ActionsCatalog.psm1") -Optional
+    }
 
     # ------------------------------------------------------------
     # Apps modules (data + engine)
     # ------------------------------------------------------------
-    Import-Module (Join-Path $basePath "Apps\InstalledApps.psm1")      -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Apps\InstallCommonApps.psm1")  -Force -ErrorAction Stop
+    Invoke-QOTStartupStep "Apps module imports" {
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Apps\InstalledApps.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Apps\InstallCommonApps.psm1")
+    }
 
     # ------------------------------------------------------------
-    # UI modules (hard reload to avoid ghost handlers)
+    # UI modules (import if not already loaded)
     # ------------------------------------------------------------
-    Remove-Item Function:\Initialize-QOTicketsUI -ErrorAction SilentlyContinue
-    Remove-Item Function:\New-QOTSettingsView   -ErrorAction SilentlyContinue
-    Remove-Item Function:\New-QOTHelpView       -ErrorAction SilentlyContinue
-    Remove-Item Function:\Initialize-QOTAppsUI  -ErrorAction SilentlyContinue
-    Remove-Item Function:\Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue
-    Remove-Item Function:\Initialize-QOTAdvancedTweaksUI -ErrorAction SilentlyContinue
-
-    Get-Module -Name "Tickets.UI"   -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module -Name "HelpWindow.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module -Name "Settings.UI"  -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module -Name "Apps.UI"      -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module -Name "TweaksAndCleaning.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module -Name "AdvancedTweaks.UI" -ErrorAction SilentlyContinue | Remove-Module -Force -ErrorAction SilentlyContinue
-
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Tickets\Tickets.UI.psm1" }            | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\UI\HelpWindow.UI.psm1" }              | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Core\Settings\Settings.UI.psm1" }     | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Apps\Apps.UI.psm1" }                  | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
-    Get-Module | Where-Object { $_.Path -and $_.Path -like "*\Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1" } | Remove-Module -Force -ErrorAction SilentlyContinue
-
-    Import-Module (Join-Path $basePath "Tickets\Tickets.UI.psm1")         -Force -Global -ErrorAction Stop
-    Import-Module (Join-Path $basePath "UI\HelpWindow.UI.psm1")           -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Core\Settings\Settings.UI.psm1")  -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Apps\Apps.UI.psm1")               -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1") -Force -ErrorAction Stop
-    Import-Module (Join-Path $basePath "Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1") -Force -ErrorAction Stop
+    Invoke-QOTStartupStep "UI module imports" {
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Global
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "UI\HelpWindow.UI.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Settings\Settings.UI.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Apps\Apps.UI.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1")
+        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1")
+    }
 
     if (-not (Get-Command Write-QOTicketsUILog -ErrorAction SilentlyContinue)) {
         function global:Write-QOTicketsUILog {
@@ -433,9 +479,11 @@ function Start-QOTMainWindow {
 
     try { Write-QLog ("Loading XAML from: {0}" -f $xamlPath) "DEBUG" } catch { }
 
+    Write-QOTStartupTrace "MainWindow InitializeComponent start"
     $xaml   = Get-Content -LiteralPath $xamlPath -Raw
     $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
     $window = [System.Windows.Markup.XamlReader]::Load($reader)
+    Write-QOTStartupTrace "MainWindow InitializeComponent end"
 
     if (-not $window) {
         throw "Failed to load MainWindow from XAML"
@@ -443,6 +491,13 @@ function Start-QOTMainWindow {
 
     $script:MainWindow = $window
     $script:SummaryTextBlock = $window.FindName("SummaryText")
+
+    $window.Add_Loaded({
+        Write-QOTStartupTrace "MainWindow Loaded event fired"
+    })
+    $window.Add_ContentRendered({
+        Write-QOTStartupTrace "MainWindow ContentRendered event fired"
+    })
 
     if (Get-Command Clear-QOTActionGroups -ErrorAction SilentlyContinue) {
         Clear-QOTActionGroups
@@ -482,7 +537,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
-        $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window)
+        Invoke-QOTStartupStep "Initialise Apps UI" { $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window) }
     }
     catch {
         try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
@@ -496,7 +551,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTicketsUI not found. Tickets\Tickets.UI.psm1 did not load or export correctly."
         }
 
-        $script:TicketsUIInitialised = [bool](Initialize-QOTicketsUI -Window $window)
+        Invoke-QOTStartupStep "Initialise Tickets UI" { $script:TicketsUIInitialised = [bool](Initialize-QOTicketsUI -Window $window) }
     }
     catch {
         try { Write-QLog ("Tickets UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
@@ -510,7 +565,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTTweaksAndCleaningUI not found. TweaksAndCleaning.UI.psm1 did not load or export correctly."
         }
 
-        Initialize-QOTTweaksAndCleaningUI -Window $window
+        Invoke-QOTStartupStep "Initialise Tweaks and Cleaning UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
     }
     catch {
         try { Write-QLog ("Tweaks/Cleaning UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
@@ -524,7 +579,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTAdvancedTweaksUI not found. AdvancedTweaks.UI.psm1 did not load or export correctly."
         }
 
-        Initialize-QOTAdvancedTweaksUI -Window $window
+        Invoke-QOTStartupStep "Initialise Advanced Tweaks UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
     }
     catch {
         try { Write-QLog ("Advanced UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
@@ -535,7 +590,7 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     try {
         if (Get-Command Initialize-QOTActionCatalog -ErrorAction SilentlyContinue) {
-            Initialize-QOTActionCatalog
+            Invoke-QOTStartupStep "Initialise action catalog" { Initialize-QOTActionCatalog }
         }
     }
     catch {
@@ -603,7 +658,8 @@ function Start-QOTMainWindow {
             throw "New-QOTSettingsView not found. Check Core\Settings\Settings.UI.psm1 exports it."
         }
 
-        $settingsView = New-QOTSettingsView -Window $window
+        $settingsView = $null
+        Invoke-QOTStartupStep "Build settings view" { $settingsView = New-QOTSettingsView -Window $window }
         if (-not $settingsView) { throw "Settings view returned null" }
 
         $settingsHost.Content = $settingsView
@@ -629,7 +685,8 @@ function Start-QOTMainWindow {
             throw "New-QOTHelpView not found. Check UI\HelpWindow.UI.psm1 exports it."
         }
 
-        $helpView = New-QOTHelpView
+        $helpView = $null
+        Invoke-QOTStartupStep "Build help view" { $helpView = New-QOTHelpView }
         if (-not $helpView) { throw "Help view returned null" }
 
         $helpHost.Content = $helpView
@@ -668,7 +725,7 @@ function Start-QOTMainWindow {
     # System summary refresh
     # ------------------------------------------------------------
     if ($script:SummaryTextBlock) {
-        Set-QOTSummary -Text (Get-QOTSystemSummaryText)
+        Invoke-QOTStartupStep "Initial system summary" { Set-QOTSummary -Text (Get-QOTSystemSummaryText) }
         $script:SummaryTimer = New-Object System.Windows.Threading.DispatcherTimer
         $script:SummaryTimer.Interval = [TimeSpan]::FromSeconds(5)
         $script:SummaryTimer.Add_Tick({
