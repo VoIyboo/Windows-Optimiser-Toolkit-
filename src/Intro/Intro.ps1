@@ -98,20 +98,116 @@ try {
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
 
-    Set-FoxSplash 75 "Scanning installed apps..."
+    Set-FoxSplash 70 "Preparing startup tasks..."
     Refresh-FoxSplash
-    try {
-        if (Get-Command Get-QOTInstalledAppsCached -ErrorAction SilentlyContinue) {
-            $null = Get-QOTInstalledAppsCached
-            try { Write-QLog "Installed apps scan completed during intro." "DEBUG" } catch { }
-        } else {
-            try { Write-QLog "Installed apps scan skipped; Get-QOTInstalledAppsCached not available." "WARN" } catch { }
+
+    $startupState = [hashtable]::Synchronized(@{
+        Percent   = 70
+        Status    = "Preparing startup tasks..."
+        Completed = $false
+        Error     = $null
+    })
+
+    $startupRunspace = [runspacefactory]::CreateRunspace()
+    $startupRunspace.ApartmentState = "MTA"
+    $startupRunspace.ThreadOptions  = "ReuseThread"
+    $startupRunspace.Open()
+
+    $startupPs = [powershell]::Create()
+    $startupPs.Runspace = $startupRunspace
+    $null = $startupPs.AddScript({
+        param(
+            [string]$RootPath,
+            [hashtable]$State
+        )
+
+        $ErrorActionPreference = "Stop"
+
+        function Set-IntroState {
+            param([int]$Percent, [string]$Text)
+            $State.Percent = $Percent
+            $State.Status  = $Text
         }
-    } catch {
-        try { Write-QLog ("Installed apps scan during intro failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+
+        try {
+            Set-IntroState 72 "Loading settings..."
+            $settingsModule = Join-Path $RootPath "src\Core\Settings.psm1"
+            if (Test-Path $settingsModule) {
+                Import-Module $settingsModule -Force -ErrorAction Stop
+                if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
+                    $null = Get-QOSettings
+                }
+            }
+
+            Set-IntroState 76 "Loading tickets..."
+            $ticketsModule = Join-Path $RootPath "src\Core\Tickets.psm1"
+            if (Test-Path $ticketsModule) {
+                Import-Module $ticketsModule -Force -ErrorAction Stop
+                if (Get-Command Get-QOTickets -ErrorAction SilentlyContinue) {
+                    $null = Get-QOTickets
+                }
+            }
+
+            Set-IntroState 80 "Scanning installed apps..."
+            $appsModule = Join-Path $RootPath "src\Apps\InstalledApps.psm1"
+            if (Test-Path $appsModule) {
+                Import-Module $appsModule -Force -ErrorAction Stop
+                if (Get-Command Get-QOTInstalledAppsCached -ErrorAction SilentlyContinue) {
+                    $null = Get-QOTInstalledAppsCached
+                }
+            }
+
+            Set-IntroState 84 "Running startup warmup..."
+            $engineModule = Join-Path $RootPath "src\Core\Engine\Engine.psm1"
+            if (Test-Path $engineModule) {
+                Import-Module $engineModule -Force -ErrorAction Stop
+                if (Get-Command Invoke-QOTStartupWarmup -ErrorAction SilentlyContinue) {
+                    Invoke-QOTStartupWarmup
+                }
+            }
+
+            Set-IntroState 88 "Finalising startup..."
+            Start-Sleep -Milliseconds 150
+
+            $State.Completed = $true
+        }
+
+       catch {
+            $State.Error = $_.Exception.ToString()
+            $State.Completed = $true
+            throw
+        }
+    }).AddArgument($rootPath).AddArgument($startupState)
+
+    $startupAsync = $startupPs.BeginInvoke()
+
+    $startupFrame = New-Object System.Windows.Threading.DispatcherFrame
+    $startupTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $startupTimer.Interval = [TimeSpan]::FromMilliseconds(120)
+    $startupTimer.Add_Tick({
+        if ($startupState.Status) {
+            Set-FoxSplash $startupState.Percent $startupState.Status
+        }
+        if ($startupAsync.IsCompleted) {
+            $startupTimer.Stop()
+            $startupFrame.Continue = $false
+        }
+    })
+    $startupTimer.Start()
+    [System.Windows.Threading.Dispatcher]::PushFrame($startupFrame)
+
+    try {
+        $null = $startupPs.EndInvoke($startupAsync)
+    } finally {
+        $startupPs.Dispose()
+        $startupRunspace.Dispose()
     }
 
-    Set-FoxSplash 85 "Preparing UI..."
+    if ($startupState.Error) {
+        throw $startupState.Error
+    }
+
+    Set-FoxSplash 92 "Building main window..."
     Refresh-FoxSplash
 
     & $script:QOTLog "Starting main window" "INFO"
@@ -119,15 +215,8 @@ try {
     # MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
    Write-Host "[STARTUP] MainWindow warmup started"
 
-    $introReady = New-Object System.Threading.Tasks.TaskCompletionSource[bool]
     $mainReady  = New-Object System.Threading.Tasks.TaskCompletionSource[bool]
-    $frame      = New-Object System.Windows.Threading.DispatcherFrame
-
-    $checkReady = {
-        if ($introReady.Task.IsCompleted -and $mainReady.Task.IsCompleted) {
-            $frame.Continue = $false
-        }
-    }
+    $renderFrame = New-Object System.Windows.Threading.DispatcherFrame
 
     $mainWindow = Start-QOTMain -RootPath $rootPath -SplashWindow $splash -WarmupOnly -PassThru
     if (-not $mainWindow) {
@@ -144,20 +233,18 @@ try {
             Write-Host "[STARTUP] MainWindow warmup done"
         }
 
-        & $checkReady
+        $renderFrame.Continue = $false
     })
 
     $mainWindow.Show()
+    $mainWindow.UpdateLayout()
+    $mainWindow.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
 
-    Write-Host "[STARTUP] Intro finished"
-    $null = $introReady.TrySetResult($true)
-    & $checkReady
-
-    if (-not ($introReady.Task.IsCompleted -and $mainReady.Task.IsCompleted)) {
-        [System.Windows.Threading.Dispatcher]::PushFrame($frame)
+    if (-not $mainReady.Task.IsCompleted) {
+        [System.Windows.Threading.Dispatcher]::PushFrame($renderFrame)
     }
 
-    try { if ($splash) { $splash.Close() } } catch { }
+    Write-Host "[STARTUP] Intro finished"
 
     Write-Host "[STARTUP] Showing MainWindow"
 
@@ -165,6 +252,8 @@ try {
     $mainWindow.ShowActivated = $true
     $mainWindow.Opacity = 1
     $mainWindow.Activate() | Out-Null
+
+    try { if ($splash) { $splash.Close() } } catch { }
 
     $mainWindow.Add_Closed({
         try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
