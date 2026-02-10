@@ -31,6 +31,32 @@ $script:QOTLog = {
     if (-not $Quiet) { Write-Host $line }
 }
 
+$script:StartupClock = [System.Diagnostics.Stopwatch]::StartNew()
+$script:StartupLast  = [TimeSpan]::Zero
+$script:StartupTimers = @{}
+
+function Write-StartupMark {
+    param([string]$Label)
+    $now   = $script:StartupClock.Elapsed
+    $delta = $now - $script:StartupLast
+    $script:StartupLast = $now
+    & $script:QOTLog ("[STARTUP] {0} at {1:hh\:mm\:ss\.fff} (+{2} ms)" -f $Label, $now, [math]::Round($delta.TotalMilliseconds)) "INFO"
+}
+
+function Start-StartupChunk {
+    param([string]$Name)
+    $script:StartupTimers[$Name] = [System.Diagnostics.Stopwatch]::StartNew()
+    & $script:QOTLog ("[STARTUP] {0} started" -f $Name) "INFO"
+}
+
+function Stop-StartupChunk {
+    param([string]$Name)
+    if (-not $script:StartupTimers.ContainsKey($Name)) { return }
+    $sw = $script:StartupTimers[$Name]
+    $sw.Stop()
+    & $script:QOTLog ("[STARTUP] {0} finished in {1} ms" -f $Name, [math]::Round($sw.Elapsed.TotalMilliseconds)) "INFO"
+}
+
 $oldWarningPreference = $WarningPreference
 $WarningPreference    = "SilentlyContinue"
 
@@ -58,9 +84,13 @@ try {
             $splash.WindowStartupLocation = "CenterScreen"
             $splash.Topmost = $true
             $splash.Show()
+            Write-StartupMark "Intro shown (splash displayed)"
         }
     }
     Write-Host "[STARTUP] Intro started"
+    if (-not $splash) {
+        Write-StartupMark "Intro shown (no splash)"
+    }
 
     function Set-FoxSplash {
         param([int]$Percent, [string]$Text)
@@ -87,19 +117,26 @@ try {
 
     Set-FoxSplash 20 "Loading config..."
     Refresh-FoxSplash
+    Start-StartupChunk "Load config module"
     if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
+    Stop-StartupChunk "Load config module"
 
     Set-FoxSplash 40 "Loading logging..."
     Refresh-FoxSplash
+    Start-StartupChunk "Load logging module"
     if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
+    Stop-StartupChunk "Load logging module"
 
     Set-FoxSplash 65 "Loading engine..."
     Refresh-FoxSplash
+    Start-StartupChunk "Load engine module"
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
+    Stop-StartupChunk "Load engine module"
 
     Set-FoxSplash 70 "Preparing startup tasks..."
     Refresh-FoxSplash
+    Start-StartupChunk "Startup runspace preparation"
 
     $startupState = [hashtable]::Synchronized(@{
         Percent   = 70
@@ -118,7 +155,8 @@ try {
     $null = $startupPs.AddScript({
         param(
             [string]$RootPath,
-            [hashtable]$State
+            [hashtable]$State,
+            [string]$LogPath
         )
 
         $ErrorActionPreference = "Stop"
@@ -129,40 +167,68 @@ try {
             $State.Status  = $Text
         }
 
+        function Write-IntroLog {
+            param([string]$Message, [string]$Level = "INFO")
+            $ts   = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+            $line = "[$ts] [$Level] $Message"
+            try { $line | Add-Content -Path $LogPath -Encoding UTF8 } catch { }
+        }
+
+        function Invoke-IntroChunk {
+            param(
+                [string]$Name,
+                [scriptblock]$Action
+            )
+
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            Write-IntroLog "[STARTUP] $Name started"
+            & $Action
+            $sw.Stop()
+            Write-IntroLog ("[STARTUP] {0} finished in {1} ms" -f $Name, [math]::Round($sw.Elapsed.TotalMilliseconds))
+        }
+
         try {
             Set-IntroState 72 "Loading settings..."
-            $settingsModule = Join-Path $RootPath "src\Core\Settings.psm1"
-            if (Test-Path $settingsModule) {
-                Import-Module $settingsModule -Force -ErrorAction Stop
-                if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
-                    $null = Get-QOSettings
+            Invoke-IntroChunk "Load settings data" {
+                $settingsModule = Join-Path $RootPath "src\Core\Settings.psm1"
+                if (Test-Path $settingsModule) {
+                    Import-Module $settingsModule -Force -ErrorAction Stop
+                    if (Get-Command Get-QOSettings -ErrorAction SilentlyContinue) {
+                        $null = Get-QOSettings
+                    }
                 }
             }
 
             Set-IntroState 76 "Loading tickets..."
-            $ticketsModule = Join-Path $RootPath "src\Core\Tickets.psm1"
-            if (Test-Path $ticketsModule) {
-                Import-Module $ticketsModule -Force -ErrorAction Stop
-                if (Get-Command Get-QOTickets -ErrorAction SilentlyContinue) {
-                    $null = Get-QOTickets
+            Invoke-IntroChunk "Load ticket data" {
+                $ticketsModule = Join-Path $RootPath "src\Core\Tickets.psm1"
+                if (Test-Path $ticketsModule) {
+                    Import-Module $ticketsModule -Force -ErrorAction Stop
+                    if (Get-Command Get-QOTickets -ErrorAction SilentlyContinue) {
+                        $null = Get-QOTickets
+                    }
                 }
             }
 
             Set-IntroState 80 "Scanning installed apps..."
-            $appsModule = Join-Path $RootPath "src\Apps\InstalledApps.psm1"
-            if (Test-Path $appsModule) {
-                Import-Module $appsModule -Force -ErrorAction Stop
-                if (Get-Command Get-QOTInstalledAppsCached -ErrorAction SilentlyContinue) {
-                    $null = Get-QOTInstalledAppsCached
+            Invoke-IntroChunk "Scan installed apps" {
+                $appsModule = Join-Path $RootPath "src\Apps\InstalledApps.psm1"
+                if (Test-Path $appsModule) {
+                    Import-Module $appsModule -Force -ErrorAction Stop
+                    if (Get-Command Get-QOTInstalledAppsCached -ErrorAction SilentlyContinue) {
+                        $null = Get-QOTInstalledAppsCached
+                    }
                 }
             }
 
             Set-IntroState 84 "Running startup warmup..."
-            $engineModule = Join-Path $RootPath "src\Core\Engine\Engine.psm1"
-            if (Test-Path $engineModule) {
-                Import-Module $engineModule -Force -ErrorAction Stop
-                if (Get-Command Invoke-QOTStartupWarmup -ErrorAction SilentlyContinue) {
-                    Invoke-QOTStartupWarmup -RootPath $RootPath
+            Invoke-IntroChunk "Run startup warmup" {
+                $engineModule = Join-Path $RootPath "src\Core\Engine\Engine.psm1"
+                if (Test-Path $engineModule) {
+                    Import-Module $engineModule -Force -ErrorAction Stop
+                    if (Get-Command Invoke-QOTStartupWarmup -ErrorAction SilentlyContinue) {
+                        Invoke-QOTStartupWarmup -RootPath $RootPath
+                    }
                 }
             }
 
@@ -177,7 +243,10 @@ try {
             $State.Completed = $true
             throw
         }
-    }).AddArgument($rootPath).AddArgument($startupState)
+    }).AddArgument($rootPath).AddArgument($startupState).AddArgument($script:QOTLogPath)
+
+    Stop-StartupChunk "Startup runspace preparation"
+    Start-StartupChunk "Startup background tasks"
 
     $startupAsync = $startupPs.BeginInvoke()
 
@@ -202,6 +271,7 @@ try {
         $startupPs.Dispose()
         $startupRunspace.Dispose()
     }
+    Stop-StartupChunk "Startup background tasks"
 
     if ($startupState.Error) {
         throw $startupState.Error
@@ -209,6 +279,8 @@ try {
 
     Set-FoxSplash 92 "Building main window..."
     Refresh-FoxSplash
+
+    Start-StartupChunk "MainWindow warmup"
 
     & $script:QOTLog "Starting main window" "INFO"
 
@@ -222,20 +294,26 @@ try {
     if (-not $mainWindow) {
         throw "MainWindow warmup failed to create window."
     }
+    Write-StartupMark "MainWindow object created"
 
     $mainWindow.Opacity        = 0
     $mainWindow.ShowActivated  = $false
     $mainWindow.ShowInTaskbar  = $false
+
+    $mainWindow.Add_Loaded({
+        Write-StartupMark "MainWindow Loaded event"
+    })
 
     $mainWindow.Add_ContentRendered({
         if (-not $mainReady.Task.IsCompleted) {
             $null = $mainReady.TrySetResult($true)
             Write-Host "[STARTUP] MainWindow warmup done"
         }
-
+        Write-StartupMark "MainWindow ContentRendered event"
         $renderFrame.Continue = $false
     })
 
+    Write-StartupMark "MainWindow.Show() called"
     $mainWindow.Show()
     $mainWindow.UpdateLayout()
     $mainWindow.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
@@ -247,6 +325,7 @@ try {
     Write-Host "[STARTUP] Intro finished"
 
     Write-Host "[STARTUP] Showing MainWindow"
+    Stop-StartupChunk "MainWindow warmup"
 
     $mainWindow.ShowInTaskbar = $true
     $mainWindow.ShowActivated = $true
