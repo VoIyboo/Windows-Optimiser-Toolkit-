@@ -244,7 +244,7 @@
 
     </Window.Resources>
 
-    <Grid>
+    <Grid Background="#0F172A">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
