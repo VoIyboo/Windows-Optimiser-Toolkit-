@@ -348,7 +348,10 @@ function Get-QOTNamedElementsMap {
 function Start-QOTMainWindow {
     param(
         [Parameter(Mandatory)]
-        $SplashWindow
+        $SplashWindow,
+
+        [switch]$WarmupOnly,
+        [switch]$PassThru
     )
 
     $basePath = Join-Path $PSScriptRoot ".."
@@ -704,8 +707,14 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Close splash + show main window
     # ------------------------------------------------------------
+    if ($WarmupOnly) {
+        if ($PassThru) { return $window }
+        return
+    }
     try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
     $window.ShowDialog() | Out-Null
+
+    if ($PassThru) { return $window }
 }
 
 Export-ModuleMember -Function Start-QOTMainWindow, Set-QOTSummary
