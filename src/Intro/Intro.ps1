@@ -50,11 +50,16 @@ function Start-StartupChunk {
 }
 
 function Stop-StartupChunk {
-    param([string]$Name)
+    param(
+        [string]$Name,
+        [int]$WarnThresholdMs = 200
+    )
     if (-not $script:StartupTimers.ContainsKey($Name)) { return }
     $sw = $script:StartupTimers[$Name]
     $sw.Stop()
-    & $script:QOTLog ("[STARTUP] {0} finished in {1} ms" -f $Name, [math]::Round($sw.Elapsed.TotalMilliseconds)) "INFO"
+    $durationMs = [math]::Round($sw.Elapsed.TotalMilliseconds)
+    $level = if ($durationMs -ge $WarnThresholdMs) { "WARN" } else { "INFO" }
+    & $script:QOTLog ("[STARTUP] {0} finished in {1} ms" -f $Name, $durationMs) $level
 }
 
 $oldWarningPreference = $WarningPreference
@@ -88,6 +93,7 @@ try {
         }
     }
     Write-Host "[STARTUP] Intro started"
+    Write-StartupMark "Start heavy init phase 1 (module imports)"
     if (-not $splash) {
         Write-StartupMark "Intro shown (no splash)"
     }
@@ -133,6 +139,7 @@ try {
     if (-not (Test-Path $engineModule)) { throw "Engine module not found at $engineModule" }
     Import-Module $engineModule -Force -ErrorAction Stop
     Stop-StartupChunk "Load engine module"
+    Write-StartupMark "Finish module imports"
 
     Set-FoxSplash 70 "Preparing startup tasks..."
     Refresh-FoxSplash
@@ -177,18 +184,22 @@ try {
         function Invoke-IntroChunk {
             param(
                 [string]$Name,
-                [scriptblock]$Action
+                [scriptblock]$Action,
+                [int]$WarnThresholdMs = 200
             )
 
             $sw = [System.Diagnostics.Stopwatch]::StartNew()
             Write-IntroLog "[STARTUP] $Name started"
             & $Action
             $sw.Stop()
-            Write-IntroLog ("[STARTUP] {0} finished in {1} ms" -f $Name, [math]::Round($sw.Elapsed.TotalMilliseconds))
+            $durationMs = [math]::Round($sw.Elapsed.TotalMilliseconds)
+            $level = if ($durationMs -ge $WarnThresholdMs) { "WARN" } else { "INFO" }
+            Write-IntroLog ("[STARTUP] {0} finished in {1} ms [{2}]" -f $Name, $durationMs, $level) $level
         }
 
         try {
             Set-IntroState 72 "Loading settings..."
+            Write-IntroLog "[STARTUP] Load settings JSON start"
             Invoke-IntroChunk "Load settings data" {
                 $settingsModule = Join-Path $RootPath "src\Core\Settings.psm1"
                 if (Test-Path $settingsModule) {
@@ -199,7 +210,10 @@ try {
                 }
             }
 
+            Write-IntroLog "[STARTUP] Load settings JSON end"
+
             Set-IntroState 76 "Loading tickets..."
+            Write-IntroLog "[STARTUP] Load tickets JSON start"
             Invoke-IntroChunk "Load ticket data" {
                 $ticketsModule = Join-Path $RootPath "src\Core\Tickets.psm1"
                 if (Test-Path $ticketsModule) {
@@ -210,7 +224,10 @@ try {
                 }
             }
 
+            Write-IntroLog "[STARTUP] Load tickets JSON end"
+
             Set-IntroState 80 "Scanning installed apps..."
+            Write-IntroLog "[STARTUP] File system scan start (installed apps)"
             Invoke-IntroChunk "Scan installed apps" {
                 $appsModule = Join-Path $RootPath "src\Apps\InstalledApps.psm1"
                 if (Test-Path $appsModule) {
@@ -220,6 +237,7 @@ try {
                     }
                 }
             }
+            Write-IntroLog "[STARTUP] File system scan end (installed apps)"
 
             Set-IntroState 84 "Running startup warmup..."
             Invoke-IntroChunk "Run startup warmup" {
@@ -313,7 +331,7 @@ try {
         $renderFrame.Continue = $false
     })
 
-    Write-StartupMark "MainWindow.Show() called"
+    Write-StartupMark "MainWindow.Show called"
     $mainWindow.Show()
     $mainWindow.UpdateLayout()
     $mainWindow.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
