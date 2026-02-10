@@ -236,7 +236,8 @@ function Sync-QOTicketsFromOutlook {
 
     $mapi  = Get-QOTOutlookNamespace
     $added = 0
-
+    $addedTickets = @()
+    
     foreach ($mb in $mailboxes) {
         $inbox = Get-QOTMailboxInboxFolder -MAPI $mapi -MailboxAddress $mb
 
@@ -274,7 +275,7 @@ function Sync-QOTicketsFromOutlook {
                 continue
             }
 
-            Add-QOTicket -Ticket $ticket
+            $addedTickets += @($ticket)
             [void]$existingIds.Add([string]$ticket.SourceMessageId)
 
             try {
@@ -290,12 +291,19 @@ function Sync-QOTicketsFromOutlook {
         }
     }
 
+    if ($addedTickets.Count -gt 0) {
+        $existingDb.Tickets = @($existingDb.Tickets) + @($addedTickets)
+        Save-QOTickets -Database $existingDb
+    }
+    
+
     # Only update watermark after completing all mailboxes
     Set-QOTLastEmailSyncUtc -UtcTime (Get-Date)
 
     return [pscustomobject]@{
-        Added = $added
-        Note  = ("Sync complete. CutoffUtc=" + $cutoffUtc.ToString("o") + " LastSyncUtcWas=" + $lastSyncUtc.ToString("o"))
+        Added       = $added
+        AddedTickets = @($addedTickets)
+        Note        = ("Sync complete. CutoffUtc=" + $cutoffUtc.ToString("o") + " LastSyncUtcWas=" + $lastSyncUtc.ToString("o"))
     }
 }
 
