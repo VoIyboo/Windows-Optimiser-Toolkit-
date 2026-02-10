@@ -665,33 +665,6 @@ function Start-QOTMainWindow {
     }
     
     # ------------------------------------------------------------
-    # Initialise Apps UI after window render, forcing Apps tab to build (tab content is lazy-loaded)
-    # ------------------------------------------------------------
-    if (-not $script:AppsUIInitialised -and $tabs -and $tabApps -and (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
-        $window.Add_ContentRendered({
-            try {
-                if ($script:AppsUIInitialised) { return }
-
-                $prev = $tabs.SelectedItem
-                $tabs.SelectedItem = $tabApps
-
-                $window.Dispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Background)
-
-                if (Initialize-QOTAppsUI -Window $window) {
-                    $script:AppsUIInitialised = $true
-                }
-
-                if ($prev) { $tabs.SelectedItem = $prev }
-
-                try { Write-QLog "Apps UI initialised after ContentRendered" "DEBUG" } catch { }
-            }
-            catch {
-                try { Write-QLog ("Apps UI failed to load after ContentRendered: {0}" -f $_.Exception.ToString()) "ERROR" } catch { }
-            }
-        })
-    }
-
-    # ------------------------------------------------------------
     # System summary refresh
     # ------------------------------------------------------------
     if ($script:SummaryTextBlock) {
