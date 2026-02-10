@@ -176,6 +176,24 @@ function Set-QOTPlayProgress {
     $ProgressClip.Rect = New-Object System.Windows.Rect(0, $top, 16, $filled)
 }
 
+function Set-QOTUIEnabledState {
+    param(
+        [Parameter(Mandatory)]$Control,
+        [Parameter(Mandatory)][bool]$IsEnabled
+    )
+
+    if (-not $Control) { return $false }
+
+    $hasIsEnabled = $null -ne $Control.PSObject.Properties['IsEnabled']
+    if (-not $hasIsEnabled) {
+        try { Write-QLog ("Skipping IsEnabled set; control type does not expose IsEnabled: {0}" -f $Control.GetType().FullName) "WARN" } catch { }
+        return $false
+    }
+
+    $Control.IsEnabled = $IsEnabled
+    return $true
+}
+
 function Invoke-QOTPlayCompletionSound {
     try {
         [console]::Beep(880, 120)
@@ -608,7 +626,7 @@ function Start-QOTMainWindow {
     $executionMessage = $window.FindName("ExecutionMessage")
 
     if ($btnPlay) {
-        $btnPlay.IsEnabled = $true
+        $null = Set-QOTUIEnabledState -Control $btnPlay -IsEnabled $true
         $btnPlay.IsHitTestVisible = $true
         Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
 
@@ -637,7 +655,7 @@ function Start-QOTMainWindow {
             finally {
                 Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
                 $script:IsPlayRunning = $false
-                $btnPlay.IsEnabled = $true
+                $null = Set-QOTUIEnabledState -Control $btnPlay -IsEnabled $true
                 $btnPlay.IsHitTestVisible = $true
             }
         })
