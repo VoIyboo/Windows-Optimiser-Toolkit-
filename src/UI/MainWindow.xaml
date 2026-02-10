@@ -636,13 +636,6 @@
                                    VerticalAlignment="Center"
                                    Margin="0,0,8,0" />
 
-                        <Button x:Name="BtnSyncTickets"
-                                MinWidth="56"
-                                Height="28"
-                                Margin="0,0,8,0"
-                                ToolTip="Sync Outlook email tickets"
-                                Content="Sync" />
-
                         <Button x:Name="BtnToggleTicketDetails"
                                 Width="28"
                                 Height="28"
