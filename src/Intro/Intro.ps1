@@ -1,6 +1,6 @@
 # Intro.ps1
 # Fox splash startup for the Quinn Optimiser Toolkit
-# MainWindow.UI.psm1 will handle "Ready", wait 2s, fade, then close the splash.
+# Intro coordinates splash display and main window warmup sequencing.
 
 param(
     [switch]$SkipSplash,
@@ -60,6 +60,7 @@ try {
             $splash.Show()
         }
     }
+    Write-Host "[STARTUP] Intro started"
 
     function Set-FoxSplash {
         param([int]$Percent, [string]$Text)
@@ -116,9 +117,61 @@ try {
     & $script:QOTLog "Starting main window" "INFO"
 
     # MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
-    Start-QOTMain -RootPath $rootPath -SplashWindow $splash
+   Write-Host "[STARTUP] MainWindow warmup started"
+
+    $introReady = New-Object System.Threading.Tasks.TaskCompletionSource[bool]
+    $mainReady  = New-Object System.Threading.Tasks.TaskCompletionSource[bool]
+    $frame      = New-Object System.Windows.Threading.DispatcherFrame
+
+    $checkReady = {
+        if ($introReady.Task.IsCompleted -and $mainReady.Task.IsCompleted) {
+            $frame.Continue = $false
+        }
+    }
+
+    $mainWindow = Start-QOTMain -RootPath $rootPath -SplashWindow $splash -WarmupOnly -PassThru
+    if (-not $mainWindow) {
+        throw "MainWindow warmup failed to create window."
+    }
+
+    $mainWindow.Opacity        = 0
+    $mainWindow.ShowActivated  = $false
+    $mainWindow.ShowInTaskbar  = $false
+
+    $mainWindow.Add_ContentRendered({
+        if (-not $mainReady.Task.IsCompleted) {
+            $null = $mainReady.TrySetResult($true)
+            Write-Host "[STARTUP] MainWindow warmup done"
+        }
+
+        & $checkReady
+    })
+
+    $mainWindow.Show()
+
+    Write-Host "[STARTUP] Intro finished"
+    $null = $introReady.TrySetResult($true)
+    & $checkReady
+
+    if (-not ($introReady.Task.IsCompleted -and $mainReady.Task.IsCompleted)) {
+        [System.Windows.Threading.Dispatcher]::PushFrame($frame)
+    }
+
+    try { if ($splash) { $splash.Close() } } catch { }
+
+    Write-Host "[STARTUP] Showing MainWindow"
+
+    $mainWindow.ShowInTaskbar = $true
+    $mainWindow.ShowActivated = $true
+    $mainWindow.Opacity = 1
+    $mainWindow.Activate() | Out-Null
+
+    $mainWindow.Add_Closed({
+        try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
+    })
 
     & $script:QOTLog "Intro handed off to main window" "INFO"
+    [System.Windows.Threading.Dispatcher]::Run()
 }
 finally {
     $WarningPreference = $oldWarningPreference
