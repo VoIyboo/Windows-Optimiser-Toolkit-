@@ -178,7 +178,8 @@ function Set-QOTPlayProgress {
 
 function Set-QOTUIEnabledState {
     param(
-        [Parameter(Mandatory)]$Control,
+        [AllowNull()]
+        $Control,
         [Parameter(Mandatory)][bool]$IsEnabled
     )
 
