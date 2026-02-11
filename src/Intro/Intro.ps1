@@ -345,19 +345,15 @@ try {
     Write-Host "[STARTUP] Showing MainWindow"
     Stop-StartupChunk "MainWindow warmup"
 
+    $mainWindow.Hide()
     $mainWindow.ShowInTaskbar = $true
     $mainWindow.ShowActivated = $true
     $mainWindow.Opacity = 1
-    $mainWindow.Activate() | Out-Null
 
     try { if ($splash) { $splash.Close() } } catch { }
 
-    $mainWindow.Add_Closed({
-        try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown() } catch { }
-    })
-
     & $script:QOTLog "Intro handed off to main window" "INFO"
-    [System.Windows.Threading.Dispatcher]::Run()
+    $null = $mainWindow.ShowDialog()
 }
 finally {
     $WarningPreference = $oldWarningPreference
