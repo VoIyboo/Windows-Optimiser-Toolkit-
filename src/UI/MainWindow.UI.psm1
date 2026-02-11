@@ -195,6 +195,25 @@ function Set-QOTUIEnabledState {
     return $true
 }
 
+function Set-QOTHitTestVisibility {
+    param(
+        [AllowNull()]
+        $Control,
+        [Parameter(Mandatory)][bool]$IsHitTestVisible
+    )
+
+    if (-not $Control) { return $false }
+
+    $hasIsHitTestVisible = $null -ne $Control.PSObject.Properties['IsHitTestVisible']
+    if (-not $hasIsHitTestVisible) {
+        try { Write-QLog ("Skipping IsHitTestVisible set; control type does not expose IsHitTestVisible: {0}" -f $Control.GetType().FullName) "WARN" } catch { }
+        return $false
+    }
+
+    $Control.IsHitTestVisible = $IsHitTestVisible
+    return $true
+}
+
 function Invoke-QOTPlayCompletionSound {
     try {
         [console]::Beep(880, 120)
@@ -628,7 +647,7 @@ function Start-QOTMainWindow {
 
     if ($btnPlay) {
         $null = Set-QOTUIEnabledState -Control $btnPlay -IsEnabled $true
-        $btnPlay.IsHitTestVisible = $true
+        $null = Set-QOTHitTestVisibility -Control $btnPlay -IsHitTestVisible $true
         Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
 
         $btnPlay.Add_Click({
@@ -657,7 +676,7 @@ function Start-QOTMainWindow {
                 Set-QOTPlayProgress -ProgressPath $playProgressPath -ProgressClip $playProgressClip -Percent 0
                 $script:IsPlayRunning = $false
                 $null = Set-QOTUIEnabledState -Control $btnPlay -IsEnabled $true
-                $btnPlay.IsHitTestVisible = $true
+                $null = Set-QOTHitTestVisibility -Control $btnPlay -IsHitTestVisible $true
             }
         })
     }
