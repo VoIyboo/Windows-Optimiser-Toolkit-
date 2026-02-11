@@ -308,8 +308,12 @@ try {
     $mainReady  = New-Object System.Threading.Tasks.TaskCompletionSource[bool]
     $renderFrame = New-Object System.Windows.Threading.DispatcherFrame
 
-    $mainWindow = Start-QOTMain -RootPath $rootPath -SplashWindow $splash -WarmupOnly -PassThru
+    $mainWindowResult = @(Start-QOTMain -RootPath $rootPath -SplashWindow $splash -WarmupOnly -PassThru)
+    $mainWindow = $mainWindowResult | Where-Object { $_ -is [System.Windows.Window] } | Select-Object -Last 1
     if (-not $mainWindow) {
+        $resultTypes = @($mainWindowResult | ForEach-Object { if ($null -eq $_) { '<null>' } else { $_.GetType().FullName } }) -join ', '
+        if (-not $resultTypes) { $resultTypes = '<no output>' }
+        & $script:QOTLog "MainWindow warmup returned no window. Output types: $resultTypes" "ERROR"
         throw "MainWindow warmup failed to create window."
     }
     Write-StartupMark "MainWindow object created"
