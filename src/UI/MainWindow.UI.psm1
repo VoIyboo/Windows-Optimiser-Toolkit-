@@ -226,10 +226,18 @@ function Invoke-QOTPlayCompletionSound {
 
 function Run-QOTSelectedTasks {
     param(
-        [Parameter(Mandatory)]$Window,
+        $Window,
         [System.Windows.Shapes.Path]$ProgressPath,
         [System.Windows.Media.RectangleGeometry]$ProgressClip
     )
+
+    $activeWindow = $Window
+    if (-not $activeWindow) {
+        $activeWindow = $script:MainWindow
+    }
+    if (-not $activeWindow) {
+        throw "Main window is not initialised. Cannot run selected tasks."
+    }
 
     $scriptsRoot = Join-Path (Join-Path $PSScriptRoot "..") "Scripts"
 
@@ -259,34 +267,34 @@ function Run-QOTSelectedTasks {
 
     $checkboxControlsInUiOrder = New-Object System.Collections.Generic.List[object]
     foreach ($checkboxName in $checkboxNamesInUiOrder) {
-        $checkbox = $Window.FindName($checkboxName)
+        $checkbox = $activeWindow.FindName($checkboxName)
         if ($checkbox -is [System.Windows.Controls.CheckBox]) {
             $checkboxControlsInUiOrder.Add($checkbox) | Out-Null
         }
     }
 
     $actionMap = @{}
-    $actionMap[$Window.FindName("CbCleanTempFiles")] = @{ Name = "Clear temporary files"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanTemp.ps1" }
-    $actionMap[$Window.FindName("CbEmptyRecycleBin")] = @{ Name = "Empty Recycle Bin"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanRecycleBin.ps1" }
-    $actionMap[$Window.FindName("CbCleanDoCache")] = @{ Name = "Clean Delivery Optimisation cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanDOCache.ps1" }
-    $actionMap[$Window.FindName("CbCleanWuCache")] = @{ Name = "Clear Windows Update cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanWindowsUpdateCache.ps1" }
-    $actionMap[$Window.FindName("CbCleanThumbCache")] = @{ Name = "Clean thumbnail cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanThumbnailCache.ps1" }
-    $actionMap[$Window.FindName("CbCleanErrorLogs")] = @{ Name = "Clean old error logs and crash dumps"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanErrorLogs.ps1" }
-    $actionMap[$Window.FindName("CbCleanSetupLeftovers")] = @{ Name = "Remove safe setup / upgrade leftovers"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanSetupLeftovers.ps1" }
-    $actionMap[$Window.FindName("CbClearStoreCache")] = @{ Name = "Clear Microsoft Store cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanStoreCache.ps1" }
-    $actionMap[$Window.FindName("CbEdgeLightCleanup")] = @{ Name = "Light clean of Microsoft Edge cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanEdgeCache.ps1" }
-    $actionMap[$Window.FindName("CbChromeLightCleanup")] = @{ Name = "Light clean of Chrome / Chromium cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanChromeCache.ps1" }
-    $actionMap[$Window.FindName("CbDisableStartRecommended")] = @{ Name = "Hide Start menu recommended items"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakStartMenuRecommendations.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbDisableSuggestedApps")] = @{ Name = "Turn off suggested apps and promotions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakSuggestedApps.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbDisableTipsStart")] = @{ Name = "Disable tips and suggestions in Start"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakTipsInStart.ps1" }
-    $actionMap[$Window.FindName("CbDisableBingSearch")] = @{ Name = "Turn off Bing / web results in Start search"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakBingSearch.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbClassicMoreOptions")] = @{ Name = "Use classic 'More options' right-click menu"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakClassicContextMenu.ps1" }
-    $actionMap[$Window.FindName("CbDisableWidgets")] = @{ Name = "Turn off Widgets"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakWidgets.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbDisableTaskbarNews")] = @{ Name = "Turn off News / taskbar content"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakNewsAndInterests.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbDisableMeetNow")] = @{ Name = "Hide legacy Meet Now button"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakMeetNow.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbDisableAdvertisingId")] = @{ Name = "Turn off advertising ID"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakAdvertisingId.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbLimitFeedbackPrompts")] = @{ Name = "Reduce feedback and survey prompts"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakFeedbackHub.ps1"; RequiresAdmin = $true }
-    $actionMap[$Window.FindName("CbDisableOnlineTips")] = @{ Name = "Disable online tips and suggestions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakOnlineTips.ps1" }
+    $actionMap[$activeWindow.FindName("CbCleanTempFiles")] = @{ Name = "Clear temporary files"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanTemp.ps1" }
+    $actionMap[$activeWindow.FindName("CbEmptyRecycleBin")] = @{ Name = "Empty Recycle Bin"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanRecycleBin.ps1" }
+    $actionMap[$activeWindow.FindName("CbCleanDoCache")] = @{ Name = "Clean Delivery Optimisation cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanDOCache.ps1" }
+    $actionMap[$activeWindow.FindName("CbCleanWuCache")] = @{ Name = "Clear Windows Update cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanWindowsUpdateCache.ps1" }
+    $actionMap[$activeWindow.FindName("CbCleanThumbCache")] = @{ Name = "Clean thumbnail cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanThumbnailCache.ps1" }
+    $actionMap[$activeWindow.FindName("CbCleanErrorLogs")] = @{ Name = "Clean old error logs and crash dumps"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanErrorLogs.ps1" }
+    $actionMap[$activeWindow.FindName("CbCleanSetupLeftovers")] = @{ Name = "Remove safe setup / upgrade leftovers"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanSetupLeftovers.ps1" }
+    $actionMap[$activeWindow.FindName("CbClearStoreCache")] = @{ Name = "Clear Microsoft Store cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanStoreCache.ps1" }
+    $actionMap[$activeWindow.FindName("CbEdgeLightCleanup")] = @{ Name = "Light clean of Microsoft Edge cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanEdgeCache.ps1" }
+    $actionMap[$activeWindow.FindName("CbChromeLightCleanup")] = @{ Name = "Light clean of Chrome / Chromium cache"; ScriptPath = Join-Path $scriptsRoot "Cleanup\Invoke-QCleanChromeCache.ps1" }
+    $actionMap[$activeWindow.FindName("CbDisableStartRecommended")] = @{ Name = "Hide Start menu recommended items"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakStartMenuRecommendations.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbDisableSuggestedApps")] = @{ Name = "Turn off suggested apps and promotions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakSuggestedApps.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbDisableTipsStart")] = @{ Name = "Disable tips and suggestions in Start"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakTipsInStart.ps1" }
+    $actionMap[$activeWindow.FindName("CbDisableBingSearch")] = @{ Name = "Turn off Bing / web results in Start search"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakBingSearch.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbClassicMoreOptions")] = @{ Name = "Use classic 'More options' right-click menu"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakClassicContextMenu.ps1" }
+    $actionMap[$activeWindow.FindName("CbDisableWidgets")] = @{ Name = "Turn off Widgets"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakWidgets.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbDisableTaskbarNews")] = @{ Name = "Turn off News / taskbar content"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakNewsAndInterests.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbDisableMeetNow")] = @{ Name = "Hide legacy Meet Now button"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakMeetNow.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbDisableAdvertisingId")] = @{ Name = "Turn off advertising ID"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakAdvertisingId.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbLimitFeedbackPrompts")] = @{ Name = "Reduce feedback and survey prompts"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakFeedbackHub.ps1"; RequiresAdmin = $true }
+    $actionMap[$activeWindow.FindName("CbDisableOnlineTips")] = @{ Name = "Disable online tips and suggestions"; ScriptPath = Join-Path $scriptsRoot "Tweaks\Invoke-QTweakOnlineTips.ps1" }
 
     $selectedTasks = New-Object System.Collections.Generic.List[object]
     foreach ($checkbox in $checkboxControlsInUiOrder) {
@@ -341,7 +349,7 @@ function Run-QOTSelectedTasks {
                 $ErrorActionPreference = 'Stop'
                 $resultReason = $null
                 $resultError = $null
-                & $scriptPath
+                & $scriptPath -Window $activeWindow
             }
             $resultStatus = $null
             if ($null -ne $result) {
@@ -390,11 +398,18 @@ function Run-QOTSelectedTasks {
                 default { $failedCount++ }
             }
 
-            $reasonSuffix = ""
-            if ($taskStatus -ne "SUCCESS" -and -not [string]::IsNullOrWhiteSpace($taskReason)) {
-                $reasonSuffix = " - $taskReason"
+            if ($taskStatus -eq "SUCCESS") {
+                Write-Host "Completed task: $taskName (SUCCESS)"
             }
-            Write-Host "Completed task: $taskName ($taskStatus)$reasonSuffix"
+            elseif ($taskStatus -eq "SKIPPED") {
+                Write-Host "Skipped task: $taskName"
+            }
+            else {
+                if ([string]::IsNullOrWhiteSpace($taskReason)) {
+                    $taskReason = "Unknown error"
+                }
+                Write-Host "Completed task: $taskName (FAILED - $taskReason)"
+            }
             if ($ProgressPath -and $ProgressClip) {
                 $pct = [math]::Round((($i + 1) / [double]$selectedTasks.Count) * 100, 0)
                 Set-QOTPlayProgress -ProgressPath $ProgressPath -ProgressClip $ProgressClip -Percent $pct
@@ -654,6 +669,14 @@ function Start-QOTMainWindow {
             Write-Host "User clicked Play button"
             try {
                 if ($script:IsPlayRunning) { return }
+
+                $activeWindow = $script:MainWindow
+                if (-not $activeWindow) {
+                    $activeWindow = [System.Windows.Window]::GetWindow($this)
+                }
+                if (-not $activeWindow) {
+                    throw "Main window reference is not available for Play button execution."
+                }
                 
                 if ($executionMessage) {
                     $executionMessage.Visibility = [System.Windows.Visibility]::Collapsed
@@ -665,7 +688,7 @@ function Start-QOTMainWindow {
 
 
 
-                Run-QOTSelectedTasks -Window $window -ProgressPath $playProgressPath -ProgressClip $playProgressClip
+                Run-QOTSelectedTasks -Window $activeWindow -ProgressPath $playProgressPath -ProgressClip $playProgressClip
 
                 Invoke-QOTPlayCompletionSound
             }
