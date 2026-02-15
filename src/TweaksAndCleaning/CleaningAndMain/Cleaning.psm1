@@ -265,8 +265,21 @@ function Invoke-QCleanSetupLeftovers {
 # ------------------------------
 function Invoke-QCleanStoreCache {
     Write-QLog "Cleaning: Microsoft Store cache"
+
+    $resetCmd = Get-Command -Name "Reset-AppxPackage" -ErrorAction SilentlyContinue
+    if (-not $resetCmd) {
+        Write-QLog "Cleaning: Microsoft Store cache (skip, Reset-AppxPackage unavailable)"
+        return New-QOTTaskResult -Name "Store cache" -Status "Skipped" -Reason "Not supported on this Windows build"
+    }
+
+    $storePackage = Get-AppxPackage -Name "Microsoft.WindowsStore" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $storePackage) {
+        Write-QLog "Cleaning: Microsoft Store cache (skip, Microsoft Store package not found)"
+        return New-QOTTaskResult -Name "Store cache" -Status "Skipped" -Reason "Microsoft Store not installed"
+    }
+    
     try {
-        Start-Process -FilePath "wsreset.exe" -Wait -WindowStyle Hidden
+        Reset-AppxPackage -Package $storePackage.PackageFullName -ErrorAction Stop
         Write-QLog "Cleaning: Microsoft Store cache (done)"
         return New-QOTTaskResult -Name "Store cache" -Status "Success"
     }
