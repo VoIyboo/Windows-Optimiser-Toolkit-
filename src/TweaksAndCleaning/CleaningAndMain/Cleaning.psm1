@@ -196,8 +196,8 @@ function Invoke-QCleanDOCache {
 function Invoke-QCleanTemp {
     Write-QLog "Cleaning: Temp folders"
     $ops = @(
-        Invoke-QCleanPath -Path $env:TEMP -Label "User temp files",
-        Invoke-QCleanPath -Path $env:TMP -Label "User tmp files",
+        Invoke-QCleanPath -Path $env:TEMP -Label "User temp files"
+        Invoke-QCleanPath -Path $env:TMP -Label "User tmp files"
         Invoke-QCleanPath -Path "$env:SystemRoot\Temp" -Label "Windows temp files"
     )
     return Resolve-QOTTaskResult -Name "Temp folders" -Operations $ops
@@ -226,7 +226,7 @@ function Invoke-QCleanThumbnailCache {
     Write-QLog "Cleaning: Thumbnail cache"
     $thumbPath = "$env:LOCALAPPDATA\Microsoft\Windows\Explorer"
     $ops = @(
-        Invoke-QCleanPathFiles -Path $thumbPath -Filter "thumbcache*.db" -Label "Thumbnail cache",
+        Invoke-QCleanPathFiles -Path $thumbPath -Filter "thumbcache*.db" -Label "Thumbnail cache"
         Invoke-QCleanPathFiles -Path $thumbPath -Filter "iconcache*.db" -Label "Icon cache"
     )
     return Resolve-QOTTaskResult -Name "Thumbnail cache" -Operations $ops
@@ -238,8 +238,8 @@ function Invoke-QCleanThumbnailCache {
 function Invoke-QCleanErrorLogs {
     Write-QLog "Cleaning: Error logs and crash dumps"
     $ops = @(
-        Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\WER\ReportArchive" -Label "Windows Error Reporting archives",
-        Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\WER\ReportQueue" -Label "Windows Error Reporting queue",
+        Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\WER\ReportArchive" -Label "Windows Error Reporting archives"
+        Invoke-QCleanPath -Path "$env:ProgramData\Microsoft\Windows\WER\ReportQueue" -Label "Windows Error Reporting queue"
         Invoke-QCleanPath -Path "$env:LOCALAPPDATA\CrashDumps" -Label "User crash dumps"
     )
     return Resolve-QOTTaskResult -Name "Error logs" -Operations $ops
@@ -251,10 +251,10 @@ function Invoke-QCleanErrorLogs {
 function Invoke-QCleanSetupLeftovers {
     Write-QLog "Cleaning: Setup/upgrade leftovers"
     $ops = @(
-        Invoke-QCleanPath -Path "$env:SystemDrive\Windows.old" -Label "Windows.old",
-        Invoke-QCleanPath -Path "$env:SystemDrive\`$WINDOWS.~BT" -Label "Setup cache (`$WINDOWS.~BT)",
-        Invoke-QCleanPath -Path "$env:SystemDrive\`$WINDOWS.~WS" -Label "Setup cache (`$WINDOWS.~WS)",
-        Invoke-QCleanPath -Path "$env:SystemDrive\ESD" -Label "Windows ESD",
+        Invoke-QCleanPath -Path "$env:SystemDrive\Windows.old" -Label "Windows.old"
+        Invoke-QCleanPath -Path "$env:SystemDrive\`$WINDOWS.~BT" -Label "Setup cache (`$WINDOWS.~BT)"
+        Invoke-QCleanPath -Path "$env:SystemDrive\`$WINDOWS.~WS" -Label "Setup cache (`$WINDOWS.~WS)"
+        Invoke-QCleanPath -Path "$env:SystemDrive\ESD" -Label "Windows ESD"
         Invoke-QCleanPath -Path "$env:SystemRoot\Panther" -Label "Setup log files"
     )
     return Resolve-QOTTaskResult -Name "Setup leftovers" -Operations $ops
@@ -283,8 +283,8 @@ function Invoke-QCleanEdgeCache {
     Write-QLog "Cleaning: Edge cache cleanup"
     $edgeBase = "$env:LOCALAPPDATA\Microsoft\Edge\User Data"
     $ops = @(
-        Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\Cache") -Label "Edge Cache",
-        Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\Code Cache") -Label "Edge Code Cache",
+        Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\Cache") -Label "Edge Cache"
+        Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\Code Cache") -Label "Edge Code Cache"
         Invoke-QCleanPath -Path (Join-Path $edgeBase "Default\GPUCache") -Label "Edge GPU Cache"
     )
     return Resolve-QOTTaskResult -Name "Edge cache" -Operations $ops
@@ -297,8 +297,8 @@ function Invoke-QCleanChromeCache {
     Write-QLog "Cleaning: Chrome/Chromium cache cleanup"
     $chromeBase = "$env:LOCALAPPDATA\Google\Chrome\User Data"
     $ops = @(
-        Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\Cache") -Label "Chrome Cache",
-        Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\Code Cache") -Label "Chrome Code Cache",
+        Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\Cache") -Label "Chrome Cache"
+        Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\Code Cache") -Label "Chrome Code Cache"
         Invoke-QCleanPath -Path (Join-Path $chromeBase "Default\GPUCache") -Label "Chrome GPU Cache"
     )
     return Resolve-QOTTaskResult -Name "Chrome cache" -Operations $ops
