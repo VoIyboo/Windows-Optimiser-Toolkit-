@@ -356,29 +356,29 @@
                                 <StackPanel Margin="4">
 
                                     <TextBlock Text="Storage cleanup" Style="{StaticResource SectionHeading}" />
-                                    <CheckBox x:Name="CbCleanTempFiles" Content="Clear temporary files" />
-                                    <CheckBox x:Name="CbEmptyRecycleBin" Content="Empty Recycle Bin" />
-                                    <CheckBox x:Name="CbCleanDoCache" Content="Clean Delivery Optimisation cache" />
-                                    <CheckBox x:Name="CbCleanWuCache" Content="Clear Windows Update cache" />
-                                    <CheckBox x:Name="CbCleanThumbCache" Content="Clean thumbnail cache" />
+                                    <CheckBox x:Name="CbCleanTempFiles" Tag="Invoke-QCleanTemp" Content="Clear temporary files" />
+                                    <CheckBox x:Name="CbEmptyRecycleBin" Tag="Invoke-QCleanRecycleBin" Content="Empty Recycle Bin" />
+                                    <CheckBox x:Name="CbCleanDoCache" Tag="Invoke-QCleanDOCache" Content="Clean Delivery Optimisation cache" />
+                                    <CheckBox x:Name="CbCleanWuCache" Tag="Invoke-QCleanWindowsUpdateCache" Content="Clear Windows Update cache" />
+                                    <CheckBox x:Name="CbCleanThumbCache" Tag="Invoke-QCleanThumbnailCache" Content="Clean thumbnail cache" />
 
                                     <Separator />
 
                                     <TextBlock Text="Windows housekeeping" Style="{StaticResource SectionHeading}" />
-                                    <CheckBox x:Name="CbCleanErrorLogs" Content="Clean old error logs and crash dumps" />
-                                    <CheckBox x:Name="CbCleanSetupLeftovers" Content="Remove safe setup / upgrade leftovers" />
-                                    <CheckBox x:Name="CbClearStoreCache" Content="Clear Microsoft Store cache" />
+                                    <CheckBox x:Name="CbCleanErrorLogs" Tag="Invoke-QCleanErrorLogs" Content="Clean old error logs and crash dumps" />
+                                    <CheckBox x:Name="CbCleanSetupLeftovers" Tag="Invoke-QCleanSetupLeftovers" Content="Remove safe setup / upgrade leftovers" />
+                                    <CheckBox x:Name="CbClearStoreCache" Tag="Invoke-QCleanStoreCache" Content="Clear Microsoft Store cache" />
 
                                     <Separator />
 
                                     <TextBlock Text="Browser cleanup (light)" Style="{StaticResource SectionHeading}" />
-                                    <CheckBox x:Name="CbEdgeLightCleanup" Content="Light clean of Microsoft Edge cache" />
-                                    <CheckBox x:Name="CbChromeLightCleanup" Content="Light clean of Chrome / Chromium cache" />
-                                    <CheckBox x:Name="CbCleanDirectXShaderCache" Content="Clear DirectX shader cache" />
-                                    <CheckBox x:Name="CbCleanWERQueue" Content="Clear Windows Error Reporting queue" />
-                                    <CheckBox x:Name="CbClearClipboardHistory" Content="Clear clipboard history" />
-                                    <CheckBox x:Name="CbCleanExplorerRecentItems" Content="Clear Explorer Recent items and Jump Lists" />
-                                    <CheckBox x:Name="CbCleanWindowsSearchHistory" Content="Clear Windows Search history" />
+                                    <CheckBox x:Name="CbEdgeLightCleanup" Tag="Invoke-QCleanEdgeCache" Content="Light clean of Microsoft Edge cache" />
+                                    <CheckBox x:Name="CbChromeLightCleanup" Tag="Invoke-QCleanChromeCache" Content="Light clean of Chrome / Chromium cache" />
+                                    <CheckBox x:Name="CbCleanDirectXShaderCache" Tag="Invoke-QCleanDirectXShaderCache" Content="Clear DirectX shader cache" />
+                                    <CheckBox x:Name="CbCleanWERQueue" Tag="Invoke-QCleanWERQueue" Content="Clear Windows Error Reporting queue" />
+                                    <CheckBox x:Name="CbClearClipboardHistory" Tag="Invoke-QCleanClipboardHistory" Content="Clear clipboard history" />
+                                    <CheckBox x:Name="CbCleanExplorerRecentItems" Tag="Invoke-QCleanExplorerRecentItems" Content="Clear Explorer Recent items and Jump Lists" />
+                                    <CheckBox x:Name="CbCleanWindowsSearchHistory" Tag="Invoke-QCleanWindowsSearchHistory" Content="Clear Windows Search history" />
 
                                 </StackPanel>
                             </ScrollViewer>
@@ -391,29 +391,29 @@
                                 <StackPanel Margin="4">
 
                                     <TextBlock Text="Start menu &amp; recommendations" Style="{StaticResource SectionHeading}" />
-                                    <CheckBox x:Name="CbDisableStartRecommended" Content="Hide Start menu recommended items" />
-                                    <CheckBox x:Name="CbDisableSuggestedApps" Content="Turn off suggested apps and promotions" />
-                                    <CheckBox x:Name="CbDisableTipsStart" Content="Disable tips and suggestions in Start" />
-                                    <CheckBox x:Name="CbDisableBingSearch" Content="Turn off Bing / web results in Start search" />
-                                    <CheckBox x:Name="CbClassicMoreOptions" Content="Use classic 'More options' right-click menu" />
+                                    <CheckBox x:Name="CbDisableStartRecommended" Tag="Invoke-QTweakStartMenuRecommendations" Content="Hide Start menu recommended items" />
+                                    <CheckBox x:Name="CbDisableSuggestedApps" Tag="Invoke-QTweakSuggestedApps" Content="Turn off suggested apps and promotions" />
+                                    <CheckBox x:Name="CbDisableTipsStart" Tag="Invoke-QTweakTipsInStart" Content="Disable tips and suggestions in Start" />
+                                    <CheckBox x:Name="CbDisableBingSearch" Tag="Invoke-QTweakBingSearch" Content="Turn off Bing / web results in Start search" />
+                                    <CheckBox x:Name="CbClassicMoreOptions" Tag="Invoke-QTweakClassicContextMenu" Content="Use classic 'More options' right-click menu" />
 
                                     <Separator />
 
                                     <TextBlock Text="Taskbar &amp; widgets" Style="{StaticResource SectionHeading}" />
-                                    <CheckBox x:Name="CbDisableWidgets" Content="Turn off Widgets" />
-                                    <CheckBox x:Name="CbDisableTaskbarNews" Content="Turn off News / taskbar content" />
-                                    <CheckBox x:Name="CbDisableMeetNow" Content="Hide legacy Meet Now button (if present)" />
+                                    <CheckBox x:Name="CbDisableWidgets" Tag="Invoke-QTweakWidgets" Content="Turn off Widgets" />
+                                    <CheckBox x:Name="CbDisableTaskbarNews" Tag="Invoke-QTweakNewsAndInterests" Content="Turn off News / taskbar content" />
+                                    <CheckBox x:Name="CbDisableMeetNow" Tag="Invoke-QTweakMeetNow" Content="Hide legacy Meet Now button (if present)" />
 
                                     <Separator />
 
                                     <TextBlock Text="Privacy &amp; telemetry (safe level)" Style="{StaticResource SectionHeading}" />
-                                    <CheckBox x:Name="CbDisableAdvertisingId" Content="Turn off advertising ID" />
-                                    <CheckBox x:Name="CbLimitFeedbackPrompts" Content="Reduce feedback and survey prompts" />
-                                    <CheckBox x:Name="CbDisableOnlineTips" Content="Disable online tips and suggestions" />
-                                    <CheckBox x:Name="CbDisableLockScreenTips" Content="Disable lock screen tips, suggestions, and spotlight extras" />
-                                    <CheckBox x:Name="CbDisableSettingsSuggestedContent" Content="Disable Suggested content in Settings" />
-                                    <CheckBox x:Name="CbDisableTransparencyEffects" Content="Turn off transparency effects" />
-                                    <CheckBox x:Name="CbDisableStartupDelay" Content="Disable startup delay for startup apps" />
+                                    <CheckBox x:Name="CbDisableAdvertisingId" Tag="Invoke-QTweakAdvertisingId" Content="Turn off advertising ID" />
+                                    <CheckBox x:Name="CbLimitFeedbackPrompts" Tag="Invoke-QTweakFeedbackHub" Content="Reduce feedback and survey prompts" />
+                                    <CheckBox x:Name="CbDisableOnlineTips" Tag="Invoke-QTweakOnlineTips" Content="Disable online tips and suggestions" />
+                                    <CheckBox x:Name="CbDisableLockScreenTips" Tag="Invoke-QTweakDisableLockScreenTips" Content="Disable lock screen tips, suggestions, and spotlight extras" />
+                                    <CheckBox x:Name="CbDisableSettingsSuggestedContent" Tag="Invoke-QTweakDisableSettingsSuggestedContent" Content="Disable Suggested content in Settings" />
+                                    <CheckBox x:Name="CbDisableTransparencyEffects" Tag="Invoke-QTweakDisableTransparencyEffects" Content="Turn off transparency effects" />
+                                    <CheckBox x:Name="CbDisableStartupDelay" Tag="Invoke-QTweakDisableStartupDelay" Content="Disable startup delay for startup apps" />
 
                                 </StackPanel>
                             </ScrollViewer>
@@ -435,8 +435,23 @@
                                   Grid.Column="0"
                                   Margin="0,0,8,0">
                             <Grid Margin="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
+                                    <TextBlock x:Name="StatusLabel"
+                                               Text="Idle"
+                                               Foreground="{StaticResource TextSubtle}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,12,0" />
+                                    <Button x:Name="BtnScanApps" Content="Scan" MinWidth="80" />
+                                    <Button x:Name="BtnUninstallSelected" Content="Uninstall Selected" MinWidth="140" />
+                                </DockPanel>
 
                                 <DataGrid x:Name="AppsGrid"
+                                          Grid.Row="1"
                                           Margin="0,4,0,0"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
