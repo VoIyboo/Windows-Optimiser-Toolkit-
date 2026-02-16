@@ -54,6 +54,22 @@ function Get-QOTActionDefinition {
     return $null
 }
 
+function Get-QOTActionDefinitions {
+    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
+        $script:QOT_ActionDefinitions = @{}
+    }
+
+    return @($script:QOT_ActionDefinitions.Values)
+}
+
+function Get-QOTActionDefinitionCount {
+    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
+        $script:QOT_ActionDefinitions = @{}
+    }
+
+    return $script:QOT_ActionDefinitions.Count
+}
+
 function Invoke-QOTActionById {
     param(
         [Parameter(Mandatory)][string]$ActionId,
@@ -215,6 +231,15 @@ function Invoke-QOTRegisteredActions {
         [scriptblock]$OnProgress
     )
     $selectedItems = Get-QOTSelectedActionsInExecutionOrder -Window $Window
+
+    try {
+        $registeredCount = Get-QOTActionDefinitionCount
+        Write-QLog ("Registered action definitions available: {0}" -f $registeredCount) "INFO"
+    } catch { }
+
+    try {
+        Write-QLog ("Selected actions before execution: {0}" -f $selectedItems.Count) "INFO"
+    } catch { }
 
     if ($selectedItems.Count -eq 0) {
         try { Write-QLog "No actions selected." "INFO" } catch { }
@@ -399,4 +424,4 @@ function Test-QOTAnyActionsSelected {
     }
 }
 
-Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Get-QOTSelectedActionsInExecutionOrder, Test-QOTAnyActionsSelected
+Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Get-QOTActionDefinitions, Get-QOTActionDefinitionCount, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Get-QOTSelectedActionsInExecutionOrder, Test-QOTAnyActionsSelected
