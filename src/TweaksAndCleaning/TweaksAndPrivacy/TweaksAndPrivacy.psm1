@@ -173,6 +173,42 @@ function Set-QOTRegistryDefaultValue {
 # ------------------------------
 # Start menu / recommendations
 # ------------------------------
+
+function Write-QOTTaskOutcome {
+    param(
+        [Parameter(Mandatory)][string]$TaskName,
+        [Parameter(Mandatory)][object]$Result
+    )
+
+    $status = "SKIPPED"
+    switch ([string]$Result.Status) {
+        "Success" { $status = "SUCCESS" }
+        "Failed" { $status = "FAILED" }
+        default { $status = "SKIPPED" }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$Result.Reason)) {
+        Write-QLog ("Task result: {0} => {1} ({2})" -f $TaskName, $status, [string]$Result.Reason)
+    } else {
+        Write-QLog ("Task result: {0} => {1}" -f $TaskName, $status)
+    }
+}
+
+function Invoke-QOTLoggedRegistryTask {
+    param(
+        [Parameter(Mandatory)][string]$TaskName,
+        [Parameter(Mandatory)][hashtable[]]$Operations
+    )
+
+    Write-QLog ("Now doing task: {0}" -f $TaskName)
+    $result = Invoke-QOTRegistryTask -Name $TaskName -Operations $Operations
+    if ($result.Status -eq "Skipped" -and $result.Reason -eq "Admin required") {
+        $result = New-QOTTaskResult -Name $TaskName -Status "Failed" -Reason "requires admin"
+    }
+    Write-QOTTaskOutcome -TaskName $TaskName -Result $result
+    return $result
+}
+
 function Invoke-QTweakStartMenuRecommendations {
     $ops = @(
         @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer"; Name = "HideRecommendedSection"; Value = 1 },
@@ -348,6 +384,44 @@ function Invoke-QDisableAppReinstall {
     Write-QLog "Tweaks: Disable auto reinstall of apps (placeholder)"
 }
 
+function Invoke-QTweakDisableLockScreenTips {
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    $ops = @(
+        @{ Path = $path; Name = "SubscribedContent-338387Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-338388Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-338389Enabled"; Value = 0 },
+        @{ Path = $path; Name = "RotatingLockScreenEnabled"; Value = 0 },
+        @{ Path = $path; Name = "RotatingLockScreenOverlayEnabled"; Value = 0 }
+    )
+    return Invoke-QOTLoggedRegistryTask -TaskName "Disable lock screen tips, suggestions, and spotlight extras" -Operations $ops
+}
+
+function Invoke-QTweakDisableSettingsSuggestedContent {
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+    $ops = @(
+        @{ Path = $path; Name = "SubscribedContent-338393Enabled"; Value = 0 },
+        @{ Path = $path; Name = "SubscribedContent-353694Enabled"; Value = 0 }
+    )
+    return Invoke-QOTLoggedRegistryTask -TaskName "Disable Suggested content in Settings" -Operations $ops
+}
+
+function Invoke-QTweakDisableTransparencyEffects {
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    $ops = @(
+        @{ Path = $path; Name = "EnableTransparency"; Value = 0 }
+    )
+    return Invoke-QOTLoggedRegistryTask -TaskName "Turn off transparency effects" -Operations $ops
+}
+
+function Invoke-QTweakDisableStartupDelay {
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize"
+    $ops = @(
+        @{ Path = $path; Name = "StartupDelayInMSec"; Value = 0 }
+    )
+    return Invoke-QOTLoggedRegistryTask -TaskName "Disable startup delay for startup apps" -Operations $ops
+}
+
+
 # ------------------------------
 # Exported functions
 # ------------------------------
@@ -374,4 +448,8 @@ Export-ModuleMember -Function `
     Invoke-QShowHiddenFiles, `
     Invoke-QEnableVerboseLogon, `
     Invoke-QDisableGameDVR, `
-    Invoke-QDisableAppReinstall
+    Invoke-QDisableAppReinstall, `
+    Invoke-QTweakDisableLockScreenTips, `
+    Invoke-QTweakDisableSettingsSuggestedContent, `
+    Invoke-QTweakDisableTransparencyEffects, `
+    Invoke-QTweakDisableStartupDelay
