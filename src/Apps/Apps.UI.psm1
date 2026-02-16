@@ -118,6 +118,29 @@ function Initialize-QOTAppsGridsColumns {
             Width      = 220
             IsReadOnly = $true
         }))
+        $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "Version"
+            Binding    = (New-Object System.Windows.Data.Binding "Version")
+            Width      = 130
+            IsReadOnly = $true
+        }))
+
+        $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "Source"
+            Binding    = (New-Object System.Windows.Data.Binding "Source")
+            Width      = 90
+            IsReadOnly = $true
+        }))
+
+        $dateBinding = New-Object System.Windows.Data.Binding "InstallDate"
+        $dateBinding.StringFormat = "yyyy-MM-dd"
+        $AppsGrid.Columns.Add((New-Object System.Windows.Controls.DataGridTextColumn -Property @{
+            Header     = "Install Date"
+            Binding    = $dateBinding
+            Width      = 120
+            IsReadOnly = $true
+        }))
+        
     }
 
     # Common Apps grid
