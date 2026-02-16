@@ -107,7 +107,8 @@ function Invoke-QOTRunSelectedAppsActions {
         return
     }
 
-    $installedNameSet = Get-QOTInstalledAppNameSet -Apps $installedItems
+    $installedDataset = Get-QOTInstalledAppDataset -Apps $installedItems
+    $installedNameSet = $installedDataset.AllNames
     $selectedInstalledNameSet = Get-QOTInstalledAppNameSet -Apps $selectedInstalled
     $selectedCommonNameSet = Get-QOTInstalledAppNameSet -Apps $selectedCommon
 
@@ -156,10 +157,7 @@ function Invoke-QOTRunSelectedAppsActions {
 
     foreach ($app in $selectedCommon) {
         $name = $app.Name
-        $key = Get-QOTNormalizedAppName -Name $name
-
-        $alreadyInstalled = $false
-        if ($installedNameSet.Contains($key)) { $alreadyInstalled = $true }
+        $alreadyInstalled = Test-QOTCommonAppInstalled -CommonApp $app -InstalledDataset $installedDataset
         if (-not $alreadyInstalled -and (Get-Command Test-QOTWingetAppInstalled -ErrorAction SilentlyContinue) -and -not [string]::IsNullOrWhiteSpace($app.WingetId)) {
             try { $alreadyInstalled = Test-QOTWingetAppInstalled -WingetId $app.WingetId } catch { $alreadyInstalled = $false }
         }
@@ -168,12 +166,12 @@ function Invoke-QOTRunSelectedAppsActions {
             $app.Status = "Installed"
             $app.IsInstallable = $false
             $app.IsSelected = $false
-            try { Write-QLog ("Skipping install for '{0}' because it is already installed." -f $name) "INFO" } catch { }
+            try { Write-QLog ("Install SKIPPED: {0} (already installed)" -f $name) "INFO" } catch { }
             continue
         }
 
         if ([string]::IsNullOrWhiteSpace($app.WingetId)) {
-            try { Write-QLog ("Skipping install for '{0}' because WingetId is missing." -f $name) "WARN" } catch { }
+            try { Write-QLog ("Install SKIPPED: {0} (missing WingetId)" -f $name) "WARN" } catch { }
             continue
         }
 
@@ -184,11 +182,11 @@ function Invoke-QOTRunSelectedAppsActions {
             $app.IsInstallable = $false
             $app.IsSelected = $false
             $didChange = $true
-            try { Write-QLog ("Install succeeded: {0}" -f $name) "INFO" } catch { }
+            try { Write-QLog ("Install SUCCESS: {0}" -f $name) "INFO" } catch { }
         }
         catch {
             $app.Status = "Failed"
-            try { Write-QLog ("Install failed for '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
+            try { Write-QLog ("Install FAILED: {0} ({1})" -f $name, $_.Exception.Message) "ERROR" } catch { }
         }
     }
 
