@@ -69,6 +69,11 @@ function Initialize-QOTTweaksAndCleaningUI {
             @{ Name = "CbClearStoreCache";      Label = "Clear Microsoft Store cache";            ActionId = "Invoke-QCleanStoreCache" },
             @{ Name = "CbEdgeLightCleanup";     Label = "Light clean of Microsoft Edge cache";    ActionId = "Invoke-QCleanEdgeCache" },
             @{ Name = "CbChromeLightCleanup";   Label = "Light clean of Chrome / Chromium cache"; ActionId = "Invoke-QCleanChromeCache" },
+            @{ Name = "CbCleanDirectXShaderCache"; Label = "Clear DirectX shader cache"; ActionId = "Invoke-QCleanDirectXShaderCache" },
+            @{ Name = "CbCleanWERQueue"; Label = "Clear Windows Error Reporting queue"; ActionId = "Invoke-QCleanWERQueue" },
+            @{ Name = "CbClearClipboardHistory"; Label = "Clear clipboard history"; ActionId = "Invoke-QCleanClipboardHistory" },
+            @{ Name = "CbCleanExplorerRecentItems"; Label = "Clear Explorer Recent items and Jump Lists"; ActionId = "Invoke-QCleanExplorerRecentItems" },
+            @{ Name = "CbCleanWindowsSearchHistory"; Label = "Clear Windows Search history"; ActionId = "Invoke-QCleanWindowsSearchHistory" },
             @{ Name = "CbDisableStartRecommended"; Label = "Hide Start menu recommended items";   ActionId = "Invoke-QTweakStartMenuRecommendations" },
             @{ Name = "CbDisableSuggestedApps";    Label = "Turn off suggested apps and promotions"; ActionId = "Invoke-QTweakSuggestedApps" },
             @{ Name = "CbDisableTipsStart";        Label = "Disable tips and suggestions in Start"; ActionId = "Invoke-QTweakTipsInStart" },
@@ -79,7 +84,11 @@ function Initialize-QOTTweaksAndCleaningUI {
             @{ Name = "CbDisableMeetNow";          Label = "Hide legacy Meet Now button";          ActionId = "Invoke-QTweakMeetNow" },
             @{ Name = "CbDisableAdvertisingId";    Label = "Turn off advertising ID";              ActionId = "Invoke-QTweakAdvertisingId" },
             @{ Name = "CbLimitFeedbackPrompts";    Label = "Reduce feedback and survey prompts";   ActionId = "Invoke-QTweakFeedbackHub" },
-            @{ Name = "CbDisableOnlineTips";       Label = "Disable online tips and suggestions";  ActionId = "Invoke-QTweakOnlineTips" }
+            @{ Name = "CbDisableOnlineTips";       Label = "Disable online tips and suggestions";  ActionId = "Invoke-QTweakOnlineTips" },
+            @{ Name = "CbDisableLockScreenTips"; Label = "Disable lock screen tips, suggestions, and spotlight extras"; ActionId = "Invoke-QTweakDisableLockScreenTips" },
+            @{ Name = "CbDisableSettingsSuggestedContent"; Label = "Disable Suggested content in Settings"; ActionId = "Invoke-QTweakDisableSettingsSuggestedContent" },
+            @{ Name = "CbDisableTransparencyEffects"; Label = "Turn off transparency effects"; ActionId = "Invoke-QTweakDisableTransparencyEffects" },
+            @{ Name = "CbDisableStartupDelay"; Label = "Disable startup delay for startup apps"; ActionId = "Invoke-QTweakDisableStartupDelay" }
         )
         
         $actionsSnapshot = $actions
