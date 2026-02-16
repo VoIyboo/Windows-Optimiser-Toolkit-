@@ -216,16 +216,20 @@ function Start-QOTInstalledAppsScanAsync {
             return
         }
 
+        if ($script:QOT_InstalledAppsWorker) {
+            try { $script:QOT_InstalledAppsWorker.Dispose() } catch { }
+        }
+
         $script:QOT_InstalledAppsWorker = New-Object System.ComponentModel.BackgroundWorker
         $script:QOT_InstalledAppsWorker.WorkerReportsProgress = $false
         $script:QOT_InstalledAppsWorker.WorkerSupportsCancellation = $false
 
-        $script:QOT_InstalledAppsWorker.DoWork += {
+        $script:QOT_InstalledAppsWorker.add_DoWork({
             param($sender, $e)
             $e.Result = @(Get-QOTInstalledAppsCached -ForceRefresh:$ForceScan)
-        }
+        })
 
-        $script:QOT_InstalledAppsWorker.RunWorkerCompleted += {
+        $script:QOT_InstalledAppsWorker.add_RunWorkerCompleted({
             param($sender, $e)
 
             try {
@@ -250,7 +254,7 @@ function Start-QOTInstalledAppsScanAsync {
             catch {
                 try { Write-QLog ("Installed apps scan completion handler failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
             }
-        }
+        })
 
         if (-not $script:QOT_InstalledAppsWorker.IsBusy) {
             try { Write-QLog "Starting installed apps scan (async)." "DEBUG" } catch { }
