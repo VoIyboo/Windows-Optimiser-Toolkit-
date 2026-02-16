@@ -341,27 +341,20 @@ function Invoke-QCleanSetupLeftovers {
 function Invoke-QCleanStoreCache {
     Write-QLog "Cleaning: Microsoft Store cache"
 
-    $resetCmd = Get-Command -Name "Reset-AppxPackage" -ErrorAction SilentlyContinue
-    if (-not $resetCmd) {
-        Write-QLog "Cleaning: Microsoft Store cache (skip, Reset-AppxPackage unavailable)"
-        return New-QOTTaskResult -Name "Store cache" -Status "Skipped" -Reason "Not supported on this Windows build"
-    }
+    $storeCacheBase = Join-Path $env:LOCALAPPDATA "Packages\Microsoft.WindowsStore_8wekyb3d8bbwe"
+    $ops = @(
+        Invoke-QCleanPath -Path (Join-Path $storeCacheBase "LocalCache") -Label "Store LocalCache"
+        Invoke-QCleanPath -Path (Join-Path $storeCacheBase "TempState") -Label "Store TempState"
+        Invoke-QCleanPath -Path (Join-Path $storeCacheBase "AC\INetCache") -Label "Store INetCache"
+    )
 
-    $storePackage = Get-AppxPackage -Name "Microsoft.WindowsStore" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $storePackage) {
-        Write-QLog "Cleaning: Microsoft Store cache (skip, Microsoft Store package not found)"
-        return New-QOTTaskResult -Name "Store cache" -Status "Skipped" -Reason "Microsoft Store not installed"
-    }
-    
-    try {
-        Reset-AppxPackage -Package $storePackage.PackageFullName -ErrorAction Stop
+    $result = Resolve-QOTTaskResult -Name "Store cache" -Operations $ops
+    if ($result.Status -eq "Skipped") {
+        Write-QLog "Cleaning: Microsoft Store cache (skip, no cache folders found)"
+    } elseif ($result.Status -eq "Success") {
         Write-QLog "Cleaning: Microsoft Store cache (done)"
-        return New-QOTTaskResult -Name "Store cache" -Status "Success"
     }
-    catch {
-        Write-QLog ("Cleaning: Microsoft Store cache failed: {0}" -f $_.Exception.Message) "ERROR"
-        return New-QOTTaskResult -Name "Store cache" -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
-    }
+    return $result  
 }
 
 # ------------------------------
