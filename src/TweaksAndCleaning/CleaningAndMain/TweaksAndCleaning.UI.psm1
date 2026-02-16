@@ -92,8 +92,112 @@ function Initialize-QOTTweaksAndCleaningUI {
         )
         
         $actionsSnapshot = $actions
+        $actionGroupName = "Tweaks & Cleaning"
 
-        Register-QOTActionGroup -Name "Tweaks & Cleaning" -GetItems ({
+        try {
+            $tweaksAndCleaningRoot = $null
+            if ($Window) {
+                $tabCleaning = $Window.FindName("TabCleaning")
+                if ($tabCleaning) {
+                    $tweaksAndCleaningRoot = $tabCleaning
+                    if ($tabCleaning.Content) {
+                        $tweaksAndCleaningRoot = $tabCleaning.Content
+                    }
+                }
+            }
+
+            $uiCheckboxes = @()
+            if ($tweaksAndCleaningRoot) {
+                $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
+                $q.Enqueue($tweaksAndCleaningRoot) | Out-Null
+
+                while ($q.Count -gt 0) {
+                    $cur = $q.Dequeue()
+                    if ($cur -is [System.Windows.Controls.CheckBox]) {
+                        $uiCheckboxes += [pscustomobject]@{
+                            Name = $cur.Name
+                            Label = [string]$cur.Content
+                        }
+                    }
+
+                    $count = 0
+                    try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
+                    for ($i = 0; $i -lt $count; $i++) {
+                        try {
+                            $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                            if ($child) { $q.Enqueue($child) | Out-Null }
+                        } catch { }
+                    }
+                }
+            }
+
+            $actionByName = @{}
+            $duplicateActionNames = @()
+            foreach ($action in $actionsSnapshot) {
+                if (-not [string]::IsNullOrWhiteSpace($action.Name)) {
+                    if ($actionByName.ContainsKey($action.Name)) {
+                        $duplicateActionNames += $action.Name
+                    } else {
+                        $actionByName[$action.Name] = $action
+                    }
+                }
+            }
+
+            $duplicateUICheckboxes = @($uiCheckboxes | Group-Object Name | Where-Object { $_.Count -gt 1 })
+            $missingFromActionList = @($uiCheckboxes | Where-Object { -not $actionByName.ContainsKey($_.Name) })
+            $missingDefinitions = @()
+            foreach ($action in $actionsSnapshot) {
+                $definition = Get-QOTActionDefinition -ActionId $action.ActionId
+                if (-not $definition) {
+                    $missingDefinitions += $action
+                    continue
+                }
+                if ([string]::IsNullOrWhiteSpace($definition.ScriptPath) -or -not (Test-Path -LiteralPath $definition.ScriptPath)) {
+                    $missingDefinitions += $action
+                }
+            }
+
+            try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in UI: {0}" -f $uiCheckboxes.Count) "INFO" } catch { }
+            foreach ($cb in $uiCheckboxes) {
+                try { Write-QLog ("Tweaks & Cleaning checkbox: {0} | {1}" -f $cb.Name, $cb.Label) "DEBUG" } catch { }
+            }
+
+            try { Write-QLog ("Tweaks & Cleaning actions mapped in UI module: {0}" -f $actionsSnapshot.Count) "INFO" } catch { }
+            try { Write-QLog ("Total registered action definitions: {0}" -f (Get-QOTActionDefinitionCount)) "INFO" } catch { }
+
+            if ($missingFromActionList.Count -gt 0) {
+                foreach ($missing in $missingFromActionList) {
+                    try { Write-QLog ("Tweaks & Cleaning checkbox has no mapped action definition: {0} | {1}" -f $missing.Name, $missing.Label) "WARN" } catch { }
+                }
+            }
+
+            if ($missingDefinitions.Count -gt 0) {
+                foreach ($missingDef in $missingDefinitions) {
+                    try { Write-QLog ("Tweaks & Cleaning mapped action has no registered definition or script: {0} -> {1}" -f $missingDef.Name, $missingDef.ActionId) "WARN" } catch { }
+                }
+            }
+
+            if ($duplicateActionNames.Count -gt 0) {
+                foreach ($duplicateName in ($duplicateActionNames | Select-Object -Unique)) {
+                    try { Write-QLog ("Tweaks & Cleaning duplicate action Name detected: {0}" -f $duplicateName) "WARN" } catch { }
+                }
+            }
+
+            if ($duplicateUICheckboxes.Count -gt 0) {
+                foreach ($duplicateGroup in $duplicateUICheckboxes) {
+                    try { Write-QLog ("Tweaks & Cleaning duplicate UI checkbox Name detected: {0}" -f $duplicateGroup.Name) "WARN" } catch { }
+                }
+            }
+
+            if ($missingFromActionList.Count -eq 0 -and $missingDefinitions.Count -eq 0 -and $uiCheckboxes.Count -eq $actionsSnapshot.Count -and $duplicateActionNames.Count -eq 0 -and $duplicateUICheckboxes.Count -eq 0) {
+                try { Write-QLog "Tweaks & Cleaning checkbox/action mapping validated: no visual-only checkboxes detected." "INFO" } catch { }
+            }
+        }
+        catch {
+            try { Write-QLog ("Failed to validate Tweaks & Cleaning checkbox mappings: {0}" -f $_.Exception.Message) "WARN" } catch { }
+        }
+        
+        Register-QOTActionGroup -Name $actionGroupName -GetItems ({
             param($Window)
 
             $items = @()
