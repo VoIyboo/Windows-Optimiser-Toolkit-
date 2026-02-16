@@ -62,6 +62,81 @@ function Resolve-QOTTaskResult {
     return New-QOTTaskResult -Name $Name -Status "Skipped" -Reason "Not applicable"
 }
 
+function Write-QOTTaskOutcome {
+    param(
+        [Parameter(Mandatory)][string]$TaskName,
+        [Parameter(Mandatory)][object]$Result
+    )
+
+    $status = "SKIPPED"
+    try {
+        switch ([string]$Result.Status) {
+            "Success" { $status = "SUCCESS" }
+            "Failed" { $status = "FAILED" }
+            default { $status = "SKIPPED" }
+        }
+    } catch { }
+
+    $reason = $null
+    try { $reason = [string]$Result.Reason } catch { $reason = $null }
+    if (-not [string]::IsNullOrWhiteSpace($reason)) {
+        Write-QLog ("Task result: {0} => {1} ({2})" -f $TaskName, $status, $reason)
+    } else {
+        Write-QLog ("Task result: {0} => {1}" -f $TaskName, $status)
+    }
+}
+
+function Test-QOTAdminRequiredFailure {
+    param([Parameter(Mandatory)][object]$ErrorRecord)
+
+    if (-not $ErrorRecord -or -not $ErrorRecord.Exception) { return $false }
+    $message = [string]$ErrorRecord.Exception.Message
+    if ($message -match "Access to the path .* is denied" -or $message -match "Access is denied") {
+        return $true
+    }
+    return $false
+}
+
+function Invoke-QOTClearFolderContents {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Label
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return New-QOTOperationResult -Status "Skipped" -Reason "Not found"
+    }
+
+    try {
+        $items = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction Stop)
+    }
+    catch {
+        if (Test-QOTAdminRequiredFailure -ErrorRecord $_) {
+            return New-QOTOperationResult -Status "Failed" -Reason "requires admin"
+        }
+        return New-QOTOperationResult -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
+    }
+
+    if ($items.Count -eq 0) {
+        return New-QOTOperationResult -Status "Skipped" -Reason "Already clear"
+    }
+
+    foreach ($item in $items) {
+        try {
+            Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            if (Test-QOTAdminRequiredFailure -ErrorRecord $_) {
+                return New-QOTOperationResult -Status "Failed" -Reason "requires admin"
+            }
+            return New-QOTOperationResult -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
+        }
+    }
+
+    Write-QLog ("Cleaning: {0} (done)" -f $Label)
+    return New-QOTOperationResult -Status "Success"
+}
+
 function Invoke-QCleanPath {
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -317,6 +392,109 @@ function Invoke-QCleanChromeCache {
     return Resolve-QOTTaskResult -Name "Chrome cache" -Operations $ops
 }
 
+function Invoke-QCleanDirectXShaderCache {
+    $taskName = "Clear DirectX shader cache"
+    Write-QLog ("Now doing task: {0}" -f $taskName)
+
+    $result = Resolve-QOTTaskResult -Name $taskName -Operations @(
+        Invoke-QOTClearFolderContents -Path "$env:LOCALAPPDATA\D3DSCache" -Label "DirectX shader cache"
+    )
+    Write-QOTTaskOutcome -TaskName $taskName -Result $result
+    return $result
+}
+
+function Invoke-QCleanWERQueue {
+    $taskName = "Clear Windows Error Reporting queue"
+    Write-QLog ("Now doing task: {0}" -f $taskName)
+
+    $ops = @(
+        Invoke-QOTClearFolderContents -Path "$env:ProgramData\Microsoft\Windows\WER\ReportQueue" -Label "WER ReportQueue"
+        Invoke-QOTClearFolderContents -Path "$env:ProgramData\Microsoft\Windows\WER\ReportArchive" -Label "WER ReportArchive"
+    )
+    $result = Resolve-QOTTaskResult -Name $taskName -Operations $ops
+    Write-QOTTaskOutcome -TaskName $taskName -Result $result
+    return $result
+}
+
+function Invoke-QCleanClipboardHistory {
+    $taskName = "Clear clipboard history"
+    Write-QLog ("Now doing task: {0}" -f $taskName)
+
+    $ops = @()
+    try {
+        if (Get-Command -Name "Set-Clipboard" -ErrorAction SilentlyContinue) {
+            Set-Clipboard -Value "" -ErrorAction Stop
+            $ops += New-QOTOperationResult -Status "Success"
+        } else {
+            $ops += New-QOTOperationResult -Status "Skipped" -Reason "Set-Clipboard unavailable"
+        }
+    }
+    catch {
+        $ops += New-QOTOperationResult -Status "Failed" -Reason "Cleanup failed" -Error $_.Exception.Message
+    }
+
+    $ops += Invoke-QOTClearFolderContents -Path "$env:LOCALAPPDATA\Microsoft\Clipboard" -Label "Clipboard history"
+
+    $result = Resolve-QOTTaskResult -Name $taskName -Operations $ops
+    Write-QOTTaskOutcome -TaskName $taskName -Result $result
+    return $result
+}
+
+function Invoke-QCleanExplorerRecentItems {
+    $taskName = "Clear Explorer Recent items and Jump Lists"
+    Write-QLog ("Now doing task: {0}" -f $taskName)
+
+    $recentPath = "$env:APPDATA\Microsoft\Windows\Recent"
+    $ops = @(
+        Invoke-QOTClearFolderContents -Path $recentPath -Label "Explorer recent items"
+        Invoke-QOTClearFolderContents -Path (Join-Path $recentPath "AutomaticDestinations") -Label "Jump Lists (automatic)"
+        Invoke-QOTClearFolderContents -Path (Join-Path $recentPath "CustomDestinations") -Label "Jump Lists (custom)"
+    )
+
+    $result = Resolve-QOTTaskResult -Name $taskName -Operations $ops
+    Write-QOTTaskOutcome -TaskName $taskName -Result $result
+    return $result
+}
+
+function Invoke-QCleanWindowsSearchHistory {
+    $taskName = "Clear Windows Search history"
+    Write-QLog ("Now doing task: {0}" -f $taskName)
+
+    $path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\WordWheelQuery"
+    if (-not (Test-Path -LiteralPath $path)) {
+        $result = New-QOTTaskResult -Name $taskName -Status "Skipped" -Reason "Search history key not found"
+        Write-QOTTaskOutcome -TaskName $taskName -Result $result
+        return $result
+    }
+
+    try {
+        $props = Get-ItemProperty -LiteralPath $path -ErrorAction Stop
+        $propNames = @($props.PSObject.Properties | Where-Object { $_.Name -match '^\d+$|^MRUListEx$' } | ForEach-Object { $_.Name })
+        if ($propNames.Count -eq 0) {
+            $result = New-QOTTaskResult -Name $taskName -Status "Skipped" -Reason "No user search history entries found"
+            Write-QOTTaskOutcome -TaskName $taskName -Result $result
+            return $result
+        }
+
+        foreach ($name in $propNames) {
+            Remove-ItemProperty -LiteralPath $path -Name $name -ErrorAction Stop
+        }
+
+        $result = New-QOTTaskResult -Name $taskName -Status "Success"
+        Write-QOTTaskOutcome -TaskName $taskName -Result $result
+        return $result
+    }
+    catch {
+        $reason = "Cleanup failed"
+        if (Test-QOTAdminRequiredFailure -ErrorRecord $_) {
+            $reason = "requires admin"
+        }
+        $result = New-QOTTaskResult -Name $taskName -Status "Failed" -Reason $reason -Error $_.Exception.Message
+        Write-QOTTaskOutcome -TaskName $taskName -Result $result
+        return $result
+    }
+}
+
 
 # ------------------------------
 # Export functions
@@ -331,4 +509,9 @@ Export-ModuleMember -Function `
     Invoke-QCleanSetupLeftovers, `
     Invoke-QCleanStoreCache, `
     Invoke-QCleanEdgeCache, `
-    Invoke-QCleanChromeCache
+    Invoke-QCleanChromeCache, `
+    Invoke-QCleanDirectXShaderCache, `
+    Invoke-QCleanWERQueue, `
+    Invoke-QCleanClipboardHistory, `
+    Invoke-QCleanExplorerRecentItems, `
+    Invoke-QCleanWindowsSearchHistory
