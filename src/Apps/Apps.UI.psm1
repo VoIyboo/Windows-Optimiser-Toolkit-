@@ -6,6 +6,45 @@ $ErrorActionPreference = "Stop"
 Import-Module "$PSScriptRoot\\..\\Core\\Actions\\ActionRegistry.psm1" -Force -ErrorAction SilentlyContinue
 Import-Module (Join-Path $PSScriptRoot "Apps.Helpers.psm1") -Force -ErrorAction Stop
 
+function Find-QOTControlByName {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
+
+    try {
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            $direct = $Root.FindName($Name)
+            if ($direct) { return $direct }
+        }
+    } catch { }
+
+    try {
+        $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
+        $q.Enqueue($Root) | Out-Null
+
+        while ($q.Count -gt 0) {
+            $cur = $q.Dequeue()
+            if ($cur -is [System.Windows.FrameworkElement] -and $cur.Name -eq $Name) {
+                return $cur
+            }
+
+            $count = 0
+            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
+            for ($i = 0; $i -lt $count; $i++) {
+                try {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                } catch { }
+            }
+        }
+    } catch { }
+
+    return $null
+}
+
 function Initialize-QOTAppsUI {
     param(
         [Parameter(Mandatory)]
@@ -17,9 +56,11 @@ function Initialize-QOTAppsUI {
         Import-Module (Join-Path $PSScriptRoot "InstalledApps.psm1")     -Force -ErrorAction SilentlyContinue
         Import-Module (Join-Path $PSScriptRoot "InstallCommonApps.psm1") -Force -ErrorAction SilentlyContinue
         # Find controls from XAML
-        $AppsGrid        = $Window.FindName("AppsGrid")
-        $InstallGrid     = $Window.FindName("InstallGrid")
-        $StatusLabel     = $Window.FindName("StatusLabel")
+        $AppsGrid        = Find-QOTControlByName -Root $Window -Name "AppsGrid"
+        $InstallGrid     = Find-QOTControlByName -Root $Window -Name "InstallGrid"
+        $StatusLabel     = Find-QOTControlByName -Root $Window -Name "StatusLabel"
+        $BtnScanApps     = Find-QOTControlByName -Root $Window -Name "BtnScanApps"
+        $BtnUninstallSelected = Find-QOTControlByName -Root $Window -Name "BtnUninstallSelected"
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return $false }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return $false }
@@ -41,8 +82,8 @@ function Initialize-QOTAppsUI {
             param($Window)
 
             $items = @()
-            $appsGrid = $Window.FindName("AppsGrid")
-            $installGrid = $Window.FindName("InstallGrid")
+            $appsGrid = Find-QOTControlByName -Root $Window -Name "AppsGrid"
+            $installGrid = Find-QOTControlByName -Root $Window -Name "InstallGrid"
 
             if ($appsGrid) { try { Commit-QOTGridEdits -Grid $appsGrid } catch { } }
             if ($installGrid) { try { Commit-QOTGridEdits -Grid $installGrid } catch { } }
@@ -50,7 +91,7 @@ function Initialize-QOTAppsUI {
             if ($appsGrid -or $installGrid) {
                 $appsGridRef = $appsGrid
                 $installGridRef = $installGrid
-                $statusLabelRef = $Window.FindName("StatusLabel")
+                $statusLabelRef = Find-QOTControlByName -Root $Window -Name "StatusLabel"
                 $items += [pscustomobject]@{
                     ActionId = "Apps.RunSelected"
                     Label = "Run selected app actions"
@@ -67,6 +108,25 @@ function Initialize-QOTAppsUI {
 
             return $items
         }).GetNewClosure()
+
+        if ($BtnScanApps) {
+            $BtnScanApps.Add_Click({
+                try { Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid -ForceScan } catch { }
+            })
+        }
+
+        if ($BtnUninstallSelected) {
+            $BtnUninstallSelected.Add_Click({
+                try {
+                    if (-not (Get-Command Invoke-QOTUninstallSelectedApps -ErrorAction SilentlyContinue)) {
+                        Import-Module (Join-Path $PSScriptRoot "Apps.Actions.psm1") -Force -ErrorAction SilentlyContinue
+                    }
+                    if (Get-Command Invoke-QOTUninstallSelectedApps -ErrorAction SilentlyContinue) {
+                        Invoke-QOTUninstallSelectedApps -Grid $AppsGrid -Rescan
+                    }
+                } catch { }
+            })
+        }
 
         try { Write-QLog "Apps tab UI initialised (Window based wiring)." "DEBUG" } catch { }
         return $true
@@ -195,4 +255,4 @@ function Initialize-QOTCommonAppsCatalogue {
     try { Write-QLog ("Common apps catalogue loaded ({0} items)." -f $Global:QOT_CommonAppsCollection.Count) "DEBUG" } catch { }
 }
 
-Export-ModuleMember -Function Initialize-QOTAppsUI
+Export-ModuleMember -Function Initialize-QOTAppsUI, Find-QOTControlByName
