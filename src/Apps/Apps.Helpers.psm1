@@ -46,6 +46,76 @@ function Get-QOTInstalledAppNameSet {
     return $set
 }
 
+function Get-QOTInstalledAppDataset {
+    param(
+        [Parameter(Mandatory)][object[]]$Apps
+    )
+
+    $win32NameSet = New-Object "System.Collections.Generic.HashSet[string]" ([System.StringComparer]::OrdinalIgnoreCase)
+    $storeNameSet = New-Object "System.Collections.Generic.HashSet[string]" ([System.StringComparer]::OrdinalIgnoreCase)
+
+    foreach ($app in $Apps) {
+        if (-not $app) { continue }
+
+        $name = $null
+        try { $name = $app.Name } catch { $name = $null }
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
+
+        $source = "Win32"
+        try {
+            if (-not [string]::IsNullOrWhiteSpace($app.Source)) {
+                $source = [string]$app.Source
+            }
+        } catch { }
+
+        if ($source -ieq "Store") {
+            [void]$storeNameSet.Add($name)
+        }
+        else {
+            [void]$win32NameSet.Add($name)
+        }
+    }
+
+    return [pscustomobject]@{
+        AllNames    = Get-QOTInstalledAppNameSet -Apps $Apps
+        Win32Names  = $win32NameSet
+        StoreNames  = $storeNameSet
+    }
+}
+
+function Test-QOTCommonAppInstalled {
+    param(
+        [Parameter(Mandatory)][object]$CommonApp,
+        [Parameter(Mandatory)][object]$InstalledDataset
+    )
+
+    $name = $null
+    try { $name = [string]$CommonApp.Name } catch { $name = $null }
+    if ([string]::IsNullOrWhiteSpace($name)) { return $false }
+
+    $normalizedName = Get-QOTNormalizedAppName -Name $name
+
+    if ($InstalledDataset.AllNames.Contains($normalizedName)) {
+        return $true
+    }
+
+    $storePackageName = $null
+    try { $storePackageName = [string]$CommonApp.PackageName } catch { $storePackageName = $null }
+    if (-not [string]::IsNullOrWhiteSpace($storePackageName) -and $InstalledDataset.StoreNames.Contains($storePackageName)) {
+        return $true
+    }
+
+    $wingetId = $null
+    try { $wingetId = [string]$CommonApp.WingetId } catch { $wingetId = $null }
+
+    if (-not [string]::IsNullOrWhiteSpace($wingetId) -and $InstalledDataset.StoreNames.Contains($wingetId)) {
+        return $true
+    }
+
+    return $false
+}
+
+
 function Update-QOTCommonAppsInstallStatus {
     param(
         [Parameter(Mandatory)][object[]]$InstalledApps
@@ -54,15 +124,11 @@ function Update-QOTCommonAppsInstallStatus {
     $commonApps = @($Global:QOT_CommonAppsCollection)
     if (-not $commonApps -or $commonApps.Count -eq 0) { return }
 
-    $installedNameSet = Get-QOTInstalledAppNameSet -Apps $InstalledApps
+    $dataset = Get-QOTInstalledAppDataset -Apps $InstalledApps
 
     foreach ($item in $commonApps) {
         if (-not $item) { continue }
-        $installed = $false
-        if (-not [string]::IsNullOrWhiteSpace($item.Name)) {
-            $key = Get-QOTNormalizedAppName -Name $item.Name
-            if ($installedNameSet.Contains($key)) { $installed = $true }
-        }
+        $installed = Test-QOTCommonAppInstalled -CommonApp $item -InstalledDataset $dataset
 
         if ($null -eq $item.PSObject.Properties["Status"]) {
             $item | Add-Member -NotePropertyName Status -NotePropertyValue "" -Force
@@ -102,6 +168,16 @@ function Ensure-QOTInstalledAppForGrid {
     if ($null -eq $App.PSObject.Properties["Publisher"]) {
         $App | Add-Member -NotePropertyName Publisher -NotePropertyValue "" -Force
     }
+    if ($null -eq $App.PSObject.Properties["Version"]) {
+        $App | Add-Member -NotePropertyName Version -NotePropertyValue "" -Force
+    }
+    if ($null -eq $App.PSObject.Properties["Source"]) {
+        $App | Add-Member -NotePropertyName Source -NotePropertyValue "Win32" -Force
+    }
+    if ($null -eq $App.PSObject.Properties["InstallDate"]) {
+        $App | Add-Member -NotePropertyName InstallDate -NotePropertyValue $null -Force
+    }
+    
     if ($null -eq $App.PSObject.Properties["UninstallString"]) {
         $App | Add-Member -NotePropertyName UninstallString -NotePropertyValue "" -Force
     }
@@ -146,7 +222,7 @@ function Start-QOTInstalledAppsScanAsync {
 
         $script:QOT_InstalledAppsWorker.DoWork += {
             param($sender, $e)
-            $e.Result = @(Get-QOTInstalledApps)
+            $e.Result = @(Get-QOTInstalledAppsCached -ForceRefresh:$ForceScan)
         }
 
         $script:QOT_InstalledAppsWorker.RunWorkerCompleted += {
@@ -168,7 +244,7 @@ function Start-QOTInstalledAppsScanAsync {
                         $Global:QOT_InstalledAppsCollection.Add($app)
                     }
                 })
-
+                Update-QOTCommonAppsInstallStatus -InstalledApps $results
                 try { Write-QLog ("Installed apps scan complete. Loaded {0} items." -f $results.Count) "DEBUG" } catch { }
             }
             catch {
@@ -186,4 +262,4 @@ function Start-QOTInstalledAppsScanAsync {
     }
 }
 
-Export-ModuleMember -Function Commit-QOTGridEdits, Get-QOTNormalizedAppName, Get-QOTInstalledAppNameSet, Update-QOTCommonAppsInstallStatus, Set-QOTAppsStatus, Ensure-QOTInstalledAppForGrid, Start-QOTInstalledAppsScanAsync
+Export-ModuleMember -Function Commit-QOTGridEdits, Get-QOTNormalizedAppName, Get-QOTInstalledAppNameSet, Get-QOTInstalledAppDataset, Test-QOTCommonAppInstalled, Update-QOTCommonAppsInstallStatus, Set-QOTAppsStatus, Ensure-QOTInstalledAppForGrid, Start-QOTInstalledAppsScanAsync
