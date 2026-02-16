@@ -3,24 +3,24 @@
 
 $ErrorActionPreference = "Stop"
 
-function Get-QOTInstalledApps {
-    <#
-        .SYNOPSIS
-            Scans common registry locations for installed applications and returns normalised objects
-            for the UI and engine.
+function Test-QOTIsElevated {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        if (-not $identity) { return $false }
+        $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        return $false
+    }
+}
 
-        .NOTES
-            - Adds IsSelected for checkbox UI
-            - Adds Version (DisplayVersion)
-            - Captures RegistryKeyPath for troubleshooting
-            - Safer handling for null properties
-            - Dedupes by Name + Publisher + Version
-    #>
-
+function Get-QOTWin32InstalledApps {
     $paths = @(
         "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
         "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
     )
 
     $results = New-Object System.Collections.Generic.List[object]
@@ -29,36 +29,16 @@ function Get-QOTInstalledApps {
 
         $items = @(Get-ItemProperty -Path $path -ErrorAction SilentlyContinue)
         foreach ($item in $items) {
-
-            $name = $item.DisplayName
+            $name = ""
+            try { $name = ("{0}" -f $item.DisplayName).Trim() } catch { $name = "" }
             if ([string]::IsNullOrWhiteSpace($name)) { continue }
 
-            $publisher = $item.Publisher
-            $version   = $item.DisplayVersion
+            $publisher = ""
+            try { $publisher = ("{0}" -f $item.Publisher).Trim() } catch { $publisher = "" }
 
-            # ----------------------------------------------------------------
-            # System / noise filtering
-            # ----------------------------------------------------------------
-            $isSystem = $false
+            $version = ""
+            try { $version = ("{0}" -f $item.DisplayVersion).Trim() } catch { $version = "" }
 
-            if ($item.SystemComponent -eq 1) { $isSystem = $true }
-            if (-not [string]::IsNullOrWhiteSpace($item.ReleaseType) -and $item.ReleaseType -eq "Security Update") { $isSystem = $true }
-            if (-not [string]::IsNullOrWhiteSpace($item.ParentKeyName)) { $isSystem = $true }
-
-            if ($name -match "(?i)\b(Driver|Runtime|Redistributable|Update|Hotfix)\b") { $isSystem = $true }
-            if (-not [string]::IsNullOrWhiteSpace($publisher) -and $publisher -match "(?i)\b(Microsoft|Intel|NVIDIA|Realtek|AMD)\b") { $isSystem = $true }
-
-            # ----------------------------------------------------------------
-            # Size
-            # ----------------------------------------------------------------
-            $sizeMB = $null
-            if ($item.EstimatedSize) {
-                try { $sizeMB = [math]::Round(([double]$item.EstimatedSize) / 1024, 1) } catch { $sizeMB = $null }
-            }
-
-            # ----------------------------------------------------------------
-            # Install Date
-            # ----------------------------------------------------------------
             $installDate = $null
             $rawInstallDate = ""
             try { $rawInstallDate = ("{0}" -f $item.InstallDate).Trim() } catch { $rawInstallDate = "" }
@@ -87,28 +67,11 @@ function Get-QOTInstalledApps {
                     }
                 }
                 catch {
-                    # Avoid "$name:" in strings, it parses like a drive reference
+
                     try { Write-QLog ("Error parsing InstallDate '{0}' for '{1}': {2}" -f $rawInstallDate, $name, $_.Exception.Message) "WARN" } catch { }
                 }
             }
 
-            # ----------------------------------------------------------------
-            # Whitelist
-            # ----------------------------------------------------------------
-            $isWhitelisted = $false
-            if ($Global:QOT_AppWhitelistPatterns) {
-                foreach ($pattern in $Global:QOT_AppWhitelistPatterns) {
-                    if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
-                    if ($name -like "*$pattern*") {
-                        $isWhitelisted = $true
-                        break
-                    }
-                }
-            }
-
-            # ----------------------------------------------------------------
-            # Uninstall string fallbacks
-            # ----------------------------------------------------------------
             $uninstall = $null
             if (-not [string]::IsNullOrWhiteSpace($item.QuietUninstallString)) {
                 $uninstall = $item.QuietUninstallString
@@ -117,7 +80,7 @@ function Get-QOTInstalledApps {
                 $uninstall = $item.UninstallString
             }
 
-            # Registry key path for debugging
+
             $regKeyPath = $null
             try { $regKeyPath = $item.PSPath } catch { $regKeyPath = $null }
 
@@ -126,49 +89,69 @@ function Get-QOTInstalledApps {
                 Name            = $name
                 Version         = $version
                 Publisher       = $publisher
-                SizeMB          = $sizeMB
+                Source          = "Win32"
+                PackageName     = $null
                 InstallDate     = $installDate
-                IsSystem        = $isSystem
-                IsWhitelisted   = $isWhitelisted
+
                 UninstallString = $uninstall
                 RegistryKeyPath = $regKeyPath
-                LastUsed        = $installDate
+
             })
         }
     }
 
-        # ----------------------------------------------------------------
-    # Appx (Store) packages
-    # ----------------------------------------------------------------
+    return @($results)
+}
+
+function Get-QOTStoreInstalledApps {
+    param(
+        [switch]$IncludeAllUsers
+    )
+
+    $results = New-Object System.Collections.Generic.List[object]
+
+    $useAllUsers = $false
+    if ($IncludeAllUsers -and (Test-QOTIsElevated)) {
+        $useAllUsers = $true
+    }
     $appxPackages = @()
     try {
-        $appxPackages = @(Get-AppxPackage -AllUsers -ErrorAction Stop)
+        if ($useAllUsers) {
+            $appxPackages = @(Get-AppxPackage -AllUsers -ErrorAction Stop)
+        }
+        else {
+            $appxPackages = @(Get-AppxPackage -ErrorAction Stop)
+        }
     }
     catch {
-        try { $appxPackages = @(Get-AppxPackage -ErrorAction SilentlyContinue) } catch { $appxPackages = @() }
-        try { Write-QLog ("Get-AppxPackage -AllUsers failed, falling back to current user: {0}" -f $_.Exception.Message) "WARN" } catch { }
+        if ($useAllUsers) {
+            try { Write-QLog ("Get-AppxPackage -AllUsers failed, falling back to current user: {0}" -f $_.Exception.Message) "WARN" } catch { }
+            try { $appxPackages = @(Get-AppxPackage -ErrorAction SilentlyContinue) } catch { $appxPackages = @() }
+        }
+        else {
+            throw
+        }
     }
 
     foreach ($appx in $appxPackages) {
         if (-not $appx) { continue }
 
-        $name = $appx.Name
+        $name = ""
+        try { $name = ("{0}" -f $appx.Name).Trim() } catch { $name = "" }
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
 
-        $publisher = $appx.PublisherDisplayName
+        $publisher = ""
+        try { $publisher = ("{0}" -f $appx.PublisherDisplayName).Trim() } catch { $publisher = "" }
         if ([string]::IsNullOrWhiteSpace($publisher)) {
-            $publisher = $appx.Publisher
+            try { $publisher = ("{0}" -f $appx.Publisher).Trim() } catch { $publisher = "" }
         }
 
         $version = $null
         try { $version = $appx.Version.ToString() } catch { $version = $null }
 
-        $isSystem = $false
-        try {
-            if ($appx.IsFramework -or $appx.IsResourcePackage) { $isSystem = $true }
-        } catch { }
+        $fullName = $null
+        try { $fullName = $appx.PackageFullName } catch { $fullName = $null }
 
-        $fullName = $appx.PackageFullName
         $uninstall = $null
         if (-not [string]::IsNullOrWhiteSpace($fullName)) {
             $escaped = $fullName.Replace("'", "''")
@@ -180,33 +163,73 @@ function Get-QOTInstalledApps {
             Name            = $name
             Version         = $version
             Publisher       = $publisher
-            SizeMB          = $null
+            Source          = "Store"
+            PackageName     = $name
             InstallDate     = $null
-            IsSystem        = $isSystem
-            IsWhitelisted   = $false
+
             UninstallString = $uninstall
-            RegistryKeyPath = "APPX:$fullName"
-            LastUsed        = $null
+            RegistryKeyPath = if ($fullName) { "APPX:$fullName" } else { "APPX:$name" }
         })
     }
 
-    $results |
-        Sort-Object Name, Publisher, Version -Unique |
-        Sort-Object Name
+    return @($results)
+}
+
+function Get-QOTInstalledApps {
+    [CmdletBinding()]
+    param(
+        [switch]$IncludeAllUsersStore
+    )
+
+    $scanErrors = New-Object System.Collections.Generic.List[string]
+
+    try { Write-QLog "Starting installed apps scan" "INFO" } catch { }
+
+    $win32Apps = @()
+    try {
+        $win32Apps = @(Get-QOTWin32InstalledApps)
+    }
+    catch {
+        $scanErrors.Add($_.Exception.Message) | Out-Null
+        try { Write-QLog ("Win32 app scan failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+    try { Write-QLog ("How many Win32 apps found: {0}" -f $win32Apps.Count) "INFO" } catch { }
+
+    $storeApps = @()
+    try {
+        $storeApps = @(Get-QOTStoreInstalledApps -IncludeAllUsers:$IncludeAllUsersStore)
+    }
+    catch {
+        $scanErrors.Add($_.Exception.Message) | Out-Null
+        try { Write-QLog ("Store app scan failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+    }
+    try { Write-QLog ("How many Store apps found: {0}" -f $storeApps.Count) "INFO" } catch { }
+
+    $results = @($win32Apps + $storeApps | Sort-Object Name, Publisher, Version, Source -Unique | Sort-Object Name)
+
+    try { Write-QLog ("Total displayed in grid: {0}" -f $results.Count) "INFO" } catch { }
+
+    foreach ($err in $scanErrors) {
+        if ([string]::IsNullOrWhiteSpace($err)) { continue }
+        try { Write-QLog ("Any scan errors: {0}" -f $err) "ERROR" } catch { }
+    }
+
+    return $results
 }
 
 function Get-QOTInstalledAppsCached {
     param(
-        [switch]$ForceRefresh
+        [switch]$ForceRefresh,
+        [switch]$IncludeAllUsersStore
     )
 
     if (-not $ForceRefresh -and $Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0) {
         return @($Global:QOT_InstalledAppsCache)
     }
 
-    $results = @(Get-QOTInstalledApps)
+     $results = @(Get-QOTInstalledApps -IncludeAllUsersStore:$IncludeAllUsersStore)
     $Global:QOT_InstalledAppsCache = $results
     return $results
 }
 
-Export-ModuleMember -Function Get-QOTInstalledApps, Get-QOTInstalledAppsCached
+Export-ModuleMember -Function Get-QOTInstalledApps, Get-QOTInstalledAppsCached, Get-QOTWin32InstalledApps, Get-QOTStoreInstalledApps
