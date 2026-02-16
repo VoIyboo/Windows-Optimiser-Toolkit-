@@ -374,6 +374,11 @@
                                     <TextBlock Text="Browser cleanup (light)" Style="{StaticResource SectionHeading}" />
                                     <CheckBox x:Name="CbEdgeLightCleanup" Content="Light clean of Microsoft Edge cache" />
                                     <CheckBox x:Name="CbChromeLightCleanup" Content="Light clean of Chrome / Chromium cache" />
+                                    <CheckBox x:Name="CbCleanDirectXShaderCache" Content="Clear DirectX shader cache" />
+                                    <CheckBox x:Name="CbCleanWERQueue" Content="Clear Windows Error Reporting queue" />
+                                    <CheckBox x:Name="CbClearClipboardHistory" Content="Clear clipboard history" />
+                                    <CheckBox x:Name="CbCleanExplorerRecentItems" Content="Clear Explorer Recent items and Jump Lists" />
+                                    <CheckBox x:Name="CbCleanWindowsSearchHistory" Content="Clear Windows Search history" />
 
                                 </StackPanel>
                             </ScrollViewer>
@@ -405,6 +410,10 @@
                                     <CheckBox x:Name="CbDisableAdvertisingId" Content="Turn off advertising ID" />
                                     <CheckBox x:Name="CbLimitFeedbackPrompts" Content="Reduce feedback and survey prompts" />
                                     <CheckBox x:Name="CbDisableOnlineTips" Content="Disable online tips and suggestions" />
+                                    <CheckBox x:Name="CbDisableLockScreenTips" Content="Disable lock screen tips, suggestions, and spotlight extras" />
+                                    <CheckBox x:Name="CbDisableSettingsSuggestedContent" Content="Disable Suggested content in Settings" />
+                                    <CheckBox x:Name="CbDisableTransparencyEffects" Content="Turn off transparency effects" />
+                                    <CheckBox x:Name="CbDisableStartupDelay" Content="Disable startup delay for startup apps" />
 
                                 </StackPanel>
                             </ScrollViewer>
