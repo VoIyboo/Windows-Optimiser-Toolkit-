@@ -564,16 +564,16 @@ function Start-QOTMainWindow {
     if (-not (Test-Path -LiteralPath $xamlPath)) {
         throw "MainWindow.xaml not found at $xamlPath"
     }
-
+    Write-QOTStartupTrace "START MainWindow build begin"
     try { Write-QLog ("Loading XAML from: {0}" -f $xamlPath) "DEBUG" } catch { }
 
-    Write-QOTStartupTrace "MainWindow InitializeComponent start"
     try {
         $xaml   = Get-Content -LiteralPath $xamlPath -Raw
         $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
         $window = [System.Windows.Markup.XamlReader]::Load($reader)
         Write-Host "Loaded XAML OK"
-        Write-QOTStartupTrace "Loaded XAML OK"
+        Write-QOTStartupTrace "XAML load OK"
+        Write-QOTStartupTrace "InitializeComponent OK"
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
@@ -581,7 +581,6 @@ function Start-QOTMainWindow {
         try { Write-QLog ("MainWindow XAML load failed from {0}`n{1}" -f $xamlPath, $errorDetail) "ERROR" } catch { }
         throw
     }
-    Write-QOTStartupTrace "MainWindow InitializeComponent end"
 
     if (-not $window) {
         throw "Failed to load MainWindow from XAML"
@@ -591,7 +590,7 @@ function Start-QOTMainWindow {
     $script:SummaryTextBlock = $window.FindName("SummaryText")
 
     $window.Add_Loaded({
-        Write-QOTStartupTrace "MainWindow Loaded event fired"
+        Write-QOTStartupTrace "MainWindow.Loaded fired"
     })
     $window.Add_ContentRendered({
         Write-QOTStartupTrace "MainWindow ContentRendered event fired"
@@ -635,7 +634,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
-        Invoke-QOTStartupStep "Initialise Apps UI" { $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window) }
+        Write-QOTStartupTrace "Initialise Apps UI OK"
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
@@ -667,7 +666,8 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTTweaksAndCleaningUI not found. TweaksAndCleaning.UI.psm1 did not load or export correctly."
         }
 
-        Invoke-QOTStartupStep "Initialise Tweaks and Cleaning UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
+        Invoke-QOTStartupStep "Initialise Tweaks UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
+        Write-QOTStartupTrace "Initialise Tweaks UI OK"
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
@@ -683,7 +683,8 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTAdvancedTweaksUI not found. AdvancedTweaks.UI.psm1 did not load or export correctly."
         }
 
-        Invoke-QOTStartupStep "Initialise Advanced Tweaks UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
+        Invoke-QOTStartupStep "Initialise Advanced UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
+        Write-QOTStartupTrace "Initialise Advanced UI OK"
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
@@ -855,8 +856,17 @@ function Start-QOTMainWindow {
         if ($PassThru) { return $window }
         return
     }
-    try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
-    $window.ShowDialog() | Out-Null
+    try {
+        try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
+        Write-QOTStartupTrace "MainWindow.Show called"
+        $window.ShowDialog() | Out-Null
+    }
+    catch {
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("MainWindow show failed.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("MainWindow show failed.`n{0}" -f $errorDetail) "ERROR" } catch { }
+        throw
+    }
 
     if ($PassThru) { return $window }
 }
