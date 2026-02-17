@@ -342,6 +342,21 @@ function Run-QOTSelectedTasks {
 
     try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in Play handler: {0}" -f $discoveredCheckboxes) "INFO" } catch { }
 
+    $appsGrid = $activeWindow.FindName("AppsGrid")
+    $installGrid = $activeWindow.FindName("InstallGrid")
+    $appsSelectedCount = 0
+    if ($appsGrid) {
+        $appsSelectedCount += @(@($appsGrid.ItemsSource) | Where-Object { $_.IsSelected -eq $true }).Count
+    }
+    if ($installGrid) {
+        $appsSelectedCount += @(@($installGrid.ItemsSource) | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false }).Count
+    }
+    try { Write-QLog ("Apps selections discovered in Play handler: {0}" -f $appsSelectedCount) "INFO" } catch { }
+
+    if ($appsSelectedCount -gt 0) {
+        $selectedTasks.Add(@{ Name = "Run selected app actions"; ScriptPath = Join-Path $scriptsRoot "Apps\Apps.RunSelected.ps1" }) | Out-Null
+    }
+
     if ($selectedTasks.Count -eq 0) {
         Write-Host "No tasks selected."
         Write-Host "No more tasks to do."
@@ -609,7 +624,7 @@ function Start-QOTMainWindow {
     try {
         $map = Get-QOTNamedElementsMap -Root $window
         $wanted = @(
-            "AppsGrid","InstallGrid","BtnScanApps","BtnUninstallSelected","BtnPlay",
+            "AppsGrid","InstallGrid","BtnPlay",
             "SettingsHost","HelpHost","BtnSettings","BtnHelp","MainTabControl","TabSettings","TabHelp",
             "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
         )
