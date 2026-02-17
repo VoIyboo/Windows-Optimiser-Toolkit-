@@ -142,21 +142,6 @@ function Update-QOTCommonAppsInstallStatus {
     }
 }
 
-function Set-QOTAppsStatus {
-    param(
-        [System.Windows.Controls.TextBlock]$StatusLabel,
-        [string]$Text
-    )
-
-    if (-not $StatusLabel -or [string]::IsNullOrWhiteSpace($Text)) { return }
-
-    try {
-        $StatusLabel.Dispatcher.Invoke([action]{ $StatusLabel.Text = $Text })
-    } catch {
-        try { $StatusLabel.Text = $Text } catch { }
-    }
-}
-
 function Ensure-QOTInstalledAppForGrid {
     param(
         [Parameter(Mandatory)][object]$App
@@ -184,6 +169,28 @@ function Ensure-QOTInstalledAppForGrid {
     if ($null -eq $App.PSObject.Properties["ActionId"]) {
         $App | Add-Member -NotePropertyName ActionId -NotePropertyValue "Apps.Uninstall" -Force
     }
+}
+
+function Write-QOTAppsCollectionDiagnostics {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][object[]]$Items,
+        [object[]]$SourceItems
+    )
+
+    $count = @($Items).Count
+    if ($count -gt 0) { return }
+
+    $datasetItems = if ($PSBoundParameters.ContainsKey("SourceItems") -and $null -ne $SourceItems) { @($SourceItems) } else { @($Items) }
+    $datasetCount = $datasetItems.Count
+
+    $samples = @($datasetItems | ForEach-Object {
+        if ($null -eq $_) { return $null }
+        try { [string]$_.Name } catch { $null }
+    } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 5)
+
+    $sampleText = if ($samples.Count -gt 0) { $samples -join ", " } else { "<none>" }
+    try { Write-QLog ("{0} ItemsSource count is 0. Dataset count: {1}. Sample names: {2}" -f $Label, $datasetCount, $sampleText) "WARN" } catch { }
 }
 
 function Start-QOTInstalledAppsScanAsync {
@@ -223,6 +230,8 @@ function Start-QOTInstalledAppsScanAsync {
             })
 
             Update-QOTCommonAppsInstallStatus -InstalledApps $cachedResults
+            try { Write-QLog ("Installed Apps grid populated: {0} rows" -f @($Global:QOT_InstalledAppsCollection).Count) "INFO" } catch { }
+            Write-QOTAppsCollectionDiagnostics -Label "Installed Apps" -Items @($Global:QOT_InstalledAppsCollection) -SourceItems $cachedResults
 
             try { Write-QLog ("Installed apps loaded from cache ({0} items)." -f $cachedResults.Count) "DEBUG" } catch { }
             return
@@ -262,6 +271,10 @@ function Start-QOTInstalledAppsScanAsync {
                     }
                 })
                 Update-QOTCommonAppsInstallStatus -InstalledApps $results
+                $installedRows = @($Global:QOT_InstalledAppsCollection).Count
+                try { Write-QLog ("Installed Apps grid populated: {0} rows" -f $installedRows) "INFO" } catch { }
+                Write-QOTAppsCollectionDiagnostics -Label "Installed Apps" -Items @($Global:QOT_InstalledAppsCollection) -SourceItems $results
+                Write-QOTAppsCollectionDiagnostics -Label "Common App installs" -Items @($Global:QOT_CommonAppsCollection)
                 try { Write-QLog ("Installed apps scan complete. Loaded {0} items." -f $results.Count) "DEBUG" } catch { }
             }
             catch {
@@ -270,7 +283,7 @@ function Start-QOTInstalledAppsScanAsync {
         })
 
         if (-not $script:QOT_InstalledAppsWorker.IsBusy) {
-            try { Write-QLog "Starting installed apps scan (async)." "DEBUG" } catch { }
+            try { Write-QLog "Starting installed apps scan" "INFO" } catch { }
             $script:QOT_InstalledAppsWorker.RunWorkerAsync() | Out-Null
         }
     }
@@ -279,4 +292,4 @@ function Start-QOTInstalledAppsScanAsync {
     }
 }
 
-Export-ModuleMember -Function Commit-QOTGridEdits, Get-QOTNormalizedAppName, Get-QOTInstalledAppNameSet, Get-QOTInstalledAppDataset, Test-QOTCommonAppInstalled, Update-QOTCommonAppsInstallStatus, Set-QOTAppsStatus, Ensure-QOTInstalledAppForGrid, Start-QOTInstalledAppsScanAsync
+Export-ModuleMember -Function Commit-QOTGridEdits, Get-QOTNormalizedAppName, Get-QOTInstalledAppNameSet, Get-QOTInstalledAppDataset, Test-QOTCommonAppInstalled, Update-QOTCommonAppsInstallStatus, Ensure-QOTInstalledAppForGrid, Write-QOTAppsCollectionDiagnostics, Start-QOTInstalledAppsScanAsync
