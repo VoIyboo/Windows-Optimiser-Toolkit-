@@ -160,19 +160,38 @@ function Start-QOTMain {
 
         if (Test-Path -LiteralPath $settingsUIModule) {
             Import-Module $settingsUIModule -Force -Global -ErrorAction Stop
-            Write-QOSettingsUILog "Engine confirmed Settings UI logger is available"
+            if (Get-Command Write-QOSettingsUILog -ErrorAction SilentlyContinue) {
+                Write-QOSettingsUILog "Engine confirmed Settings UI logger is available"
+            }
         } else {
             try {
                 if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
                     Write-QLog "Settings UI module missing: $settingsUIModule" "WARN"
                 }
+            } catch { }
+        }
 
+        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+            $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
+            $uiModule = [System.IO.Path]::GetFullPath($uiModule)
+
+            if (-not (Test-Path -LiteralPath $uiModule)) {
+                throw "UI module file missing: $uiModule"
+            }
+
+            Import-Module $uiModule -Force -ErrorAction Stop
+        }
+
+        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+            throw "UI module not loaded: Start-QOTMainWindow not found"
+        }
         # This call blocks (ShowDialog) and keeps the app alive, while ContentRendered can still close the splash.
         if ($WarmupOnly) {
             return Start-QOTMainWindow -SplashWindow $SplashWindow -WarmupOnly -PassThru:$PassThru
         }
         Start-QOTMainWindow -SplashWindow $SplashWindow
-        }
+        
+    }
         
     catch {
         $exception = $_.Exception
@@ -199,28 +218,9 @@ function Start-QOTMain {
             Write-Host "Start-QOTMain failed. Full error details:"
             $Error[0] | Format-List * -Force
         } catch { }
-        } catch { }
-    }
 
-    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-        $uiModule = Join-Path $PSScriptRoot "..\..\UI\MainWindow.UI.psm1"
-        $uiModule = [System.IO.Path]::GetFullPath($uiModule)
-
-        if (-not (Test-Path -LiteralPath $uiModule)) {
-            throw "UI module file missing: $uiModule"
-        }
-
-        Import-Module $uiModule -Force -ErrorAction Stop
-    }
-
-    if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
-        throw "UI module not loaded: Start-QOTMainWindow not found"
-    }
-
-    # This call blocks (ShowDialog) and keeps the app alive, while ContentRendered can still close the splash.
         throw
     }
-    Start-QOTMainWindow -SplashWindow $SplashWindow
 }
 
 Export-ModuleMember -Function `
