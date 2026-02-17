@@ -181,12 +181,16 @@ function Ensure-QOTInstalledAppForGrid {
     if ($null -eq $App.PSObject.Properties["UninstallString"]) {
         $App | Add-Member -NotePropertyName UninstallString -NotePropertyValue "" -Force
     }
+    if ($null -eq $App.PSObject.Properties["ActionId"]) {
+        $App | Add-Member -NotePropertyName ActionId -NotePropertyValue "Apps.Uninstall" -Force
+    }
 }
 
 function Start-QOTInstalledAppsScanAsync {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid,
-        [switch]$ForceScan
+        [switch]$ForceScan,
+        [int]$StaleAfterMinutes = 30
     )
 
     try {
@@ -200,7 +204,15 @@ function Start-QOTInstalledAppsScanAsync {
 
         $dispatcher = $AppsGrid.Dispatcher
 
-        if (-not $ForceScan -and $Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0) {
+        $isCacheFresh = $false
+        if ($Global:QOT_InstalledAppsCacheTimestamp) {
+            try {
+                $cacheAge = (New-TimeSpan -Start $Global:QOT_InstalledAppsCacheTimestamp -End (Get-Date)).TotalMinutes
+                $isCacheFresh = ($cacheAge -lt $StaleAfterMinutes)
+            } catch { $isCacheFresh = $false }
+        }
+
+        if (-not $ForceScan -and $Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0 -and $isCacheFresh) {
             $cachedResults = @($Global:QOT_InstalledAppsCache)
             $dispatcher.Invoke([action]{
                 $Global:QOT_InstalledAppsCollection.Clear()
@@ -240,6 +252,7 @@ function Start-QOTInstalledAppsScanAsync {
 
                 $results = @($e.Result)
                 $Global:QOT_InstalledAppsCache = $results
+                $Global:QOT_InstalledAppsCacheTimestamp = Get-Date
 
                 $dispatcher.Invoke([action]{
                     $Global:QOT_InstalledAppsCollection.Clear()
