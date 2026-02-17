@@ -88,8 +88,7 @@ function Invoke-QOTRunSelectedAppsActions {
     param(
         [Parameter(Mandatory)][System.Windows.Window]$Window,
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$AppsGrid,
-        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$InstallGrid,
-        [System.Windows.Controls.TextBlock]$StatusLabel
+        [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$InstallGrid
     )
 
     Commit-QOTGridEdits -Grid $AppsGrid
@@ -216,7 +215,6 @@ function Invoke-QOTRunSelectedAppsActions {
     } else {
         Update-QOTCommonAppsInstallStatus -InstalledApps $installedItems
     }
-    Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Apps ready"
 }
 
 function Invoke-QOTInstallSelectedCommonApps {
