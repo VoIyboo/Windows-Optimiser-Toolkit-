@@ -649,6 +649,7 @@ function Start-QOTMainWindow {
             throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
         }
 
+        Invoke-QOTStartupStep "Initialise Apps UI" { $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window) }
         Write-QOTStartupTrace "Initialise Apps UI OK"
     }
     catch {
