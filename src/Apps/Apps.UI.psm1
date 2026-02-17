@@ -59,8 +59,7 @@ function Initialize-QOTAppsUI {
         $AppsGrid        = Find-QOTControlByName -Root $Window -Name "AppsGrid"
         $InstallGrid     = Find-QOTControlByName -Root $Window -Name "InstallGrid"
         $StatusLabel     = Find-QOTControlByName -Root $Window -Name "StatusLabel"
-        $BtnScanApps     = Find-QOTControlByName -Root $Window -Name "BtnScanApps"
-        $BtnUninstallSelected = Find-QOTControlByName -Root $Window -Name "BtnUninstallSelected"
+
 
         if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return $false }
         if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return $false }
@@ -85,48 +84,43 @@ function Initialize-QOTAppsUI {
             $appsGrid = Find-QOTControlByName -Root $Window -Name "AppsGrid"
             $installGrid = Find-QOTControlByName -Root $Window -Name "InstallGrid"
 
-            if ($appsGrid) { try { Commit-QOTGridEdits -Grid $appsGrid } catch { } }
-            if ($installGrid) { try { Commit-QOTGridEdits -Grid $installGrid } catch { } }
-
-            if ($appsGrid -or $installGrid) {
-                $appsGridRef = $appsGrid
-                $installGridRef = $installGrid
-                $statusLabelRef = Find-QOTControlByName -Root $Window -Name "StatusLabel"
-                $items += [pscustomobject]@{
-                    ActionId = "Apps.RunSelected"
-                    Label = "Run selected app actions"
-                    IsSelected = ({
-                        param($window)
-                        $apps = @($appsGridRef.ItemsSource)
-                        $common = @($installGridRef.ItemsSource)
-                        $installedSelected = @($apps | Where-Object { $_.IsSelected -eq $true })
-                        $commonSelected = @($common | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false })
-                        return (($installedSelected.Count + $commonSelected.Count) -gt 0)
-                    }).GetNewClosure()
+            if ($appsGrid) {
+                try { Commit-QOTGridEdits -Grid $appsGrid } catch { }
+                foreach ($app in @($appsGrid.ItemsSource)) {
+                    if (-not $app) { continue }
+                    if ($app.PSObject.Properties.Name -notcontains "ActionId") {
+                        $app | Add-Member -NotePropertyName ActionId -NotePropertyValue "Apps.Uninstall" -Force
+                    }
                 }
+            }
+
+            if ($installGrid) {
+                try { Commit-QOTGridEdits -Grid $installGrid } catch { }
+                foreach ($app in @($installGrid.ItemsSource)) {
+                    if (-not $app) { continue }
+                    if ($app.PSObject.Properties.Name -notcontains "ActionId") {
+                        $app | Add-Member -NotePropertyName ActionId -NotePropertyValue "Apps.Install" -Force
+                    }
+                }
+            }
+
+            $appsGridRef = $appsGrid
+            $installGridRef = $installGrid
+            $items += [pscustomobject]@{
+                ActionId = "Apps.RunSelected"
+                Label = "Run selected app actions"
+                IsSelected = ({
+                    param($window)
+                    $apps = if ($appsGridRef) { @($appsGridRef.ItemsSource) } else { @() }
+                    $common = if ($installGridRef) { @($installGridRef.ItemsSource) } else { @() }
+                    $installedSelected = @($apps | Where-Object { $_.IsSelected -eq $true })
+                    $commonSelected = @($common | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false })
+                    return (($installedSelected.Count + $commonSelected.Count) -gt 0)
+                }).GetNewClosure()
             }
 
             return $items
         }).GetNewClosure()
-
-        if ($BtnScanApps) {
-            $BtnScanApps.Add_Click({
-                try { Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid -ForceScan } catch { }
-            })
-        }
-
-        if ($BtnUninstallSelected) {
-            $BtnUninstallSelected.Add_Click({
-                try {
-                    if (-not (Get-Command Invoke-QOTUninstallSelectedApps -ErrorAction SilentlyContinue)) {
-                        Import-Module (Join-Path $PSScriptRoot "Apps.Actions.psm1") -Force -ErrorAction SilentlyContinue
-                    }
-                    if (Get-Command Invoke-QOTUninstallSelectedApps -ErrorAction SilentlyContinue) {
-                        Invoke-QOTUninstallSelectedApps -Grid $AppsGrid -Rescan
-                    }
-                } catch { }
-            })
-        }
 
         try { Write-QLog "Apps tab UI initialised (Window based wiring)." "DEBUG" } catch { }
         return $true
@@ -248,6 +242,9 @@ function Initialize-QOTCommonAppsCatalogue {
     foreach ($item in $catalogue) {
         if ($null -eq $item.PSObject.Properties["IsSelected"]) {
             $item | Add-Member -NotePropertyName IsSelected -NotePropertyValue $false -Force
+        if ($null -eq $item.PSObject.Properties["ActionId"]) {
+            $item | Add-Member -NotePropertyName ActionId -NotePropertyValue "Apps.Install" -Force
+        }
         }
         $Global:QOT_CommonAppsCollection.Add($item)
     }
