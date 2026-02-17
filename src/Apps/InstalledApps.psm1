@@ -193,7 +193,7 @@ function Get-QOTInstalledApps {
         $scanErrors.Add($_.Exception.Message) | Out-Null
         try { Write-QLog ("Win32 app scan failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
     }
-    try { Write-QLog ("How many Win32 apps found: {0}" -f $win32Apps.Count) "INFO" } catch { }
+
 
     $storeApps = @()
     try {
@@ -203,11 +203,48 @@ function Get-QOTInstalledApps {
         $scanErrors.Add($_.Exception.Message) | Out-Null
         try { Write-QLog ("Store app scan failed: {0}" -f $_.Exception.Message) "ERROR" } catch { }
     }
-    try { Write-QLog ("How many Store apps found: {0}" -f $storeApps.Count) "INFO" } catch { }
 
     $results = @($win32Apps + $storeApps | Sort-Object Name, Publisher, Version, Source -Unique | Sort-Object Name)
 
-    try { Write-QLog ("Total displayed in grid: {0}" -f $results.Count) "INFO" } catch { }
+    try { Write-QLog ("Win32 found: {0}, Store found: {1}" -f $win32Apps.Count, $storeApps.Count) "INFO" } catch { }
+
+    if ($results.Count -eq 0) {
+        $reasons = New-Object System.Collections.Generic.List[string]
+
+        if ($win32Apps.Count -eq 0) {
+            if ($scanErrors | Where-Object { $_ -match "Win32|registry|access|denied|permission" }) {
+                $reasons.Add("Win32 source returned 0 apps (permissions/registry access issue detected).") | Out-Null
+            }
+            else {
+                $reasons.Add("Win32 source returned 0 apps (no uninstall entries found or access restricted).") | Out-Null
+            }
+        }
+
+        if ($storeApps.Count -eq 0) {
+            if ($scanErrors | Where-Object { $_ -match "Appx|Get-AppxPackage|access|denied|permission" }) {
+                $reasons.Add("Store source returned 0 apps (Get-AppxPackage permissions/error).") | Out-Null
+            }
+            else {
+                $reasons.Add("Store source returned 0 apps (no Appx packages found for current scope).") | Out-Null
+            }
+        }
+
+        if ($scanErrors.Count -gt 0) {
+            foreach ($err in $scanErrors) {
+                if (-not [string]::IsNullOrWhiteSpace($err)) {
+                    $reasons.Add("Source error: $err") | Out-Null
+                }
+            }
+        }
+
+        if ($reasons.Count -eq 0) {
+            $reasons.Add("No source-level errors were reported, but combined dataset is empty.") | Out-Null
+        }
+
+        foreach ($reason in $reasons) {
+            try { Write-QLog $reason "WARN" } catch { }
+        }
+    }
 
     foreach ($err in $scanErrors) {
         if ([string]::IsNullOrWhiteSpace($err)) { continue }
