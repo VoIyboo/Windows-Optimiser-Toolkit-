@@ -30,6 +30,30 @@ function Write-QOTStartupTrace {
     try { Write-Host $line } catch { }
 }
 
+function Get-QOTExceptionReport {
+    param(
+        [Parameter(Mandatory)]
+        [System.Exception]$Exception
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $depth = 0
+    $current = $Exception
+
+    while ($current) {
+        $parts.Add(("Exception[{0}] Type: {1}" -f $depth, $current.GetType().FullName))
+        $parts.Add(("Exception[{0}] Message: {1}" -f $depth, $current.Message))
+        if (-not [string]::IsNullOrWhiteSpace($current.StackTrace)) {
+            $parts.Add(("Exception[{0}] StackTrace:`n{1}" -f $depth, $current.StackTrace))
+        }
+
+        $current = $current.InnerException
+        $depth++
+    }
+
+    return ($parts -join [Environment]::NewLine)
+}
+
 function Invoke-QOTStartupStep {
     param(
         [Parameter(Mandatory)][string]$Name,
@@ -39,7 +63,15 @@ function Invoke-QOTStartupStep {
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     Write-QOTStartupTrace "$Name start"
-    & $Action
+    try {
+        & $Action
+    }
+    catch {
+        $sw.Stop()
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("{0} failed ({1} ms)`n{2}" -f $Name, [math]::Round($sw.Elapsed.TotalMilliseconds), $errorDetail) 'ERROR'
+        throw
+    }
     $sw.Stop()
 
     $durationMs = [math]::Round($sw.Elapsed.TotalMilliseconds)
@@ -536,9 +568,19 @@ function Start-QOTMainWindow {
     try { Write-QLog ("Loading XAML from: {0}" -f $xamlPath) "DEBUG" } catch { }
 
     Write-QOTStartupTrace "MainWindow InitializeComponent start"
-    $xaml   = Get-Content -LiteralPath $xamlPath -Raw
-    $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
-    $window = [System.Windows.Markup.XamlReader]::Load($reader)
+    try {
+        $xaml   = Get-Content -LiteralPath $xamlPath -Raw
+        $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
+        $window = [System.Windows.Markup.XamlReader]::Load($reader)
+        Write-Host "Loaded XAML OK"
+        Write-QOTStartupTrace "Loaded XAML OK"
+    }
+    catch {
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("MainWindow XAML load failed from {0}`n{1}" -f $xamlPath, $errorDetail) 'ERROR'
+        try { Write-QLog ("MainWindow XAML load failed from {0}`n{1}" -f $xamlPath, $errorDetail) "ERROR" } catch { }
+        throw
+    }
     Write-QOTStartupTrace "MainWindow InitializeComponent end"
 
     if (-not $window) {
@@ -596,7 +638,9 @@ function Start-QOTMainWindow {
         Invoke-QOTStartupStep "Initialise Apps UI" { $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window) }
     }
     catch {
-        try { Write-QLog ("Apps UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("Apps UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("Apps UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
     }
 
     # ------------------------------------------------------------
@@ -610,7 +654,9 @@ function Start-QOTMainWindow {
         Invoke-QOTStartupStep "Initialise Tickets UI" { $script:TicketsUIInitialised = [bool](Initialize-QOTicketsUI -Window $window) }
     }
     catch {
-        try { Write-QLog ("Tickets UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("Tickets UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("Tickets UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
     }
 
     # ------------------------------------------------------------
@@ -624,7 +670,9 @@ function Start-QOTMainWindow {
         Invoke-QOTStartupStep "Initialise Tweaks and Cleaning UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
     }
     catch {
-        try { Write-QLog ("Tweaks/Cleaning UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("Tweaks/Cleaning UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("Tweaks/Cleaning UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
     }
 
     # ------------------------------------------------------------
@@ -638,7 +686,9 @@ function Start-QOTMainWindow {
         Invoke-QOTStartupStep "Initialise Advanced Tweaks UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
     }
     catch {
-        try { Write-QLog ("Advanced UI failed to load: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+        Write-QOTStartupTrace ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
     }
 
     # ------------------------------------------------------------
