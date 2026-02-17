@@ -442,12 +442,10 @@
 
                                 <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
                                     <TextBlock x:Name="StatusLabel"
-                                               Text="Idle"
+                                               Text="Apps ready"
                                                Foreground="{StaticResource TextSubtle}"
                                                VerticalAlignment="Center"
                                                Margin="0,0,12,0" />
-                                    <Button x:Name="BtnScanApps" Content="Scan" MinWidth="80" />
-                                    <Button x:Name="BtnUninstallSelected" Content="Uninstall Selected" MinWidth="140" />
                                 </DockPanel>
 
                                 <DataGrid x:Name="AppsGrid"
@@ -465,6 +463,7 @@
                                                 <DataTemplate>
                                                     <CheckBox Focusable="False"
                                                               IsHitTestVisible="True"
+                                                              Tag="{Binding ActionId}"
                                                               IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                               HorizontalAlignment="Center"
                                                               VerticalAlignment="Center"/>
@@ -531,6 +530,7 @@
                                                 <DataTemplate>
                                                     <CheckBox Focusable="False"
                                                               IsHitTestVisible="True"
+                                                              Tag="{Binding ActionId}"
                                                               IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                               IsEnabled="{Binding IsInstallable}"
                                                               HorizontalAlignment="Center"
