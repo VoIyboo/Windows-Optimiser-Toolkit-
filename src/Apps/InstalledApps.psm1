@@ -229,6 +229,7 @@ function Get-QOTInstalledAppsCached {
 
      $results = @(Get-QOTInstalledApps -IncludeAllUsersStore:$IncludeAllUsersStore)
     $Global:QOT_InstalledAppsCache = $results
+    $Global:QOT_InstalledAppsCacheTimestamp = Get-Date
     return $results
 }
 
