@@ -58,21 +58,21 @@ function Initialize-QOTAppsUI {
         # Find controls from XAML
         $AppsGrid        = Find-QOTControlByName -Root $Window -Name "AppsGrid"
         $InstallGrid     = Find-QOTControlByName -Root $Window -Name "InstallGrid"
-        $StatusLabel     = Find-QOTControlByName -Root $Window -Name "StatusLabel"
-
-
-        if (-not $AppsGrid)    { try { Write-QLog "Apps UI: AppsGrid not found in XAML (x:Name='AppsGrid')." "ERROR" } catch { }; return $false }
-        if (-not $InstallGrid) { try { Write-QLog "Apps UI: InstallGrid not found in XAML (x:Name='InstallGrid')." "ERROR" } catch { }; return $false }
+        if (-not $AppsGrid)    { try { Write-QLog "Apps UI: Failed to resolve grid control AppsGrid (x:Name=AppsGrid)." "ERROR" } catch { }; return $false }
+        if (-not $InstallGrid) { try { Write-QLog "Apps UI: Failed to resolve grid control InstallGrid (x:Name=InstallGrid)." "ERROR" } catch { }; return $false }
 
         Initialize-QOTAppsCollections
 
         $AppsGrid.ItemsSource    = $Global:QOT_InstalledAppsCollection
         $InstallGrid.ItemsSource = $Global:QOT_CommonAppsCollection
 
+        try { Write-QLog ("Apps UI: Installed Apps ItemsSource bound ({0} rows currently)." -f @($Global:QOT_InstalledAppsCollection).Count) "DEBUG" } catch { }
+
         Initialize-QOTAppsGridsColumns -AppsGrid $AppsGrid -InstallGrid $InstallGrid
 
         # Load common apps catalogue (fast)
         Initialize-QOTCommonAppsCatalogue
+        Write-QOTAppsCollectionDiagnostics -Label "Common App installs" -Items @($Global:QOT_CommonAppsCollection)
 
         # Auto scan installed apps on load (async)
         Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid
@@ -242,14 +242,19 @@ function Initialize-QOTCommonAppsCatalogue {
     foreach ($item in $catalogue) {
         if ($null -eq $item.PSObject.Properties["IsSelected"]) {
             $item | Add-Member -NotePropertyName IsSelected -NotePropertyValue $false -Force
+        }
         if ($null -eq $item.PSObject.Properties["ActionId"]) {
             $item | Add-Member -NotePropertyName ActionId -NotePropertyValue "Apps.Install" -Force
-        }
         }
         $Global:QOT_CommonAppsCollection.Add($item)
     }
 
-    try { Write-QLog ("Common apps catalogue loaded ({0} items)." -f $Global:QOT_CommonAppsCollection.Count) "DEBUG" } catch { }
+    $commonCount = @($Global:QOT_CommonAppsCollection).Count
+    try { Write-QLog ("Common App installs list populated: {0} rows" -f $commonCount) "INFO" } catch { }
+
+    if ($commonCount -eq 0) {
+        try { Write-QLog "Common App installs list is empty after catalogue load." "WARN" } catch { }
+    }
 }
 
 Export-ModuleMember -Function Initialize-QOTAppsUI, Find-QOTControlByName
