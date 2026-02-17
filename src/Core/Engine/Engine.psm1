@@ -153,18 +153,52 @@ function Start-QOTMain {
         }
     } catch { }
 
-    # Ensure Settings UI logging + view builder are available globally before UI loads
-    $settingsUIModule = Join-Path $PSScriptRoot "..\Settings\Settings.UI.psm1"
-    $settingsUIModule = [System.IO.Path]::GetFullPath($settingsUIModule)
+    try {
+        # Ensure Settings UI logging + view builder are available globally before UI loads
+        $settingsUIModule = Join-Path $PSScriptRoot "..\Settings\Settings.UI.psm1"
+        $settingsUIModule = [System.IO.Path]::GetFullPath($settingsUIModule)
 
-    if (Test-Path -LiteralPath $settingsUIModule) {
-        Import-Module $settingsUIModule -Force -Global -ErrorAction Stop
-        Write-QOSettingsUILog "Engine confirmed Settings UI logger is available"
-    } else {
+        if (Test-Path -LiteralPath $settingsUIModule) {
+            Import-Module $settingsUIModule -Force -Global -ErrorAction Stop
+            Write-QOSettingsUILog "Engine confirmed Settings UI logger is available"
+        } else {
+            try {
+                if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
+                    Write-QLog "Settings UI module missing: $settingsUIModule" "WARN"
+                }
+
+        # This call blocks (ShowDialog) and keeps the app alive, while ContentRendered can still close the splash.
+        if ($WarmupOnly) {
+            return Start-QOTMainWindow -SplashWindow $SplashWindow -WarmupOnly -PassThru:$PassThru
+        }
+        Start-QOTMainWindow -SplashWindow $SplashWindow
+        }
+        
+    catch {
+        $exception = $_.Exception
+        $detailLines = New-Object System.Collections.Generic.List[string]
+        $depth = 0
+        while ($exception) {
+            $detailLines.Add(("Exception[{0}] Type: {1}" -f $depth, $exception.GetType().FullName))
+            $detailLines.Add(("Exception[{0}] Message: {1}" -f $depth, $exception.Message))
+            if (-not [string]::IsNullOrWhiteSpace($exception.StackTrace)) {
+                $detailLines.Add(("Exception[{0}] StackTrace:`n{1}" -f $depth, $exception.StackTrace))
+            }
+            $exception = $exception.InnerException
+            $depth++
+        }
+
+        $details = $detailLines -join [Environment]::NewLine
         try {
             if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
-                Write-QLog "Settings UI module missing: $settingsUIModule" "WARN"
+                Write-QLog ("Start-QOTMain failed.`n{0}" -f $details) "ERROR"
             }
+        } catch { }
+
+        try {
+            Write-Host "Start-QOTMain failed. Full error details:"
+            $Error[0] | Format-List * -Force
+        } catch { }
         } catch { }
     }
 
@@ -184,8 +218,7 @@ function Start-QOTMain {
     }
 
     # This call blocks (ShowDialog) and keeps the app alive, while ContentRendered can still close the splash.
-    if ($WarmupOnly) {
-        return Start-QOTMainWindow -SplashWindow $SplashWindow -WarmupOnly -PassThru:$PassThru
+        throw
     }
     Start-QOTMainWindow -SplashWindow $SplashWindow
 }
