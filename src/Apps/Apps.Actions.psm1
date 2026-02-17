@@ -98,12 +98,30 @@ function Invoke-QOTRunSelectedAppsActions {
     $installedItems = @($AppsGrid.ItemsSource)
     $commonItems = @($InstallGrid.ItemsSource)
 
+    $needsRefresh = ($installedItems.Count -eq 0)
+    if (-not $needsRefresh -and $Global:QOT_InstalledAppsCacheTimestamp) {
+        try {
+            $cacheAge = (New-TimeSpan -Start $Global:QOT_InstalledAppsCacheTimestamp -End (Get-Date)).TotalMinutes
+            if ($cacheAge -ge 30) { $needsRefresh = $true }
+        } catch { }
+    }
+
+    if ($needsRefresh) {
+        try { Write-QLog "Apps dataset empty/stale. Triggering refresh before Play actions." "INFO" } catch { }
+        Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid -ForceScan
+        if ($Global:QOT_InstalledAppsCache -and $Global:QOT_InstalledAppsCache.Count -gt 0) {
+            $installedItems = @($Global:QOT_InstalledAppsCache)
+        }
+    }
+
     $selectedInstalled = @($installedItems | Where-Object { $_.IsSelected -eq $true })
     $selectedCommon = @($commonItems | Where-Object { $_.IsSelected -eq $true -and $_.IsInstallable -ne $false })
 
+    try { Write-QLog ("Apps selections discovered for Play: {0}" -f ($selectedInstalled.Count + $selectedCommon.Count)) "INFO" } catch { }
+
     if ($selectedInstalled.Count -eq 0 -and $selectedCommon.Count -eq 0) {
         try { Write-QLog "Apps actions skipped. Nothing selected." "INFO" } catch { }
-        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Idle"
+        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Apps ready"
         return
     }
 
@@ -131,6 +149,8 @@ function Invoke-QOTRunSelectedAppsActions {
 
     foreach ($app in $selectedInstalled) {
         $name = $app.Name
+        $taskName = "Uninstall $name"
+        try { Write-QLog ("Skipped task: {0} (not installed)" -f $taskName) "INFO" } catch { }
         $key = Get-QOTNormalizedAppName -Name $name
         if (-not $installedNameSet.Contains($key)) {
             try { Write-QLog ("Skipping uninstall for '{0}' because it no longer appears installed." -f $name) "WARN" } catch { }
@@ -139,24 +159,25 @@ function Invoke-QOTRunSelectedAppsActions {
 
         $cmd = Get-QOTSilentUninstallCommand -App $app
         if ([string]::IsNullOrWhiteSpace($cmd)) {
-            try { Write-QLog ("Skipping uninstall for '{0}' because no uninstall command is available." -f $name) "WARN" } catch { }
+            try { Write-QLog ("Completed task: {0} (FAILED - no uninstall command is available)" -f $taskName) "ERROR" } catch { }
             continue
         }
 
-        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text ("Uninstalling {0}..." -f $name)
         try {
             Start-QOTProcessFromCommand -Command $cmd -Wait
             $app.IsSelected = $false
             $didChange = $true
-            try { Write-QLog ("Uninstall succeeded: {0}" -f $name) "INFO" } catch { }
+            try { Write-QLog ("Completed task: {0} (SUCCESS)" -f $taskName) "INFO" } catch { }
         }
         catch {
-            try { Write-QLog ("Failed uninstall '{0}': {1}" -f $name, $_.Exception.Message) "ERROR" } catch { }
+            try { Write-QLog ("Completed task: {0} (FAILED - {1})" -f $taskName, $_.Exception.Message) "ERROR" } catch { }
         }
     }
 
     foreach ($app in $selectedCommon) {
         $name = $app.Name
+        $taskName = "Install $name"
+        try { Write-QLog ("Now doing task: {0}" -f $taskName) "INFO" } catch { }
         $alreadyInstalled = Test-QOTCommonAppInstalled -CommonApp $app -InstalledDataset $installedDataset
         if (-not $alreadyInstalled -and (Get-Command Test-QOTWingetAppInstalled -ErrorAction SilentlyContinue) -and -not [string]::IsNullOrWhiteSpace($app.WingetId)) {
             try { $alreadyInstalled = Test-QOTWingetAppInstalled -WingetId $app.WingetId } catch { $alreadyInstalled = $false }
@@ -166,37 +187,36 @@ function Invoke-QOTRunSelectedAppsActions {
             $app.Status = "Installed"
             $app.IsInstallable = $false
             $app.IsSelected = $false
-            try { Write-QLog ("Install SKIPPED: {0} (already installed)" -f $name) "INFO" } catch { }
+            try { Write-QLog ("Skipped task: Install {0} (already installed)" -f $name) "INFO" } catch { }
             continue
         }
 
         if ([string]::IsNullOrWhiteSpace($app.WingetId)) {
-            try { Write-QLog ("Install SKIPPED: {0} (missing WingetId)" -f $name) "WARN" } catch { }
+            try { Write-QLog ("Completed task: Install {0} (FAILED - missing WingetId)" -f $name) "ERROR" } catch { }
             continue
         }
 
-        Set-QOTAppsStatus -StatusLabel $StatusLabel -Text ("Installing {0}..." -f $name)
+
         try {
             Install-QOTCommonApp -Name $app.Name -WingetId $app.WingetId
             $app.Status = "Installed"
             $app.IsInstallable = $false
             $app.IsSelected = $false
             $didChange = $true
-            try { Write-QLog ("Install SUCCESS: {0}" -f $name) "INFO" } catch { }
+            try { Write-QLog ("Completed task: Install {0} (SUCCESS)" -f $name) "INFO" } catch { }
         }
         catch {
             $app.Status = "Failed"
-            try { Write-QLog ("Install FAILED: {0} ({1})" -f $name, $_.Exception.Message) "ERROR" } catch { }
+            try { Write-QLog ("Completed task: Install {0} (FAILED - {1})" -f $name, $_.Exception.Message) "ERROR" } catch { }
         }
     }
 
-    Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Refreshing apps..."
     if ($didChange) {
         Start-QOTInstalledAppsScanAsync -AppsGrid $AppsGrid -ForceScan
     } else {
         Update-QOTCommonAppsInstallStatus -InstalledApps $installedItems
     }
-    Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Idle"
+    Set-QOTAppsStatus -StatusLabel $StatusLabel -Text "Apps ready"
 }
 
 function Invoke-QOTInstallSelectedCommonApps {
