@@ -436,20 +436,11 @@
                                   Margin="0,0,8,0">
                             <Grid Margin="4">
                                 <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                 </Grid.RowDefinitions>
 
-                                <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
-                                    <TextBlock x:Name="StatusLabel"
-                                               Text="Apps ready"
-                                               Foreground="{StaticResource TextSubtle}"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,12,0" />
-                                </DockPanel>
-
                                 <DataGrid x:Name="AppsGrid"
-                                          Grid.Row="1"
+                                          Grid.Row="0"
                                           Margin="0,4,0,0"
                                           AutoGenerateColumns="False"
                                           HeadersVisibility="Column"
