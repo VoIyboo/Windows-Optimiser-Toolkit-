@@ -1,3 +1,7 @@
+param(
+    [string]$Branch = "main"
+)
+
 # bootstrap.ps1
 # Remote bootstrap for: irm "<raw url>" | iex
 # Downloads fresh repo zip into TEMP, extracts, runs Intro.ps1
@@ -30,7 +34,11 @@ try {
     # -------------------------
     $repoOwner = "VoIyboo"
     $repoName  = "Windows-Optimiser-Toolkit-"
-    $branch    = "main"
+    if ([string]::IsNullOrWhiteSpace($Branch)) {
+        $Branch = "main"
+    }
+
+    $branch = $Branch
 
     # -------------------------
     # TEMP workspace (code only)
@@ -49,6 +57,7 @@ try {
     $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust"
 
     Write-Host "Downloading Quinn Optimiser Toolkit..."
+    Write-Host "Branch: $branch"
     Write-Host $zipUrl
 
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing | Out-Null
