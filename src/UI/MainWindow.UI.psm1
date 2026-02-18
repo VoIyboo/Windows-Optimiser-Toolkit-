@@ -1013,18 +1013,17 @@ function Start-QOTMainWindow {
         $btnHelp     = Find-QOTControlByNameDeep -Root $window -Name "BtnHelp"
         $tabHelp     = Find-QOTControlByNameDeep -Root $window -Name "TabHelp"
         $tabSettings = Find-QOTControlByNameDeep -Root $window -Name "TabSettings"
-        $tabTickets  = $resolvedControls["TabTickets"]
 
         if ($btnSettings -and $tabs -and $tabSettings) {
-        $btnSettings.Add_Click({
-            $tabs.SelectedItem = $tabSettings
-        })
-    }
+            $btnSettings.Add_Click({
+                $tabs.SelectedItem = $tabSettings
+            })
+        }
 
         if ($btnHelp -and $tabs -and $tabHelp) {
-        $btnHelp.Add_Click({
-            $tabs.SelectedItem = $tabHelp
-        })
+            $btnHelp.Add_Click({
+                $tabs.SelectedItem = $tabHelp
+            })
         }
     }
     else {
