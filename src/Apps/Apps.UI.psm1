@@ -21,27 +21,42 @@ function Find-QOTControlByName {
         }
     } catch { }
 
-    try {
-        $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
-        $q.Enqueue($Root) | Out-Null
+    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+    $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
+    $q.Enqueue($Root) | Out-Null
 
-        while ($q.Count -gt 0) {
-            $cur = $q.Dequeue()
-            if ($cur -is [System.Windows.FrameworkElement] -and $cur.Name -eq $Name) {
-                return $cur
+    while ($q.Count -gt 0) {
+        $cur = $q.Dequeue()
+        if (-not $cur) { continue }
+
+        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+        if (-not $visited.Add($objId)) { continue }
+
+        if ($cur -is [System.Windows.FrameworkElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+            try {
+                $withinScope = $cur.FindName($Name)
+                if ($withinScope) { return $withinScope }
+            } catch { }
+        } elseif ($cur -is [System.Windows.FrameworkContentElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+        }
+
+        try {
+            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                if ($child) { $q.Enqueue($child) | Out-Null }
             }
+        } catch { }
 
-            $count = 0
-            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
-            for ($i = 0; $i -lt $count; $i++) {
-                try {
+        if ($cur -is [System.Windows.DependencyObject]) {
+            try {
+                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
+                for ($i = 0; $i -lt $count; $i++) {
                     $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
                     if ($child) { $q.Enqueue($child) | Out-Null }
-                } catch { }
-            }
+                }
+            } catch { }
         }
-    } catch { }
-
     return $null
 }
 
@@ -127,7 +142,7 @@ function Initialize-QOTAppsUI {
     }
     catch {
         try { Write-QLog ("Apps UI initialisation error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
-        return $true
+        return $false
     }
 }
 
