@@ -1146,7 +1146,7 @@ function Initialize-QOTicketsUI {
     $grid.AddHandler([System.Windows.Controls.Primitives.Selector]::SelectionChangedEvent, $script:TicketsSelectionChangedHandler)
 
     # Row edit handler typed
-    $script:TicketsRowEditHandler = [System.Windows.Controls.DataGridRowEditEndingEventHandler]{
+    $script:TicketsRowEditHandler = [System.EventHandler[System.Windows.Controls.DataGridRowEditEndingEventArgs]]{
         param($sender, $args)
         try {
             if ($args.EditAction -ne [System.Windows.Controls.DataGridEditAction]::Commit) { return }
