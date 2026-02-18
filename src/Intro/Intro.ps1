@@ -305,9 +305,6 @@ try {
     # MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
    Write-Host "[STARTUP] MainWindow warmup started"
 
-    $mainReady  = New-Object System.Threading.Tasks.TaskCompletionSource[bool]
-    $renderFrame = New-Object System.Windows.Threading.DispatcherFrame
-
     $mainWindowResult = @(Start-QOTMain -RootPath $rootPath -SplashWindow $splash -WarmupOnly -PassThru)
     $mainWindow = $mainWindowResult | Where-Object { $_ -is [System.Windows.Window] } | Select-Object -Last 1
     if (-not $mainWindow) {
@@ -318,38 +315,11 @@ try {
     }
     Write-StartupMark "MainWindow object created"
 
-    $mainWindow.Opacity        = 0
-    $mainWindow.ShowActivated  = $false
-    $mainWindow.ShowInTaskbar  = $false
-
-    $mainWindow.Add_Loaded({
-        Write-StartupMark "MainWindow Loaded event"
-    })
-
-    $mainWindow.Add_ContentRendered({
-        if (-not $mainReady.Task.IsCompleted) {
-            $null = $mainReady.TrySetResult($true)
-            Write-Host "[STARTUP] MainWindow warmup done"
-        }
-        Write-StartupMark "MainWindow ContentRendered event"
-        $renderFrame.Continue = $false
-    })
-
-    Write-StartupMark "MainWindow.Show called"
-    $mainWindow.Show()
-    $mainWindow.UpdateLayout()
-    $mainWindow.Dispatcher.Invoke([action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
-
-    if (-not $mainReady.Task.IsCompleted) {
-        [System.Windows.Threading.Dispatcher]::PushFrame($renderFrame)
-    }
-
     Write-Host "[STARTUP] Intro finished"
 
     Write-Host "[STARTUP] Showing MainWindow"
     Stop-StartupChunk "MainWindow warmup"
 
-    $mainWindow.Hide()
     $mainWindow.ShowInTaskbar = $true
     $mainWindow.ShowActivated = $true
     $mainWindow.Opacity = 1
@@ -374,9 +344,11 @@ try {
 
     Write-StartupMark "Calling MainWindow.Show()"
     & $script:QOTLog "Calling MainWindow.Show()" "INFO"
+    $mainWindow.Show()
+    $mainWindow.Activate() | Out-Null
     Write-StartupMark "MainWindow.Show called"
     & $script:QOTLog "MainWindow.Show called" "INFO"
-    $mainWindow.Show()
+
 
     Write-StartupMark "Entering WPF Run loop"
     & $script:QOTLog "Entering WPF Run loop" "INFO"
