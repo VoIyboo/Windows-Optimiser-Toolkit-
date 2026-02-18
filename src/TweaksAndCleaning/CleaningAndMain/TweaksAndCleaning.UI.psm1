@@ -23,24 +23,59 @@ function Get-QOTNamedElement {
     }
 
     try {
-        $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            $direct = $Root.FindName($Name)
+            if ($direct) {
+                return $direct
+            }
+        }
+
+        $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+        $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
         $q.Enqueue($Root) | Out-Null
 
         while ($q.Count -gt 0) {
             $cur = $q.Dequeue()
+            if (-not $cur) { continue }
+
+            $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+            if (-not $visited.Add($objId)) { continue }
             if ($cur -is [System.Windows.FrameworkElement]) {
+                if ($cur.Name -eq $Name) {
+                    return $cur
+                }
+
+                try {
+                    $scoped = $cur.FindName($Name)
+                    if ($scoped) {
+                        return $scoped
+                    }
+                }
+                catch { }
+            }
+            elseif ($cur -is [System.Windows.FrameworkContentElement]) {
                 if ($cur.Name -eq $Name) {
                     return $cur
                 }
             }
 
-            $count = 0
-            try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
-            for ($i = 0; $i -lt $count; $i++) {
-                try {
-                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+            try {
+                foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
                     if ($child) { $q.Enqueue($child) | Out-Null }
-                } catch { }
+                }
+            }
+            catch { }
+
+            if ($cur -is [System.Windows.DependencyObject]) {
+                $count = 0
+                try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
+                for ($i = 0; $i -lt $count; $i++) {
+                    try {
+                        $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                        if ($child) { $q.Enqueue($child) | Out-Null }
+                    }
+                    catch { }
+                }
             }
         }
     }
@@ -95,39 +130,19 @@ function Initialize-QOTTweaksAndCleaningUI {
         $actionGroupName = "Tweaks & Cleaning"
 
         try {
-            $tweaksAndCleaningRoot = $null
-            if ($Window) {
-                $tabCleaning = $Window.FindName("TabCleaning")
-                if ($tabCleaning) {
-                    $tweaksAndCleaningRoot = $tabCleaning
-                    if ($tabCleaning.Content) {
-                        $tweaksAndCleaningRoot = $tabCleaning.Content
-                    }
-                }
-            }
 
             $uiCheckboxes = @()
-            if ($tweaksAndCleaningRoot) {
-                $q = New-Object 'System.Collections.Generic.Queue[System.Windows.DependencyObject]'
-                $q.Enqueue($tweaksAndCleaningRoot) | Out-Null
-
-                while ($q.Count -gt 0) {
-                    $cur = $q.Dequeue()
-                    if ($cur -is [System.Windows.Controls.CheckBox]) {
-                        $uiCheckboxes += [pscustomobject]@{
-                            Name = $cur.Name
-                            Label = [string]$cur.Content
-                        }
+            $missingUICheckboxes = @()
+            foreach ($action in $actionsSnapshot) {
+                $control = Get-QOTNamedElement -Root $Window -Name $action.Name
+                if ($control -and $control -is [System.Windows.Controls.CheckBox]) {
+                    $uiCheckboxes += [pscustomobject]@{
+                        Name = $control.Name
+                        Label = [string]$control.Content
                     }
-
-                    $count = 0
-                    try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
-                    for ($i = 0; $i -lt $count; $i++) {
-                        try {
-                            $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
-                            if ($child) { $q.Enqueue($child) | Out-Null }
-                        } catch { }
-                    }
+                }
+                else {
+                    $missingUICheckboxes += $action
                 }
             }
 
@@ -184,7 +199,11 @@ function Initialize-QOTTweaksAndCleaningUI {
                     try { Write-QLog ("Tweaks & Cleaning mapped action has no registered definition or script: {0} -> {1}" -f $missingDef.Name, $missingDef.ActionId) "WARN" } catch { }
                 }
             }
-
+            if ($missingUICheckboxes.Count -gt 0) {
+                foreach ($missingUI in $missingUICheckboxes) {
+                    try { Write-QLog ("Tweaks & Cleaning mapped checkbox missing in XAML: {0} -> {1}" -f $missingUI.Name, $missingUI.ActionId) "WARN" } catch { }
+                }
+            }
             if ($duplicateActionNames.Count -gt 0) {
                 foreach ($duplicateName in ($duplicateActionNames | Select-Object -Unique)) {
                     try { Write-QLog ("Tweaks & Cleaning duplicate action Name detected: {0}" -f $duplicateName) "WARN" } catch { }
@@ -197,10 +216,10 @@ function Initialize-QOTTweaksAndCleaningUI {
                 }
             }
 
-            if ($missingFromActionList.Count -eq 0 -and $missingDefinitions.Count -eq 0 -and $uiCheckboxes.Count -eq $actionsSnapshot.Count -and $duplicateActionNames.Count -eq 0 -and $duplicateUICheckboxes.Count -eq 0) {
+            if ($missingFromActionList.Count -eq 0 -and $missingDefinitions.Count -eq 0 -and $missingUICheckboxes.Count -eq 0 -and $uiCheckboxes.Count -eq $actionsSnapshot.Count -and $duplicateActionNames.Count -eq 0 -and $duplicateUICheckboxes.Count -eq 0) {
                 try { Write-QLog "Tweaks & Cleaning checkbox/action mapping validated: no visual-only checkboxes detected." "INFO" } catch { }
             }
-            if ($missingFromActionList.Count -gt 0 -or $missingDefinitions.Count -gt 0) {
+            if ($missingFromActionList.Count -gt 0 -or $missingDefinitions.Count -gt 0 -or $missingUICheckboxes.Count -gt 0) {
                 $criticalMessage = "Tweaks & Cleaning checkbox/action mapping mismatch detected. Startup halted to prevent incorrect execution wiring."
                 try { Write-QLog $criticalMessage "CRITICAL" } catch {
                     try { Write-QLog $criticalMessage "ERROR" } catch { }
