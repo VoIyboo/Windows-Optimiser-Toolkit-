@@ -340,6 +340,150 @@ function Run-QOTSelectedTasks {
         }
     }
 
+function Find-QOTControlByNameDeep {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
+
+    try {
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            $direct = $Root.FindName($Name)
+            if ($direct) { return $direct }
+        }
+    } catch { }
+
+    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+    $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
+    $q.Enqueue($Root) | Out-Null
+
+    while ($q.Count -gt 0) {
+        $cur = $q.Dequeue()
+        if (-not $cur) { continue }
+
+        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+        if (-not $visited.Add($objId)) { continue }
+
+        if ($cur -is [System.Windows.FrameworkElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+            try {
+                $withinScope = $cur.FindName($Name)
+                if ($withinScope) { return $withinScope }
+            } catch { }
+        } elseif ($cur -is [System.Windows.FrameworkContentElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+        }
+
+        try {
+            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                if ($child) { $q.Enqueue($child) | Out-Null }
+            }
+        } catch { }
+
+        if ($cur -is [System.Windows.DependencyObject]) {
+            try {
+                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
+                for ($i = 0; $i -lt $count; $i++) {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                }
+            } catch { }
+        }
+    }
+
+function Find-QOTControlByNameDeep {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
+
+    try {
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            $direct = $Root.FindName($Name)
+            if ($direct) { return $direct }
+        }
+    } catch { }
+
+    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+    $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
+    $q.Enqueue($Root) | Out-Null
+
+    while ($q.Count -gt 0) {
+        $cur = $q.Dequeue()
+        if (-not $cur) { continue }
+
+        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+        if (-not $visited.Add($objId)) { continue }
+
+        if ($cur -is [System.Windows.FrameworkElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+            try {
+                $withinScope = $cur.FindName($Name)
+                if ($withinScope) { return $withinScope }
+            } catch { }
+        } elseif ($cur -is [System.Windows.FrameworkContentElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+        }
+
+        try {
+            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                if ($child) { $q.Enqueue($child) | Out-Null }
+            }
+        } catch { }
+
+        if ($cur -is [System.Windows.DependencyObject]) {
+            try {
+                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
+                for ($i = 0; $i -lt $count; $i++) {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                }
+            } catch { }
+        }
+    }
+
+    return $null
+}
+
+function Show-QOTStartupErrorBanner {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $banner = Find-QOTControlByNameDeep -Root $Window -Name "ExecutionMessage"
+    if (-not $banner) {
+        Write-QOTStartupTrace ("Startup error banner control not found. Message: {0}" -f $Message) 'ERROR'
+        return
+    }
+
+    $banner.Text = $Message
+    $banner.Visibility = [System.Windows.Visibility]::Visible
+}
+
+    return $null
+}
+
+function Show-QOTStartupErrorBanner {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $banner = Find-QOTControlByNameDeep -Root $Window -Name "ExecutionMessage"
+    if (-not $banner) {
+        Write-QOTStartupTrace ("Startup error banner control not found. Message: {0}" -f $Message) 'ERROR'
+        return
+    }
+
+    $banner.Text = $Message
+    $banner.Visibility = [System.Windows.Visibility]::Visible
+}
+
     try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in Play handler: {0}" -f $discoveredCheckboxes) "INFO" } catch { }
 
     $appsGrid = $activeWindow.FindName("AppsGrid")
@@ -602,7 +746,7 @@ function Start-QOTMainWindow {
     }
 
     $script:MainWindow = $window
-    $script:SummaryTextBlock = $window.FindName("SummaryText")
+    $script:SummaryTextBlock = Find-QOTControlByNameDeep -Root $window -Name "SummaryText"
 
     $window.Add_Loaded({
         Write-QOTStartupTrace "MainWindow.Loaded fired"
@@ -638,97 +782,128 @@ function Start-QOTMainWindow {
         }
     } catch { }
 
-    $tabs    = $window.FindName("MainTabControl")
-    $tabApps = $window.FindName("TabApps")
+    $requiredControls = @(
+        "MainTabControl","BtnPlay","AppsGrid","InstallGrid","TicketsGrid","SettingsHost","HelpHost","TabTickets"
+    )
+    $resolvedControls = @{}
+    $missingControls = New-Object System.Collections.Generic.List[string]
+
+    foreach ($controlName in $requiredControls) {
+        $control = Find-QOTControlByNameDeep -Root $window -Name $controlName
+        if ($control) {
+            $resolvedControls[$controlName] = $control
+        } else {
+            $missingControls.Add($controlName) | Out-Null
+        }
+    }
+
+    if ($missingControls.Count -eq 0) {
+        Write-QOTStartupTrace ("UI controls resolved: OK ({0}/{1})" -f $resolvedControls.Count, $requiredControls.Count)
+    } else {
+        Write-QOTStartupTrace ("UI controls resolved with warnings ({0}/{1}). Missing: {2}" -f $resolvedControls.Count, $requiredControls.Count, ($missingControls -join ', ')) 'WARN'
+    }
+
+    $criticalMissing = @($missingControls | Where-Object { $_ -in @("BtnPlay", "MainTabControl") })
+    $hasCriticalResolutionFailure = ($criticalMissing.Count -gt 0)
+    if ($hasCriticalResolutionFailure) {
+        $fatalMessage = "Fatal UI wiring error. Missing controls: {0}" -f ($missingControls -join ', ')
+        Write-QOTStartupTrace $fatalMessage 'ERROR'
+        try { Write-QLog $fatalMessage 'ERROR' } catch { }
+        Show-QOTStartupErrorBanner -Window $window -Message $fatalMessage
+    }
+
+    $tabs    = $resolvedControls["MainTabControl"]
+    $tabApps = Find-QOTControlByNameDeep -Root $window -Name "TabApps"
 
     # ------------------------------------------------------------
     # Initialise Apps UI
     # ------------------------------------------------------------
-    try {
-        if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
-            throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
-        }
+    if (-not $hasCriticalResolutionFailure) {
+        try {
+            if (-not (Get-Command Initialize-QOTAppsUI -ErrorAction SilentlyContinue)) {
+                throw "Initialize-QOTAppsUI not found. Apps\Apps.UI.psm1 did not load or export correctly."
+            }
 
-        Invoke-QOTStartupStep "Initialise Apps UI" { $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window) }
-        Write-QOTStartupTrace "Initialise Apps UI OK"
-    }
-    catch {
-        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-        Write-QOTStartupTrace ("Apps UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
-        try { Write-QLog ("Apps UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
-    }
+            Invoke-QOTStartupStep "Initialise Apps UI" { $script:AppsUIInitialised = [bool](Initialize-QOTAppsUI -Window $window) }
+            Write-QOTStartupTrace "Initialise Apps UI OK"
+        }
+        catch {
+            $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+            Write-QOTStartupTrace ("Apps UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
+            try { Write-QLog ("Apps UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
+        }
 
     # ------------------------------------------------------------
     # Initialise Tickets UI
     # ------------------------------------------------------------
-    try {
+        try {
         if (-not (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue)) {
             throw "Initialize-QOTicketsUI not found. Tickets\Tickets.UI.psm1 did not load or export correctly."
         }
 
         Invoke-QOTStartupStep "Initialise Tickets UI" { $script:TicketsUIInitialised = [bool](Initialize-QOTicketsUI -Window $window) }
-    }
-    catch {
+        }
+        catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
         Write-QOTStartupTrace ("Tickets UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
         try { Write-QLog ("Tickets UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
-    }
+        }
 
     # ------------------------------------------------------------
     # Initialise Tweaks & Cleaning UI
     # ------------------------------------------------------------
-    try {
+        try {
         if (-not (Get-Command Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue)) {
             throw "Initialize-QOTTweaksAndCleaningUI not found. TweaksAndCleaning.UI.psm1 did not load or export correctly."
         }
 
         Invoke-QOTStartupStep "Initialise Tweaks UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
         Write-QOTStartupTrace "Initialise Tweaks UI OK"
-    }
-    catch {
+        }
+        catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
         Write-QOTStartupTrace ("Tweaks/Cleaning UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
         try { Write-QLog ("Tweaks/Cleaning UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
-    }
+        }
 
     # ------------------------------------------------------------
     # Initialise Advanced Tweaks UI
     # ------------------------------------------------------------
-    try {
+        try {
         if (-not (Get-Command Initialize-QOTAdvancedTweaksUI -ErrorAction SilentlyContinue)) {
             throw "Initialize-QOTAdvancedTweaksUI not found. AdvancedTweaks.UI.psm1 did not load or export correctly."
         }
 
         Invoke-QOTStartupStep "Initialise Advanced UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
         Write-QOTStartupTrace "Initialise Advanced UI OK"
-    }
-    catch {
+        }
+        catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
         Write-QOTStartupTrace ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
         try { Write-QLog ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
-    }
+        }
 
     # ------------------------------------------------------------
     # Register action catalog (central ActionId mappings)
     # ------------------------------------------------------------
-    try {
+        try {
         if (Get-Command Initialize-QOTActionCatalog -ErrorAction SilentlyContinue) {
             Invoke-QOTStartupStep "Initialise action catalog" { Initialize-QOTActionCatalog }
         }
-    }
-    catch {
+        }
+        catch {
         try { Write-QLog ("Action catalog failed to initialise: {0}" -f $_.Exception.Message) "ERROR" } catch { }
-    }
+        }
 
 
 
     # ------------------------------------------------------------
    # Wire Play button (global action registry)
     # ------------------------------------------------------------
-    $btnPlay = $window.FindName("BtnPlay")
-    $playProgressPath = $window.FindName("BtnPlayProgressPath")
-    $playProgressClip = $window.FindName("BtnPlayProgressClip")
-    $executionMessage = $window.FindName("ExecutionMessage")
+        $btnPlay = $resolvedControls["BtnPlay"]
+        $playProgressPath = Find-QOTControlByNameDeep -Root $window -Name "BtnPlayProgressPath"
+        $playProgressClip = Find-QOTControlByNameDeep -Root $window -Name "BtnPlayProgressClip"
+        $executionMessage = Find-QOTControlByNameDeep -Root $window -Name "ExecutionMessage"
 
     if ($btnPlay) {
         $null = Set-QOTUIEnabledState -Control $btnPlay -IsEnabled $true
@@ -778,10 +953,10 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Initialise Settings UI (hosted in SettingsHost)
     # ------------------------------------------------------------
-    $settingsHost = $window.FindName("SettingsHost")
-    if (-not $settingsHost) {
-        throw "SettingsHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='SettingsHost' />"
-    }
+        $settingsHost = $resolvedControls["SettingsHost"]
+        if (-not $settingsHost) {
+            throw "SettingsHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='SettingsHost' />"
+        }
 
     try {
         $cmd = Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue
@@ -805,10 +980,10 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Initialise Help UI (hosted in HelpHost)
     # ------------------------------------------------------------
-    $helpHost = $window.FindName("HelpHost")
-    if (-not $helpHost) {
-        throw "HelpHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='HelpHost' />"
-    }
+        $helpHost = $resolvedControls["HelpHost"]
+        if (-not $helpHost) {
+            throw "HelpHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='HelpHost' />"
+        }
 
     try {
         $cmd = Get-Command New-QOTHelpView -ErrorAction SilentlyContinue
@@ -834,22 +1009,26 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
-    $btnSettings = $window.FindName("BtnSettings")
-    $btnHelp     = $window.FindName("BtnHelp")
-    $tabHelp     = $window.FindName("TabHelp")
-    $tabSettings = $window.FindName("TabSettings")
-    $tabTickets  = $window.FindName("TabTickets")
+        $btnSettings = Find-QOTControlByNameDeep -Root $window -Name "BtnSettings"
+        $btnHelp     = Find-QOTControlByNameDeep -Root $window -Name "BtnHelp"
+        $tabHelp     = Find-QOTControlByNameDeep -Root $window -Name "TabHelp"
+        $tabSettings = Find-QOTControlByNameDeep -Root $window -Name "TabSettings"
+        $tabTickets  = $resolvedControls["TabTickets"]
 
-    if ($btnSettings -and $tabs -and $tabSettings) {
+        if ($btnSettings -and $tabs -and $tabSettings) {
         $btnSettings.Add_Click({
             $tabs.SelectedItem = $tabSettings
         })
     }
 
-    if ($btnHelp -and $tabs -and $tabHelp) {
+        if ($btnHelp -and $tabs -and $tabHelp) {
         $btnHelp.Add_Click({
             $tabs.SelectedItem = $tabHelp
         })
+        }
+    }
+    else {
+        Write-QOTStartupTrace "Critical UI controls are missing; feature module wiring skipped." 'WARN'
     }
     
     # ------------------------------------------------------------
