@@ -1227,10 +1227,6 @@ function Start-QOTMainWindow {
                 $window.Activate() | Out-Null
                 Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
             }
-
-            Write-QOTStartupTrace "Entering WPF dispatcher loop"
-            [void]$app.Run($window)
-            Write-QOTStartupTrace "Dispatcher loop ended"
         }
         else {
 
@@ -1247,15 +1243,10 @@ function Start-QOTMainWindow {
                 Set-QOTWindowSafetyDefaults -Window $window
                 Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-taskbar-opacity-fix"
             }
-
-            $window.Add_Closed({
-                try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvokeShutdown([System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
-            })
-
-            Write-QOTStartupTrace "Entering WPF dispatcher loop"
-            [System.Windows.Threading.Dispatcher]::Run()
-            Write-QOTStartupTrace "Dispatcher loop ended"
         }
+        Write-QOTStartupTrace "Entering app.Run()"
+        $app.Run($window) | Out-Null
+        Write-QOTStartupTrace "Run exited"
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
