@@ -312,29 +312,20 @@ function Invoke-QOTControlResolution {
         [Parameter(Mandatory)][string[]]$Names
     )
 
-    $resolverCommand = Get-Command Resolve-QOTControlSet -ErrorAction SilentlyContinue
-    $resolverAvailable = [bool]$resolverCommand
-
-    Write-QOTStartupTrace ("Resolve-QOTControlSet available: {0}" -f $resolverAvailable)
-
-    if ($resolverCommand) {
-        $resolverSource = if ($resolverCommand.Source) { $resolverCommand.Source } else { '<none>' }
-        $resolverModule = if ($resolverCommand.ModuleName) { $resolverCommand.ModuleName } else { '<none>' }
-        Write-QOTStartupTrace ("Resolve-QOTControlSet provider: Source={0}; ModuleName={1}" -f $resolverSource, $resolverModule) 'DEBUG'
+    if (-not $Root) {
+        throw "Invoke-QOTControlResolution requires a non-null root."
     }
 
-    if ($resolverAvailable) {
-        try {
-            return Resolve-QOTControlSet -Root $Root -Names $Names
-        }
-        catch {
-            $errorText = "Resolve-QOTControlSet failed; falling back to legacy control resolution. Error: $($_.Exception.Message)"
-            Write-QOTStartupTrace $errorText 'ERROR'
-            try { Write-QLog $errorText 'ERROR' } catch { }
-        }
+    if ($script:MainWindow -and ([object]::ReferenceEquals($Root, $script:MainWindow) -eq $false)) {
+        Write-QOTStartupTrace "Control resolution root does not match script:MainWindow; forcing resolver root to script:MainWindow" 'WARN'
+        $Root = $script:MainWindow
     }
-    else {
-        $errorText = "Missing dependency: Resolve-QOTControlSet not found. Falling back to legacy control resolution."
+
+    try {
+        return Resolve-QOTControlSet -Root $Root -Names $Names
+    }
+    catch {
+        $errorText = "Resolve-QOTControlSet failed; falling back to legacy control resolution. Error: $($_.Exception.Message)"
         Write-QOTStartupTrace $errorText 'ERROR'
         try { Write-QLog $errorText 'ERROR' } catch { }
     }
@@ -737,6 +728,37 @@ function Write-QOTWindowVisibilityDiagnostics {
     }
 }
 
+function Ensure-QOTWpfApplication {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window
+    )
+
+    $existing = [System.Windows.Application]::Current
+    if ($existing) {
+        Write-QOTStartupTrace ("Using existing WPF Application instance: {0}" -f $existing.GetType().FullName)
+        if (-not $existing.MainWindow -or -not [object]::ReferenceEquals($existing.MainWindow, $Window)) {
+            $existing.MainWindow = $Window
+            Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
+        }
+
+        return [pscustomobject]@{
+            Application = $existing
+            CreatedHere = $false
+        }
+    }
+
+    $created = [System.Windows.Application]::new()
+    $created.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
+    $created.MainWindow = $Window
+    Write-QOTStartupTrace ("Created new WPF Application instance: {0}" -f $created.GetType().FullName)
+    Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
+
+    return [pscustomobject]@{
+        Application = $created
+        CreatedHere = $true
+    }
+}
+
 function Set-QOTWindowSafetyDefaults {
     param(
         [Parameter(Mandatory)][System.Windows.Window]$Window
@@ -873,14 +895,15 @@ function Start-QOTMainWindow {
     }
 
     $script:MainWindow = $window
-    $app = [System.Windows.Application]::Current
-    if ($app) {
-        $app.MainWindow = $window
-        Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $window.GetType().FullName)
-    } else {
-        Write-QOTStartupTrace "Application.Current is null; unable to assign MainWindow" 'WARN'
+    $applicationState = Ensure-QOTWpfApplication -Window $window
+    $app = $applicationState.Application
+    $appCreatedHere = [bool]$applicationState.CreatedHere
+
+    if (-not [System.Windows.Application]::Current) {
+        Write-QOTStartupTrace "Application.Current is unexpectedly null after Ensure-QOTWpfApplication" 'ERROR'
+        throw "WPF Application instance was not available after initialisation."
     }
-    $script:SummaryTextBlock = Find-QOTControlByNameDeep -Root $window -Name "SummaryText"
+    $script:SummaryTextBlock = Find-QOTControlByNameDeep -Root $script:MainWindow -Name "SummaryText"
 
     $window.Add_Loaded({
         Write-QOTStartupTrace "MainWindow.Loaded fired"
@@ -921,7 +944,7 @@ function Start-QOTMainWindow {
         "TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket",
         "SettingsHost","HelpHost","TabTickets"
     )
-    $controlResolution = Invoke-QOTControlResolution -Root $window -Names $requiredControls
+    $controlResolution = Invoke-QOTControlResolution -Root $script:MainWindow -Names $requiredControls
     $resolvedControls = $controlResolution.Resolved
     $missingControls = @($controlResolution.Missing)
 
@@ -941,7 +964,7 @@ function Start-QOTMainWindow {
         Show-QOTStartupErrorBanner -Window $window -Message $fatalMessage
     }
 
-    $extraControlResolution = Invoke-QOTControlResolution -Root $window -Names @("TabApps","BtnPlayProgressPath","BtnPlayProgressClip","ExecutionMessage","BtnSettings","BtnHelp","TabHelp","TabSettings")
+    $extraControlResolution = Invoke-QOTControlResolution -Root $script:MainWindow -Names @("TabApps","BtnPlayProgressPath","BtnPlayProgressClip","ExecutionMessage","BtnSettings","BtnHelp","TabHelp","TabSettings")
     foreach ($kv in $extraControlResolution.Resolved.GetEnumerator()) {
         if (-not $resolvedControls.ContainsKey($kv.Key)) {
             $resolvedControls[$kv.Key] = $kv.Value
@@ -1199,32 +1222,40 @@ function Start-QOTMainWindow {
         try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-show"
         
-        Write-QOTStartupTrace "MainWindow.Show called"
-        $window.Show()
-        $window.Activate() | Out-Null
+        if ($appCreatedHere) {
 
-        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
-
-        if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
-            Write-QOTStartupTrace "MainWindow not visible after Show; applying safety defaults" 'WARN'
             Set-QOTWindowSafetyDefaults -Window $window
+            Write-QOTStartupTrace "Starting Application.Run loop for MainWindow"
+            [void]$app.Run($window)
+        }
+        else {
+            Write-QOTStartupTrace "MainWindow.Show called"
             $window.Show()
             $window.Activate() | Out-Null
-            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
+
+            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
+
+            if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
+                Write-QOTStartupTrace "MainWindow not visible after Show; applying safety defaults" 'WARN'
+                Set-QOTWindowSafetyDefaults -Window $window
+                $window.Show()
+                $window.Activate() | Out-Null
+                Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
+            }
+
+            if (-not $window.ShowInTaskbar -or $window.Opacity -lt 1) {
+                Write-QOTStartupTrace "MainWindow taskbar/opacity defaults were not normal; enforcing safety defaults" 'WARN'
+                Set-QOTWindowSafetyDefaults -Window $window
+                Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-taskbar-opacity-fix"
+            }
+
+            $window.Add_Closed({
+                try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvokeShutdown([System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
+            })
+
+            Write-QOTStartupTrace "Starting Dispatcher.Run loop for MainWindow"
+            [System.Windows.Threading.Dispatcher]::Run()
         }
-
-        if (-not $window.ShowInTaskbar -or $window.Opacity -lt 1) {
-            Write-QOTStartupTrace "MainWindow taskbar/opacity defaults were not normal; enforcing safety defaults" 'WARN'
-            Set-QOTWindowSafetyDefaults -Window $window
-            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-taskbar-opacity-fix"
-        }
-
-        $window.Add_Closed({
-            try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvokeShutdown([System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
-        })
-
-        Write-QOTStartupTrace "Starting Dispatcher.Run loop for MainWindow"
-        [System.Windows.Threading.Dispatcher]::Run()
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
