@@ -356,8 +356,22 @@ try {
 
     try { if ($splash) { $splash.Close() } } catch { }
 
-    & $script:QOTLog "Intro handed off to main window" "INFO"
-    $null = $mainWindow.ShowDialog()
+    $app = [System.Windows.Application]::Current
+    if (-not $app) {
+        $app = New-Object System.Windows.Application
+    }
+
+    $app.MainWindow = $mainWindow
+
+    Write-StartupMark "Calling MainWindow.Show()"
+    & $script:QOTLog "Calling MainWindow.Show()" "INFO"
+    $mainWindow.Show()
+
+    Write-StartupMark "Entering WPF Run loop (app.Run)"
+    & $script:QOTLog "Entering WPF Run loop (app.Run)" "INFO"
+    $null = $app.Run($mainWindow)
+    Write-StartupMark "WPF Run loop exited"
+    & $script:QOTLog "WPF Run loop exited" "INFO"
 }
 finally {
     $WarningPreference = $oldWarningPreference
