@@ -1214,7 +1214,7 @@ function Start-QOTMainWindow {
         try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-show"
 
-        Write-QOTStartupTrace "MainWindow.Show() called"
+        Write-QOTStartupTrace "Calling MainWindow.Show()"
         $window.Show()
         $window.Activate() | Out-Null
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
@@ -1228,8 +1228,9 @@ function Start-QOTMainWindow {
                 Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
             }
 
-            Write-QOTStartupTrace "Entering dispatcher loop (Application.Run)"
-            [void]$app.Run()
+            Write-QOTStartupTrace "Entering WPF dispatcher loop"
+            [void]$app.Run($window)
+            Write-QOTStartupTrace "Dispatcher loop ended"
         }
         else {
 
@@ -1251,8 +1252,9 @@ function Start-QOTMainWindow {
                 try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvokeShutdown([System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
             })
 
-            Write-QOTStartupTrace "Entering dispatcher loop (Dispatcher.Run)"
+            Write-QOTStartupTrace "Entering WPF dispatcher loop"
             [System.Windows.Threading.Dispatcher]::Run()
+            Write-QOTStartupTrace "Dispatcher loop ended"
         }
     }
     catch {
