@@ -186,6 +186,10 @@ function Initialize-QOTTweaksAndCleaningUI {
             }
 
             try { Write-QLog ("Tweaks & Cleaning actions mapped in UI module: {0}" -f $actionsSnapshot.Count) "INFO" } catch { }
+            try {
+                $catalogState = Get-QOTActionCatalogState
+                Write-QLog ("ActionCatalog instance: {0} hash={1} count={2} (right before Tweaks UI mapping check)" -f $catalogState.TypeName, $catalogState.HashCode, $catalogState.Count) "INFO"
+            } catch { }
             try { Write-QLog ("Total registered action definitions: {0}" -f (Get-QOTActionDefinitionCount)) "INFO" } catch { }
 
             if ($missingFromActionList.Count -gt 0) {
