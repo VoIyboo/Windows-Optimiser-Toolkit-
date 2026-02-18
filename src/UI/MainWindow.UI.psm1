@@ -340,131 +340,6 @@ function Run-QOTSelectedTasks {
         }
     }
 
-function Find-QOTControlByNameDeep {
-    param(
-        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
-        [Parameter(Mandatory)][string]$Name
-    )
-
-    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
-
-    try {
-        if ($Root -is [System.Windows.FrameworkElement]) {
-            $direct = $Root.FindName($Name)
-            if ($direct) { return $direct }
-        }
-    } catch { }
-
-    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
-    $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
-    $q.Enqueue($Root) | Out-Null
-
-    while ($q.Count -gt 0) {
-        $cur = $q.Dequeue()
-        if (-not $cur) { continue }
-
-        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
-        if (-not $visited.Add($objId)) { continue }
-
-        if ($cur -is [System.Windows.FrameworkElement]) {
-            if ($cur.Name -eq $Name) { return $cur }
-            try {
-                $withinScope = $cur.FindName($Name)
-                if ($withinScope) { return $withinScope }
-            } catch { }
-        } elseif ($cur -is [System.Windows.FrameworkContentElement]) {
-            if ($cur.Name -eq $Name) { return $cur }
-        }
-
-        try {
-            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
-                if ($child) { $q.Enqueue($child) | Out-Null }
-            }
-        } catch { }
-
-        if ($cur -is [System.Windows.DependencyObject]) {
-            try {
-                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
-                for ($i = 0; $i -lt $count; $i++) {
-                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
-                    if ($child) { $q.Enqueue($child) | Out-Null }
-                }
-            } catch { }
-        }
-    }
-
-function Find-QOTControlByNameDeep {
-    param(
-        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
-        [Parameter(Mandatory)][string]$Name
-    )
-
-    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
-
-    try {
-        if ($Root -is [System.Windows.FrameworkElement]) {
-            $direct = $Root.FindName($Name)
-            if ($direct) { return $direct }
-        }
-    } catch { }
-
-    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
-    $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
-    $q.Enqueue($Root) | Out-Null
-
-    while ($q.Count -gt 0) {
-        $cur = $q.Dequeue()
-        if (-not $cur) { continue }
-
-        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
-        if (-not $visited.Add($objId)) { continue }
-
-        if ($cur -is [System.Windows.FrameworkElement]) {
-            if ($cur.Name -eq $Name) { return $cur }
-            try {
-                $withinScope = $cur.FindName($Name)
-                if ($withinScope) { return $withinScope }
-            } catch { }
-        } elseif ($cur -is [System.Windows.FrameworkContentElement]) {
-            if ($cur.Name -eq $Name) { return $cur }
-        }
-
-        try {
-            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
-                if ($child) { $q.Enqueue($child) | Out-Null }
-            }
-        } catch { }
-
-        if ($cur -is [System.Windows.DependencyObject]) {
-            try {
-                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
-                for ($i = 0; $i -lt $count; $i++) {
-                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
-                    if ($child) { $q.Enqueue($child) | Out-Null }
-                }
-            } catch { }
-        }
-    }
-
-    return $null
-}
-
-function Show-QOTStartupErrorBanner {
-    param(
-        [Parameter(Mandatory)][System.Windows.Window]$Window,
-        [Parameter(Mandatory)][string]$Message
-    )
-
-    $banner = Find-QOTControlByNameDeep -Root $Window -Name "ExecutionMessage"
-    if (-not $banner) {
-        Write-QOTStartupTrace ("Startup error banner control not found. Message: {0}" -f $Message) 'ERROR'
-        return
-    }
-
-    $banner.Text = $Message
-    $banner.Visibility = [System.Windows.Visibility]::Visible
-}
-
     return $null
 }
 
@@ -612,6 +487,78 @@ function Show-QOTStartupErrorBanner {
     }
     Write-Host "Summary: Success=$successCount Skipped=$skippedCount Failed=$failedCount"
     Write-Host "No more tasks to do."
+}
+
+function Find-QOTControlByNameDeep {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if (-not $Root -or [string]::IsNullOrWhiteSpace($Name)) { return $null }
+
+    try {
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            $direct = $Root.FindName($Name)
+            if ($direct) { return $direct }
+        }
+    } catch { }
+
+    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+    $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
+    $q.Enqueue($Root) | Out-Null
+
+    while ($q.Count -gt 0) {
+        $cur = $q.Dequeue()
+        if (-not $cur) { continue }
+
+        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+        if (-not $visited.Add($objId)) { continue }
+
+        if ($cur -is [System.Windows.FrameworkElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+            try {
+                $withinScope = $cur.FindName($Name)
+                if ($withinScope) { return $withinScope }
+            } catch { }
+        } elseif ($cur -is [System.Windows.FrameworkContentElement]) {
+            if ($cur.Name -eq $Name) { return $cur }
+        }
+
+        try {
+            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                if ($child) { $q.Enqueue($child) | Out-Null }
+            }
+        } catch { }
+
+        if ($cur -is [System.Windows.DependencyObject]) {
+            try {
+                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
+                for ($i = 0; $i -lt $count; $i++) {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                }
+            } catch { }
+        }
+    }
+
+    return $null
+}
+
+function Show-QOTStartupErrorBanner {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $banner = Find-QOTControlByNameDeep -Root $Window -Name "ExecutionMessage"
+    if (-not $banner) {
+        Write-QOTStartupTrace ("Startup error banner control not found. Message: {0}" -f $Message) 'ERROR'
+        return
+    }
+
+    $banner.Text = $Message
+    $banner.Visibility = [System.Windows.Visibility]::Visible
 }
 
 function Get-QOTNamedElementsMap {
