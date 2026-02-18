@@ -158,6 +158,14 @@ function Initialize-QOTTweaksAndCleaningUI {
             }
 
             try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in UI: {0}" -f $uiCheckboxes.Count) "INFO" } catch { }
+            if ($uiCheckboxes.Count -eq 0) {
+                $criticalMessage = "Tweaks & Cleaning checkboxes discovered in UI: 0. Startup halted to prevent silent action mismatches."
+                try { Write-QLog $criticalMessage "CRITICAL" } catch {
+                    try { Write-QLog $criticalMessage "ERROR" } catch { }
+                }
+                throw $criticalMessage
+            }
+
             foreach ($cb in $uiCheckboxes) {
                 try { Write-QLog ("Tweaks & Cleaning checkbox: {0} | {1}" -f $cb.Name, $cb.Label) "DEBUG" } catch { }
             }
@@ -192,9 +200,17 @@ function Initialize-QOTTweaksAndCleaningUI {
             if ($missingFromActionList.Count -eq 0 -and $missingDefinitions.Count -eq 0 -and $uiCheckboxes.Count -eq $actionsSnapshot.Count -and $duplicateActionNames.Count -eq 0 -and $duplicateUICheckboxes.Count -eq 0) {
                 try { Write-QLog "Tweaks & Cleaning checkbox/action mapping validated: no visual-only checkboxes detected." "INFO" } catch { }
             }
+            if ($missingFromActionList.Count -gt 0 -or $missingDefinitions.Count -gt 0) {
+                $criticalMessage = "Tweaks & Cleaning checkbox/action mapping mismatch detected. Startup halted to prevent incorrect execution wiring."
+                try { Write-QLog $criticalMessage "CRITICAL" } catch {
+                    try { Write-QLog $criticalMessage "ERROR" } catch { }
+                }
+                throw $criticalMessage
+            }
         }
         catch {
-            try { Write-QLog ("Failed to validate Tweaks & Cleaning checkbox mappings: {0}" -f $_.Exception.Message) "WARN" } catch { }
+            try { Write-QLog ("Failed to validate Tweaks & Cleaning checkbox mappings: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+            throw
         }
         
         Register-QOTActionGroup -Name $actionGroupName -GetItems ({
@@ -223,6 +239,7 @@ function Initialize-QOTTweaksAndCleaningUI {
     }
     catch {
         try { Write-QLog ("Tweaks/Cleaning UI initialisation error: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+        throw
     }
 }
 
