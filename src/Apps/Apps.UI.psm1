@@ -57,6 +57,7 @@ function Find-QOTControlByName {
                 }
             } catch { }
         }
+    }
     return $null
 }
 
