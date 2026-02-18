@@ -340,25 +340,6 @@ function Run-QOTSelectedTasks {
         }
     }
 
-    return $null
-}
-
-function Show-QOTStartupErrorBanner {
-    param(
-        [Parameter(Mandatory)][System.Windows.Window]$Window,
-        [Parameter(Mandatory)][string]$Message
-    )
-
-    $banner = Find-QOTControlByNameDeep -Root $Window -Name "ExecutionMessage"
-    if (-not $banner) {
-        Write-QOTStartupTrace ("Startup error banner control not found. Message: {0}" -f $Message) 'ERROR'
-        return
-    }
-
-    $banner.Text = $Message
-    $banner.Visibility = [System.Windows.Visibility]::Visible
-}
-
     try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in Play handler: {0}" -f $discoveredCheckboxes) "INFO" } catch { }
 
     $appsGrid = $activeWindow.FindName("AppsGrid")
