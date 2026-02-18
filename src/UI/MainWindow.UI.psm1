@@ -856,7 +856,11 @@ function Start-QOTMainWindow {
         }
     } catch { }
 
-    $requiredControls = @("MainTabControl","BtnPlay","AppsGrid","InstallGrid","TicketsGrid","SettingsHost","HelpHost","TabTickets")
+    $requiredControls = @(
+        "MainTabControl","BtnPlay","AppsGrid","InstallGrid",
+        "TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket",
+        "SettingsHost","HelpHost","TabTickets"
+    )
     $controlResolution = Invoke-QOTControlResolution -Root $window -Names $requiredControls
     $resolvedControls = $controlResolution.Resolved
     $missingControls = @($controlResolution.Missing)
@@ -912,59 +916,68 @@ function Start-QOTMainWindow {
         if (-not (Get-Command Initialize-QOTicketsUI -ErrorAction SilentlyContinue)) {
             throw "Initialize-QOTicketsUI not found. Tickets\Tickets.UI.psm1 did not load or export correctly."
         }
-
+        if (-not (Get-Command Invoke-QOTicketsFilterSafely -ErrorAction SilentlyContinue)) {
+            throw "Invoke-QOTicketsFilterSafely not found after Tickets UI module import."
+        }
         Invoke-QOTStartupStep "Initialise Tickets UI" { $script:TicketsUIInitialised = [bool](Initialize-QOTicketsUI -Window $window) }
         }
         catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-        Write-QOTStartupTrace ("Tickets UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
-        try { Write-QLog ("Tickets UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
+        Write-QOTStartupTrace ("Tickets UI failed to load; startup halted.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("Tickets UI failed to load; startup halted.`n{0}" -f $errorDetail) "ERROR" } catch { }
+        throw
         }
 
     # ------------------------------------------------------------
     # Initialise Tweaks & Cleaning UI
     # ------------------------------------------------------------
         try {
-        if (-not (Get-Command Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue)) {
-            throw "Initialize-QOTTweaksAndCleaningUI not found. TweaksAndCleaning.UI.psm1 did not load or export correctly."
-        }
+            if (-not (Get-Command Initialize-QOTActionCatalog -ErrorAction SilentlyContinue)) {
+                throw "Initialize-QOTActionCatalog not found. Core\\Actions\\ActionsCatalog.psm1 did not load or export correctly."
+            }
 
-        Invoke-QOTStartupStep "Initialise Tweaks UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
-        Write-QOTStartupTrace "Initialise Tweaks UI OK"
+            Invoke-QOTStartupStep "Initialise action catalog" { Initialize-QOTActionCatalog }
         }
         catch {
-        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-        Write-QOTStartupTrace ("Tweaks/Cleaning UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
-        try { Write-QLog ("Tweaks/Cleaning UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
+            $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+            Write-QOTStartupTrace ("Action catalog failed to initialise; startup halted.`n{0}" -f $errorDetail) 'ERROR'
+            try { Write-QLog ("Action catalog failed to initialise; startup halted.`n{0}" -f $errorDetail) "ERROR" } catch { }
+            throw
         }
 
     # ------------------------------------------------------------
     # Initialise Advanced Tweaks UI
     # ------------------------------------------------------------
         try {
-        if (-not (Get-Command Initialize-QOTAdvancedTweaksUI -ErrorAction SilentlyContinue)) {
-            throw "Initialize-QOTAdvancedTweaksUI not found. AdvancedTweaks.UI.psm1 did not load or export correctly."
-        }
+            if (-not (Get-Command Initialize-QOTTweaksAndCleaningUI -ErrorAction SilentlyContinue)) {
+                throw "Initialize-QOTTweaksAndCleaningUI not found. TweaksAndCleaning.UI.psm1 did not load or export correctly."
+            }
 
-        Invoke-QOTStartupStep "Initialise Advanced UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
-        Write-QOTStartupTrace "Initialise Advanced UI OK"
+            Invoke-QOTStartupStep "Initialise Tweaks UI" { Initialize-QOTTweaksAndCleaningUI -Window $window }
+            Write-QOTStartupTrace "Initialise Tweaks UI OK"
         }
         catch {
-        $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-        Write-QOTStartupTrace ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
-        try { Write-QLog ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
+            $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+            Write-QOTStartupTrace ("Tweaks/Cleaning UI failed to load; startup halted.`n{0}" -f $errorDetail) 'ERROR'
+            try { Write-QLog ("Tweaks/Cleaning UI failed to load; startup halted.`n{0}" -f $errorDetail) "ERROR" } catch { }
+            throw
         }
 
     # ------------------------------------------------------------
     # Register action catalog (central ActionId mappings)
     # ------------------------------------------------------------
         try {
-        if (Get-Command Initialize-QOTActionCatalog -ErrorAction SilentlyContinue) {
-            Invoke-QOTStartupStep "Initialise action catalog" { Initialize-QOTActionCatalog }
-        }
+            if (-not (Get-Command Initialize-QOTAdvancedTweaksUI -ErrorAction SilentlyContinue)) {
+                throw "Initialize-QOTAdvancedTweaksUI not found. AdvancedTweaks.UI.psm1 did not load or export correctly."
+            }
+
+            Invoke-QOTStartupStep "Initialise Advanced UI" { Initialize-QOTAdvancedTweaksUI -Window $window }
+            Write-QOTStartupTrace "Initialise Advanced UI OK"
         }
         catch {
-        try { Write-QLog ("Action catalog failed to initialise: {0}" -f $_.Exception.Message) "ERROR" } catch { }
+            $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+            Write-QOTStartupTrace ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) 'ERROR'
+            try { Write-QLog ("Advanced UI failed to load; continuing startup.`n{0}" -f $errorDetail) "ERROR" } catch { }
         }
 
 
