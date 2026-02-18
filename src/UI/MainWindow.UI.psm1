@@ -673,7 +673,7 @@ function Get-QOTNamedElementsSnapshot {
         [int]$MaxCount = 30
     )
 
-    $result = New-Object System.Collections.Generic.List[object]
+    $result = New-Object System.Collections.ArrayList
     $seenNames = New-Object 'System.Collections.Generic.HashSet[string]'
     $visited = New-Object 'System.Collections.Generic.HashSet[int]'
     $queue = New-Object 'System.Collections.Generic.Queue[System.Object]'
@@ -689,15 +689,20 @@ function Get-QOTNamedElementsSnapshot {
         if ($cur -is [System.Windows.FrameworkElement] -or $cur -is [System.Windows.FrameworkContentElement]) {
             $name = $cur.Name
             if (-not [string]::IsNullOrWhiteSpace($name) -and $seenNames.Add($name)) {
-                $result.Add([pscustomobject]@{ Name = $name; Type = $cur.GetType().FullName }) | Out-Null
+                [void]$result.Add([pscustomobject]@{ Name = $name; Type = $cur.GetType().FullName })
             }
         }
 
-        try {
-            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
-                if ($child) { $queue.Enqueue($child) | Out-Null }
+        if ($cur -is [System.Windows.DependencyObject]) {
+            try {
+                foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                    if ($child) { $queue.Enqueue($child) | Out-Null }
+                }
             }
-        } catch { }
+            catch {
+                Write-QOTStartupTrace ("Named elements snapshot logical-tree walk skipped for {0}: {1}" -f $cur.GetType().FullName, $_.Exception.Message) 'DEBUG'
+            }
+        }
 
         if ($cur -is [System.Windows.DependencyObject]) {
             try {
@@ -711,6 +716,54 @@ function Get-QOTNamedElementsSnapshot {
     }
 
     return @($result)
+}
+
+function Write-QOTWindowVisibilityDiagnostics {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [string]$Prefix = "MainWindow"
+    )
+
+    $diagnostic = "{0} visibility: IsVisible={1}; Visibility={2}; WindowState={3}; Left={4}; Top={5}; Width={6}; Height={7}; Opacity={8}; ShowInTaskbar={9}" -f `
+        $Prefix, $Window.IsVisible, $Window.Visibility, $Window.WindowState, $Window.Left, $Window.Top, $Window.Width, $Window.Height, $Window.Opacity, $Window.ShowInTaskbar
+    Write-QOTStartupTrace $diagnostic
+
+    $app = [System.Windows.Application]::Current
+    if ($app) {
+        $currentMainWindowType = if ($app.MainWindow) { $app.MainWindow.GetType().FullName } else { '<null>' }
+        Write-QOTStartupTrace ("Application.Current.MainWindow currently: {0}" -f $currentMainWindowType)
+    } else {
+        Write-QOTStartupTrace "Application.Current is null while logging visibility diagnostics" 'WARN'
+    }
+}
+
+function Set-QOTWindowSafetyDefaults {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window
+    )
+
+    $Window.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
+    $Window.WindowState = [System.Windows.WindowState]::Normal
+    $Window.Visibility = [System.Windows.Visibility]::Visible
+    $Window.ShowInTaskbar = $true
+    $Window.Opacity = 1
+
+    $virtualLeft = [System.Windows.SystemParameters]::VirtualScreenLeft
+    $virtualTop = [System.Windows.SystemParameters]::VirtualScreenTop
+    $virtualWidth = [System.Windows.SystemParameters]::VirtualScreenWidth
+    $virtualHeight = [System.Windows.SystemParameters]::VirtualScreenHeight
+
+    $hasInvalidLeft = [double]::IsNaN($Window.Left) -or [double]::IsInfinity($Window.Left)
+    $hasInvalidTop = [double]::IsNaN($Window.Top) -or [double]::IsInfinity($Window.Top)
+    $hasOffscreenLeft = ($Window.Left -lt $virtualLeft) -or ($Window.Left -gt ($virtualLeft + $virtualWidth))
+    $hasOffscreenTop = ($Window.Top -lt $virtualTop) -or ($Window.Top -gt ($virtualTop + $virtualHeight))
+
+    if ($hasInvalidLeft -or $hasInvalidTop -or $hasOffscreenLeft -or $hasOffscreenTop) {
+        $width = if ($Window.Width -gt 0) { $Window.Width } else { 1200 }
+        $height = if ($Window.Height -gt 0) { $Window.Height } else { 800 }
+        $Window.Left = $virtualLeft + (($virtualWidth - $width) / 2)
+        $Window.Top = $virtualTop + (($virtualHeight - $height) / 2)
+    }
 }
 
 function Start-QOTMainWindow {
@@ -820,6 +873,13 @@ function Start-QOTMainWindow {
     }
 
     $script:MainWindow = $window
+    $app = [System.Windows.Application]::Current
+    if ($app) {
+        $app.MainWindow = $window
+        Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $window.GetType().FullName)
+    } else {
+        Write-QOTStartupTrace "Application.Current is null; unable to assign MainWindow" 'WARN'
+    }
     $script:SummaryTextBlock = Find-QOTControlByNameDeep -Root $window -Name "SummaryText"
 
     $window.Add_Loaded({
@@ -1137,8 +1197,34 @@ function Start-QOTMainWindow {
     }
     try {
         try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
+        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-show"
+        
         Write-QOTStartupTrace "MainWindow.Show called"
-        $window.ShowDialog() | Out-Null
+        $window.Show()
+        $window.Activate() | Out-Null
+
+        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
+
+        if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
+            Write-QOTStartupTrace "MainWindow not visible after Show; applying safety defaults" 'WARN'
+            Set-QOTWindowSafetyDefaults -Window $window
+            $window.Show()
+            $window.Activate() | Out-Null
+            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
+        }
+
+        if (-not $window.ShowInTaskbar -or $window.Opacity -lt 1) {
+            Write-QOTStartupTrace "MainWindow taskbar/opacity defaults were not normal; enforcing safety defaults" 'WARN'
+            Set-QOTWindowSafetyDefaults -Window $window
+            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-taskbar-opacity-fix"
+        }
+
+        $window.Add_Closed({
+            try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvokeShutdown([System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
+        })
+
+        Write-QOTStartupTrace "Starting Dispatcher.Run loop for MainWindow"
+        [System.Windows.Threading.Dispatcher]::Run()
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
