@@ -226,6 +226,33 @@ function Apply-TicketsFilter {
     $script:TicketsGrid.Items.Refresh()
 }
 
+function Invoke-QOTicketsFilterSafely {
+    param(
+        [switch]$ForceRefresh
+    )
+
+    $filterCommand = Get-Command -Name "Apply-TicketsFilter" -ErrorAction SilentlyContinue
+    if (-not $filterCommand) {
+        Write-QOTicketsUILog "Tickets: Apply-TicketsFilter is unavailable; skipping filter and continuing." "WARN"
+        if ($ForceRefresh -and $script:TicketsGrid) {
+            try { $script:TicketsGrid.Items.Refresh() } catch { }
+        }
+        return $false
+    }
+
+    try {
+        & $filterCommand
+        return $true
+    }
+    catch {
+        Write-QOTicketsUILog ("Tickets: Apply-TicketsFilter failed; skipping filter. " + $_.Exception.Message) "WARN"
+        if ($ForceRefresh -and $script:TicketsGrid) {
+            try { $script:TicketsGrid.Items.Refresh() } catch { }
+        }
+        return $false
+    }
+}
+
 function Refresh-QOTicketsGrid {
     param(
         [Parameter(Mandatory)][System.Windows.Controls.DataGrid]$Grid,
@@ -236,7 +263,7 @@ function Refresh-QOTicketsGrid {
     try {
         Write-QOTicketsUILog "Tickets: Grid refresh started."
         $script:AllTickets = @(Get-QOTicketsAllItems)
-        Apply-TicketsFilter
+        Invoke-QOTicketsFilterSafely -ForceRefresh
         $sourceType = $null
         try { $sourceType = $Grid.ItemsSource.GetType().FullName } catch { }
 
@@ -459,7 +486,7 @@ function Merge-QOTicketsIntoGridCollection {
             if ($itemsSource -is [System.Collections.ObjectModel.ObservableCollection[object]]) {
                 $itemsSource.Add($ticket) | Out-Null
             } else {
-                Apply-TicketsFilter
+                Invoke-QOTicketsFilterSafely -ForceRefresh
             }
         }
         $addedCount++
@@ -882,7 +909,7 @@ function Initialize-QOTicketsUI {
         if ($LogChange) {
             Write-QOTicketsFilterLog -Open $script:ShowOpen -Closed $script:ShowClosed -Deleted $script:ShowDeleted
         }
-        Apply-TicketsFilter
+        Invoke-QOTicketsFilterSafely -ForceRefresh
     }.GetNewClosure()
 
     $script:TicketsFilterCheckboxHandler = [System.Windows.RoutedEventHandler]{
