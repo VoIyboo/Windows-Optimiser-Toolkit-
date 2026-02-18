@@ -919,26 +919,6 @@ function Start-QOTMainWindow {
         Clear-QOTActionDefinitions
     }
 
-    # ------------------------------------------------------------
-    # Optional: log key names present in LOADED XAML
-    # ------------------------------------------------------------
-    try {
-        $map = Get-QOTNamedElementsMap -Root $window
-        $wanted = @(
-            "AppsGrid","InstallGrid","BtnPlay",
-            "SettingsHost","HelpHost","BtnSettings","BtnHelp","MainTabControl","TabSettings","TabHelp",
-            "TabTickets","TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket"
-        )
-
-        foreach ($k in $wanted) {
-            if ($map.ContainsKey($k)) {
-                Write-QLog ("Found control: {0} ({1})" -f $k, $map[$k]) "DEBUG"
-            } else {
-                Write-QLog ("Missing control in loaded XAML: {0}" -f $k) "DEBUG"
-            }
-        }
-    } catch { }
-
     $requiredControls = @(
         "MainTabControl","BtnPlay","AppsGrid","InstallGrid",
         "TicketsGrid","BtnRefreshTickets","BtnNewTicket","BtnDeleteTicket",
@@ -947,6 +927,18 @@ function Start-QOTMainWindow {
     $controlResolution = Invoke-QOTControlResolution -Root $script:MainWindow -Names $requiredControls
     $resolvedControls = $controlResolution.Resolved
     $missingControls = @($controlResolution.Missing)
+
+    try {
+        foreach ($controlName in $requiredControls) {
+            if ($resolvedControls.ContainsKey($controlName)) {
+                $controlType = $resolvedControls[$controlName].GetType().FullName
+                Write-QOTStartupTrace ("Control resolved from MainWindow instance: {0} ({1})" -f $controlName, $controlType) 'DEBUG'
+            }
+            else {
+                Write-QOTStartupTrace ("Control unresolved from MainWindow instance: {0}" -f $controlName) 'WARN'
+            }
+        }
+    } catch { }
 
     if ($missingControls.Count -eq 0) {
         Write-QOTStartupTrace ("UI controls resolved: OK ({0}/{1})" -f $resolvedControls.Count, $requiredControls.Count)
@@ -1221,19 +1213,25 @@ function Start-QOTMainWindow {
     try {
         try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-show"
+
+        Write-QOTStartupTrace "MainWindow.Show() called"
+        $window.Show()
+        $window.Activate() | Out-Null
+        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
         
         if ($appCreatedHere) {
-
             Set-QOTWindowSafetyDefaults -Window $window
-            Write-QOTStartupTrace "Starting Application.Run loop for MainWindow"
-            [void]$app.Run($window)
+            if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
+                Write-QOTStartupTrace "MainWindow not visible after Show; re-showing with safety defaults" 'WARN'
+                $window.Show()
+                $window.Activate() | Out-Null
+                Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
+            }
+
+            Write-QOTStartupTrace "Entering dispatcher loop (Application.Run)"
+            [void]$app.Run()
         }
         else {
-            Write-QOTStartupTrace "MainWindow.Show called"
-            $window.Show()
-            $window.Activate() | Out-Null
-
-            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
 
             if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
                 Write-QOTStartupTrace "MainWindow not visible after Show; applying safety defaults" 'WARN'
@@ -1253,7 +1251,7 @@ function Start-QOTMainWindow {
                 try { [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvokeShutdown([System.Windows.Threading.DispatcherPriority]::Background) | Out-Null } catch { }
             })
 
-            Write-QOTStartupTrace "Starting Dispatcher.Run loop for MainWindow"
+            Write-QOTStartupTrace "Entering dispatcher loop (Dispatcher.Run)"
             [System.Windows.Threading.Dispatcher]::Run()
         }
     }
