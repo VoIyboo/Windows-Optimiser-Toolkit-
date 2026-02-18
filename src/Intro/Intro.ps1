@@ -363,13 +363,28 @@ try {
 
     $app.MainWindow = $mainWindow
 
+    $isStaThread = [System.Threading.Thread]::CurrentThread.GetApartmentState() -eq [System.Threading.ApartmentState]::STA
+    if (-not $isStaThread) {
+        throw "MainWindow lifecycle must run on an STA thread."
+    }
+
+    if (-not $mainWindow.Dispatcher.CheckAccess()) {
+        throw "MainWindow lifecycle must run on the UI dispatcher thread that created the window."
+    }    
+
     Write-StartupMark "Calling MainWindow.Show()"
     & $script:QOTLog "Calling MainWindow.Show()" "INFO"
+    Write-StartupMark "MainWindow.Show called"
+    & $script:QOTLog "MainWindow.Show called" "INFO"
     $mainWindow.Show()
 
-    Write-StartupMark "Entering WPF Run loop (app.Run)"
-    & $script:QOTLog "Entering WPF Run loop (app.Run)" "INFO"
+    Write-StartupMark "Entering WPF Run loop"
+    & $script:QOTLog "Entering WPF Run loop" "INFO"
+    Write-StartupMark "App.Run entered"
+    & $script:QOTLog "App.Run entered" "INFO"
     $null = $app.Run($mainWindow)
+    Write-StartupMark "App.Run exited"
+    & $script:QOTLog "App.Run exited" "INFO"
     Write-StartupMark "WPF Run loop exited"
     & $script:QOTLog "WPF Run loop exited" "INFO"
 }
