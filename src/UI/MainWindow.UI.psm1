@@ -1014,6 +1014,18 @@ function Start-QOTMainWindow {
             }
 
             Invoke-QOTStartupStep "Initialise action catalog" { Initialize-QOTActionCatalog }
+
+            Invoke-QOTStartupStep "Validate action catalog initialisation" {
+                $actionDefinitionCount = Get-QOTActionDefinitionCount
+                if ($actionDefinitionCount -le 0) {
+                    throw "Action catalog initialised with zero definitions. Tweaks UI initialisation blocked."
+                }
+                try {
+                    $catalogState = Get-QOTActionCatalogState
+                    Write-QLog ("ActionCatalog instance: {0} hash={1} count={2} (after action catalog init before Tweaks UI)" -f $catalogState.TypeName, $catalogState.HashCode, $catalogState.Count) "INFO"
+                } catch { }
+            }
+            
         }
         catch {
             $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
