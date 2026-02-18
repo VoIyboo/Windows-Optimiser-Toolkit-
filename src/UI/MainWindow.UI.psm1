@@ -1246,9 +1246,44 @@ function Start-QOTMainWindow {
                 Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-taskbar-opacity-fix"
             }
         }
-        Write-QOTStartupTrace "Entering app.Run()"
-        $app.Run($window) | Out-Null
-        Write-QOTStartupTrace "Run exited"
+        if (-not $app) {
+            throw "WPF Application instance is null before Run()."
+        }
+        if (-not $window) {
+            throw "MainWindow instance is null before Run()."
+        }
+
+        $currentApartmentState = [System.Threading.Thread]::CurrentThread.GetApartmentState()
+        Write-QOTStartupTrace ("CurrentThread.ApartmentState before Run: {0}" -f $currentApartmentState)
+
+        $app.MainWindow = $window
+        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
+        Write-QOTStartupTrace ("Application ShutdownMode set to: {0}" -f $app.ShutdownMode)
+
+        $window.Add_Loaded({ Write-QOTStartupTrace "MainWindow lifecycle event fired: Loaded" })
+        $window.Add_ContentRendered({ Write-QOTStartupTrace "MainWindow lifecycle event fired: ContentRendered" })
+        $window.Add_Closing({
+            param($sender, $eventArgs)
+            Write-QOTStartupTrace ("MainWindow lifecycle event fired: Closing (Cancel={0})" -f $eventArgs.Cancel)
+        })
+        $window.Add_Closed({ Write-QOTStartupTrace "MainWindow lifecycle event fired: Closed" })
+
+        Write-QOTStartupTrace "Forcing MainWindow.Show() + Activate() immediately before Run"
+        $window.Show()
+        $window.Activate() | Out-Null
+        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-run forced-show"
+
+        Write-QOTStartupTrace "Entering app.Run(mainWindow)"
+        try {
+            $app.Run($window) | Out-Null
+            Write-QOTStartupTrace "app.Run(mainWindow) exited normally"
+        }
+        catch {
+            $runExceptionText = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
+            Write-QOTStartupTrace ("app.Run(mainWindow) threw an exception.`n{0}" -f $runExceptionText) 'ERROR'
+            try { Write-QLog ("app.Run(mainWindow) threw an exception.`n{0}" -f $runExceptionText) "ERROR" } catch { }
+            throw
+        }
     }
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
