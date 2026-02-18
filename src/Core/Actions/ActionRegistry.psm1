@@ -6,7 +6,34 @@ $ErrorActionPreference = "Stop"
 Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction SilentlyContinue
 
 $script:QOT_ActionGroups = New-Object System.Collections.Generic.List[object]
-$script:QOT_ActionDefinitions = @{}
+$script:QOT_ActionDefinitions = $null
+
+function Initialize-QOTActionCatalogStore {
+    if (-not $global:QOT_ActionCatalog -or -not ($global:QOT_ActionCatalog -is [hashtable])) {
+        $global:QOT_ActionCatalog = @{}
+        try {
+            $instance = $global:QOT_ActionCatalog
+            Write-QLog ("ActionCatalog instance: {0} hash={1} count={2} (creation)" -f $instance.GetType().FullName, $instance.GetHashCode(), $instance.Count) "INFO"
+        } catch { }
+    }
+
+    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable]) -or -not [object]::ReferenceEquals($script:QOT_ActionDefinitions, $global:QOT_ActionCatalog)) {
+        $script:QOT_ActionDefinitions = $global:QOT_ActionCatalog
+    }
+
+    return $script:QOT_ActionDefinitions
+}
+
+function Write-QOTActionCatalogState {
+    param(
+        [string]$Context = "state"
+    )
+
+    $catalog = Initialize-QOTActionCatalogStore
+    try {
+        Write-QLog ("ActionCatalog instance: {0} hash={1} count={2} ({3})" -f $catalog.GetType().FullName, $catalog.GetHashCode(), $catalog.Count, $Context) "INFO"
+    } catch { }
+}
 
 function Initialize-QOTActionGroups {
     if (-not $script:QOT_ActionGroups -or -not ($script:QOT_ActionGroups -is [System.Collections.Generic.List[object]])) {
@@ -15,7 +42,9 @@ function Initialize-QOTActionGroups {
 }
 
 function Clear-QOTActionDefinitions {
-    $script:QOT_ActionDefinitions = @{}
+    $catalog = Initialize-QOTActionCatalogStore
+    $catalog.Clear()
+    Write-QOTActionCatalogState -Context "clear"
 }
 
 function Register-QOTActionDefinition {
@@ -25,17 +54,26 @@ function Register-QOTActionDefinition {
         [Parameter(Mandatory)][string]$ScriptPath
     )
 
-    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
-        $script:QOT_ActionDefinitions = @{}
-    }
+    $catalog = Initialize-QOTActionCatalogStore
 
-    $script:QOT_ActionDefinitions[$ActionId] = [pscustomobject]@{
+    $catalog[$ActionId] = [pscustomobject]@{
         ActionId = $ActionId
         Label    = $Label
         ScriptPath  = $ScriptPath
     }
 
     try { Write-QLog ("Registered action definition: {0} -> {1}" -f $ActionId, $ScriptPath) "DEBUG" } catch { }
+    Write-QOTActionCatalogState -Context ("after registration ({0})" -f $ActionId)
+}
+
+
+function Get-QOTActionCatalogState {
+    $catalog = Initialize-QOTActionCatalogStore
+    return [pscustomobject]@{
+        TypeName = $catalog.GetType().FullName
+        HashCode = $catalog.GetHashCode()
+        Count    = $catalog.Count
+    }
 }
 
 function Get-QOTActionDefinition {
@@ -43,31 +81,23 @@ function Get-QOTActionDefinition {
         [Parameter(Mandatory)][string]$ActionId
     )
 
-    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
-        $script:QOT_ActionDefinitions = @{}
-    }
+    $catalog = Initialize-QOTActionCatalogStore
 
-    if ($script:QOT_ActionDefinitions.ContainsKey($ActionId)) {
-        return $script:QOT_ActionDefinitions[$ActionId]
+    if ($catalog.ContainsKey($ActionId)) {
+        return $catalog[$ActionId]
     }
 
     return $null
 }
 
 function Get-QOTActionDefinitions {
-    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
-        $script:QOT_ActionDefinitions = @{}
-    }
-
-    return @($script:QOT_ActionDefinitions.Values)
+    $catalog = Initialize-QOTActionCatalogStore
+    return @($catalog.Values)
 }
 
 function Get-QOTActionDefinitionCount {
-    if (-not $script:QOT_ActionDefinitions -or -not ($script:QOT_ActionDefinitions -is [hashtable])) {
-        $script:QOT_ActionDefinitions = @{}
-    }
-
-    return $script:QOT_ActionDefinitions.Count
+    $catalog = Initialize-QOTActionCatalogStore
+    return $catalog.Count
 }
 
 function Invoke-QOTActionById {
@@ -424,4 +454,4 @@ function Test-QOTAnyActionsSelected {
     }
 }
 
-Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Get-QOTActionDefinitions, Get-QOTActionDefinitionCount, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Get-QOTSelectedActionsInExecutionOrder, Test-QOTAnyActionsSelected
+Export-ModuleMember -Function Clear-QOTActionGroups, Clear-QOTActionDefinitions, Register-QOTActionDefinition, Get-QOTActionDefinition, Get-QOTActionDefinitions, Get-QOTActionDefinitionCount, Get-QOTActionCatalogState, Invoke-QOTActionById, Register-QOTActionGroup, Get-QOTActionGroups, Invoke-QOTRegisteredActions, Get-QOTSelectedActions, Get-QOTSelectedActionsInExecutionOrder, Test-QOTAnyActionsSelected
