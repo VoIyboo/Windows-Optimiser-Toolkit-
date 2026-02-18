@@ -18,16 +18,18 @@ function Write-QOTStartupTrace {
         [ValidateSet('INFO','WARN','ERROR','DEBUG')][string]$Level = 'INFO'
     )
 
-    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-    $line = "[$ts] [STARTUP] $Message"
+    $line = "[STARTUP] $Message"
 
     try {
         if (Get-Command Write-QLog -ErrorAction SilentlyContinue) {
             Write-QLog $line $Level
+            return
         }
     } catch { }
 
-    try { Write-Host $line } catch { }
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+    $consoleLine = "[$ts] $line"
+    try { Write-Host $consoleLine } catch { }
 }
 
 function Get-QOTExceptionReport {
