@@ -340,6 +340,31 @@ function Run-QOTSelectedTasks {
         }
     }
 
+function Resolve-QOTControlSet {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string[]]$Names
+    )
+
+    $resolved = @{}
+    $missing = New-Object System.Collections.Generic.List[string]
+
+    foreach ($name in $Names) {
+        $control = Find-QOTControlByNameDeep -Root $Root -Name $name
+        if ($control) {
+            $resolved[$name] = $control
+        }
+        else {
+            $missing.Add($name) | Out-Null
+        }
+    }
+
+    return [pscustomobject]@{
+        Resolved = $resolved
+        Missing  = @($missing)
+    }
+}
+
     try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in Play handler: {0}" -f $discoveredCheckboxes) "INFO" } catch { }
 
     $appsGrid = $activeWindow.FindName("AppsGrid")
@@ -581,6 +606,52 @@ function Get-QOTNamedElementsMap {
     return $map
 }
 
+function Get-QOTNamedElementsSnapshot {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [int]$MaxCount = 30
+    )
+
+    $result = New-Object System.Collections.Generic.List[object]
+    $seenNames = New-Object 'System.Collections.Generic.HashSet[string]'
+    $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+    $queue = New-Object 'System.Collections.Generic.Queue[System.Object]'
+    $queue.Enqueue($Root) | Out-Null
+
+    while ($queue.Count -gt 0 -and $result.Count -lt $MaxCount) {
+        $cur = $queue.Dequeue()
+        if (-not $cur) { continue }
+
+        $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+        if (-not $visited.Add($objId)) { continue }
+
+        if ($cur -is [System.Windows.FrameworkElement] -or $cur -is [System.Windows.FrameworkContentElement]) {
+            $name = $cur.Name
+            if (-not [string]::IsNullOrWhiteSpace($name) -and $seenNames.Add($name)) {
+                $result.Add([pscustomobject]@{ Name = $name; Type = $cur.GetType().FullName }) | Out-Null
+            }
+        }
+
+        try {
+            foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                if ($child) { $queue.Enqueue($child) | Out-Null }
+            }
+        } catch { }
+
+        if ($cur -is [System.Windows.DependencyObject]) {
+            try {
+                $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur)
+                for ($i = 0; $i -lt $count; $i++) {
+                    $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                    if ($child) { $queue.Enqueue($child) | Out-Null }
+                }
+            } catch { }
+        }
+    }
+
+    return @($result)
+}
+
 function Start-QOTMainWindow {
     param(
         [Parameter(Mandatory)]
@@ -673,6 +744,20 @@ function Start-QOTMainWindow {
         throw "Failed to load MainWindow from XAML"
     }
 
+    Write-QOTStartupTrace ("MainWindow XAML path: {0}" -f ([System.IO.Path]::GetFullPath($xamlPath)))
+    Write-QOTStartupTrace ("MainWindow root type: {0}" -f $window.GetType().FullName)
+    try {
+        $namedSnapshot = Get-QOTNamedElementsSnapshot -Root $window -MaxCount 30
+        if ($namedSnapshot.Count -gt 0) {
+            Write-QOTStartupTrace ("First {0} named elements: {1}" -f $namedSnapshot.Count, (($namedSnapshot | ForEach-Object { "{0}<{1}>" -f $_.Name, $_.Type }) -join ', '))
+        }
+        else {
+            Write-QOTStartupTrace "First named elements: none discovered" 'WARN'
+        }
+    } catch {
+        Write-QOTStartupTrace ("Failed to enumerate named elements snapshot: {0}" -f $_.Exception.Message) 'WARN'
+    }
+
     $script:MainWindow = $window
     $script:SummaryTextBlock = Find-QOTControlByNameDeep -Root $window -Name "SummaryText"
 
@@ -710,38 +795,36 @@ function Start-QOTMainWindow {
         }
     } catch { }
 
-    $requiredControls = @(
-        "MainTabControl","BtnPlay","AppsGrid","InstallGrid","TicketsGrid","SettingsHost","HelpHost","TabTickets"
-    )
-    $resolvedControls = @{}
-    $missingControls = New-Object System.Collections.Generic.List[string]
-
-    foreach ($controlName in $requiredControls) {
-        $control = Find-QOTControlByNameDeep -Root $window -Name $controlName
-        if ($control) {
-            $resolvedControls[$controlName] = $control
-        } else {
-            $missingControls.Add($controlName) | Out-Null
-        }
-    }
+    $requiredControls = @("MainTabControl","BtnPlay","AppsGrid","InstallGrid","TicketsGrid","SettingsHost","HelpHost","TabTickets")
+    $controlResolution = Resolve-QOTControlSet -Root $window -Names $requiredControls
+    $resolvedControls = $controlResolution.Resolved
+    $missingControls = @($controlResolution.Missing)
 
     if ($missingControls.Count -eq 0) {
         Write-QOTStartupTrace ("UI controls resolved: OK ({0}/{1})" -f $resolvedControls.Count, $requiredControls.Count)
     } else {
-        Write-QOTStartupTrace ("UI controls resolved with warnings ({0}/{1}). Missing: {2}" -f $resolvedControls.Count, $requiredControls.Count, ($missingControls -join ', ')) 'WARN'
+        Write-QOTStartupTrace ("UI controls resolution FAILED ({0}/{1}). Missing: {2}" -f $resolvedControls.Count, $requiredControls.Count, ($missingControls -join ', ')) 'WARN'
     }
 
-    $criticalMissing = @($missingControls | Where-Object { $_ -in @("BtnPlay", "MainTabControl") })
+    $criticalRequiredControls = @("BtnPlay", "MainTabControl")
+    $criticalMissing = @($criticalRequiredControls | Where-Object { -not $resolvedControls.ContainsKey($_) })
     $hasCriticalResolutionFailure = ($criticalMissing.Count -gt 0)
     if ($hasCriticalResolutionFailure) {
-        $fatalMessage = "Fatal UI wiring error. Missing controls: {0}" -f ($missingControls -join ', ')
+        $fatalMessage = "Critical UI controls missing: {0}. Modules (Apps/Tickets/Tweaks) will not be wired." -f ($criticalMissing -join ', ')
         Write-QOTStartupTrace $fatalMessage 'ERROR'
         try { Write-QLog $fatalMessage 'ERROR' } catch { }
         Show-QOTStartupErrorBanner -Window $window -Message $fatalMessage
     }
 
+    $extraControlResolution = Resolve-QOTControlSet -Root $window -Names @("TabApps","BtnPlayProgressPath","BtnPlayProgressClip","ExecutionMessage","BtnSettings","BtnHelp","TabHelp","TabSettings")
+    foreach ($kv in $extraControlResolution.Resolved.GetEnumerator()) {
+        if (-not $resolvedControls.ContainsKey($kv.Key)) {
+            $resolvedControls[$kv.Key] = $kv.Value
+        }
+    }
+
     $tabs    = $resolvedControls["MainTabControl"]
-    $tabApps = Find-QOTControlByNameDeep -Root $window -Name "TabApps"
+    $tabApps = $resolvedControls["TabApps"]
 
     # ------------------------------------------------------------
     # Initialise Apps UI
@@ -829,9 +912,9 @@ function Start-QOTMainWindow {
    # Wire Play button (global action registry)
     # ------------------------------------------------------------
         $btnPlay = $resolvedControls["BtnPlay"]
-        $playProgressPath = Find-QOTControlByNameDeep -Root $window -Name "BtnPlayProgressPath"
-        $playProgressClip = Find-QOTControlByNameDeep -Root $window -Name "BtnPlayProgressClip"
-        $executionMessage = Find-QOTControlByNameDeep -Root $window -Name "ExecutionMessage"
+        $playProgressPath = $resolvedControls["BtnPlayProgressPath"]
+        $playProgressClip = $resolvedControls["BtnPlayProgressClip"]
+        $executionMessage = $resolvedControls["ExecutionMessage"]
 
     if ($btnPlay) {
         $null = Set-QOTUIEnabledState -Control $btnPlay -IsEnabled $true
@@ -937,11 +1020,11 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Gear icon switches to Settings tab (tab is hidden)
     # ------------------------------------------------------------
-        $btnSettings = Find-QOTControlByNameDeep -Root $window -Name "BtnSettings"
-        $btnHelp     = Find-QOTControlByNameDeep -Root $window -Name "BtnHelp"
-        $tabHelp     = Find-QOTControlByNameDeep -Root $window -Name "TabHelp"
-        $tabSettings = Find-QOTControlByNameDeep -Root $window -Name "TabSettings"
-
+        $btnSettings = $resolvedControls["BtnSettings"]
+        $btnHelp     = $resolvedControls["BtnHelp"]
+        $tabHelp     = $resolvedControls["TabHelp"]
+        $tabSettings = $resolvedControls["TabSettings"]
+        
         if ($btnSettings -and $tabs -and $tabSettings) {
             $btnSettings.Add_Click({
                 $tabs.SelectedItem = $tabSettings
