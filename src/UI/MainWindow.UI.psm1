@@ -256,6 +256,92 @@ function Invoke-QOTPlayCompletionSound {
     }
 }
 
+function Resolve-QOTControlSet {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string[]]$Names
+    )
+
+    $resolved = @{}
+    $missing = New-Object System.Collections.Generic.List[string]
+
+    foreach ($name in $Names) {
+        $control = Find-QOTControlByNameDeep -Root $Root -Name $name
+        if ($control) {
+            $resolved[$name] = $control
+        }
+        else {
+            $missing.Add($name) | Out-Null
+        }
+    }
+
+    return [pscustomobject]@{
+        Resolved = $resolved
+        Missing  = @($missing)
+    }
+}
+
+function Resolve-QOTControlSetFallback {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string[]]$Names
+    )
+
+    $resolved = @{}
+    $missing = New-Object System.Collections.Generic.List[string]
+
+    foreach ($name in $Names) {
+        $control = Find-QOTControlByNameDeep -Root $Root -Name $name
+        if ($control) {
+            $resolved[$name] = $control
+        }
+        else {
+            $missing.Add($name) | Out-Null
+        }
+    }
+
+    return [pscustomobject]@{
+        Resolved = $resolved
+        Missing  = @($missing)
+    }
+}
+
+function Invoke-QOTControlResolution {
+    param(
+        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)][string[]]$Names
+    )
+
+    $resolverCommand = Get-Command Resolve-QOTControlSet -ErrorAction SilentlyContinue
+    $resolverAvailable = [bool]$resolverCommand
+
+    Write-QOTStartupTrace ("Resolve-QOTControlSet available: {0}" -f $resolverAvailable)
+
+    if ($resolverCommand) {
+        $resolverSource = if ($resolverCommand.Source) { $resolverCommand.Source } else { '<none>' }
+        $resolverModule = if ($resolverCommand.ModuleName) { $resolverCommand.ModuleName } else { '<none>' }
+        Write-QOTStartupTrace ("Resolve-QOTControlSet provider: Source={0}; ModuleName={1}" -f $resolverSource, $resolverModule) 'DEBUG'
+    }
+
+    if ($resolverAvailable) {
+        try {
+            return Resolve-QOTControlSet -Root $Root -Names $Names
+        }
+        catch {
+            $errorText = "Resolve-QOTControlSet failed; falling back to legacy control resolution. Error: $($_.Exception.Message)"
+            Write-QOTStartupTrace $errorText 'ERROR'
+            try { Write-QLog $errorText 'ERROR' } catch { }
+        }
+    }
+    else {
+        $errorText = "Missing dependency: Resolve-QOTControlSet not found. Falling back to legacy control resolution."
+        Write-QOTStartupTrace $errorText 'ERROR'
+        try { Write-QLog $errorText 'ERROR' } catch { }
+    }
+
+    return Resolve-QOTControlSetFallback -Root $Root -Names $Names
+}
+
 function Run-QOTSelectedTasks {
     param(
         $Window,
@@ -339,31 +425,6 @@ function Run-QOTSelectedTasks {
             }
         }
     }
-
-function Resolve-QOTControlSet {
-    param(
-        [Parameter(Mandatory)][System.Windows.DependencyObject]$Root,
-        [Parameter(Mandatory)][string[]]$Names
-    )
-
-    $resolved = @{}
-    $missing = New-Object System.Collections.Generic.List[string]
-
-    foreach ($name in $Names) {
-        $control = Find-QOTControlByNameDeep -Root $Root -Name $name
-        if ($control) {
-            $resolved[$name] = $control
-        }
-        else {
-            $missing.Add($name) | Out-Null
-        }
-    }
-
-    return [pscustomobject]@{
-        Resolved = $resolved
-        Missing  = @($missing)
-    }
-}
 
     try { Write-QLog ("Tweaks & Cleaning checkboxes discovered in Play handler: {0}" -f $discoveredCheckboxes) "INFO" } catch { }
 
@@ -796,7 +857,7 @@ function Start-QOTMainWindow {
     } catch { }
 
     $requiredControls = @("MainTabControl","BtnPlay","AppsGrid","InstallGrid","TicketsGrid","SettingsHost","HelpHost","TabTickets")
-    $controlResolution = Resolve-QOTControlSet -Root $window -Names $requiredControls
+    $controlResolution = Invoke-QOTControlResolution -Root $window -Names $requiredControls
     $resolvedControls = $controlResolution.Resolved
     $missingControls = @($controlResolution.Missing)
 
@@ -816,7 +877,7 @@ function Start-QOTMainWindow {
         Show-QOTStartupErrorBanner -Window $window -Message $fatalMessage
     }
 
-    $extraControlResolution = Resolve-QOTControlSet -Root $window -Names @("TabApps","BtnPlayProgressPath","BtnPlayProgressClip","ExecutionMessage","BtnSettings","BtnHelp","TabHelp","TabSettings")
+    $extraControlResolution = Invoke-QOTControlResolution -Root $window -Names @("TabApps","BtnPlayProgressPath","BtnPlayProgressClip","ExecutionMessage","BtnSettings","BtnHelp","TabHelp","TabSettings")
     foreach ($kv in $extraControlResolution.Resolved.GetEnumerator()) {
         if (-not $resolvedControls.ContainsKey($kv.Key)) {
             $resolvedControls[$kv.Key] = $kv.Value
@@ -1076,4 +1137,4 @@ function Start-QOTMainWindow {
     if ($PassThru) { return $window }
 }
 
-Export-ModuleMember -Function Start-QOTMainWindow, Set-QOTSummary
+Export-ModuleMember -Function Start-QOTMainWindow, Set-QOTSummary, Resolve-QOTControlSet
