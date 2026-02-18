@@ -1359,4 +1359,4 @@ function Initialize-QOTicketsUI {
     Set-QOTicketsSyncStatus -StatusText $syncStatusText -Message "Tickets ready"
 }
 
-Export-ModuleMember -Function Write-QOTicketsUILog, Initialize-QOTicketsUI, Invoke-QOTicketsEmailSyncAndRefresh, Start-TicketsEmailSyncAsync
+Export-ModuleMember -Function Write-QOTicketsUILog, Initialize-QOTicketsUI, Invoke-QOTicketsFilterSafely, Invoke-QOTicketsEmailSyncAndRefresh, Start-TicketsEmailSyncAsync
