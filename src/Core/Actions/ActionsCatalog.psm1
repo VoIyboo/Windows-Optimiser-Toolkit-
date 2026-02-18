@@ -9,6 +9,11 @@ Import-Module "$PSScriptRoot\ActionRegistry.psm1" -Force -ErrorAction SilentlyCo
 function Initialize-QOTActionCatalog {
     $scriptsBasePath = Join-Path $PSScriptRoot "..\..\Scripts"
 
+    try {
+        Clear-QOTActionDefinitions
+        Write-QOTActionCatalogState -Context "initialise catalog start"
+    } catch { }
+
     function Register-QOTActionScript {
         param(
             [Parameter(Mandatory)][string]$ActionId,
@@ -77,7 +82,7 @@ function Initialize-QOTActionCatalog {
     }
 
     Register-QOTActionScript -ActionId "Apps.RunSelected" -Label "Run selected app actions" -RelativeScriptPath "Apps\\Apps.RunSelected.ps1"   
-
+    try { Write-QOTActionCatalogState -Context "initialise catalog complete" } catch { }
     try { Write-QLog "Action catalog initialised." "DEBUG" } catch { }
 }
 
