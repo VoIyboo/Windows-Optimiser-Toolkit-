@@ -270,12 +270,23 @@ try {
 
     $startupFrame = New-Object System.Windows.Threading.DispatcherFrame
     $startupTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $startupTimeoutMs = 45000
+    $startupTimeoutHit = $false
+    $startupStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     $startupTimer.Interval = [TimeSpan]::FromMilliseconds(120)
     $startupTimer.Add_Tick({
         if ($startupState.Status) {
             Set-FoxSplash $startupState.Percent $startupState.Status
         }
         if ($startupAsync.IsCompleted) {
+            $startupTimer.Stop()
+            $startupFrame.Continue = $false
+            return
+        }
+
+        if ($startupStopwatch.ElapsedMilliseconds -ge $startupTimeoutMs) {
+            $startupTimeoutHit = $true
+            $startupState.Status = "Startup warmup timed out, continuing..."
             $startupTimer.Stop()
             $startupFrame.Continue = $false
         }
@@ -285,7 +296,16 @@ try {
 
     try {
         $null = $startupPs.EndInvoke($startupAsync)
+        if ($startupTimeoutHit) {
+            try {
+                $startupPs.Stop()
+            } catch { }
+            & $script:QOTLog ("[STARTUP] Background startup tasks timed out after {0} ms. Continuing with main window initialisation." -f $startupTimeoutMs) "WARN"
+        } else {
+            $null = $startupPs.EndInvoke($startupAsync)
+        }
     } finally {
+        $startupStopwatch.Stop()
         $startupPs.Dispose()
         $startupRunspace.Dispose()
     }
