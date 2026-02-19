@@ -295,7 +295,6 @@ try {
     [System.Windows.Threading.Dispatcher]::PushFrame($startupFrame)
 
     try {
-        $null = $startupPs.EndInvoke($startupAsync)
         if ($startupTimeoutHit) {
             try {
                 $startupPs.Stop()
@@ -351,7 +350,7 @@ try {
         $app = New-Object System.Windows.Application
     }
 
-    $app.MainWindow = $mainWindow
+    $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
 
     $isStaThread = [System.Threading.Thread]::CurrentThread.GetApartmentState() -eq [System.Threading.ApartmentState]::STA
     if (-not $isStaThread) {
