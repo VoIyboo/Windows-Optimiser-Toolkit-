@@ -841,7 +841,8 @@ function Start-QOTMainWindow {
             $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
             Write-QOTStartupTrace (("Failed to import {0}; continuing startup.`n{1}" -f $moduleSpec.Name, $errorDetail)) 'ERROR'
             try { Write-QLog (("Failed to import {0}; continuing startup.`n{1}" -f $moduleSpec.Name, $errorDetail)) "ERROR" } catch { }
-           
+            Add-QOTStartupIssue -Issues $startupIssues -Message ("Module failed to load: {0}" -f $moduleSpec.Name)
+        }
     }
 
     # ------------------------------------------------------------
