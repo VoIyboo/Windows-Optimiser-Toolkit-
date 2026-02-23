@@ -621,6 +621,16 @@ function Show-QOTStartupErrorBanner {
     $banner.Visibility = [System.Windows.Visibility]::Visible
 }
 
+function Add-QOTStartupIssue {
+    param(
+        [Parameter(Mandatory)][System.Collections.Generic.List[string]]$Issues,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Message)) { return }
+    $Issues.Add($Message) | Out-Null
+}
+
 function Get-QOTNamedElementsMap {
     param(
         [Parameter(Mandatory)]
@@ -800,7 +810,7 @@ function Start-QOTMainWindow {
     )
 
     $basePath = Join-Path $PSScriptRoot ".."
-
+    $startupIssues = New-Object 'System.Collections.Generic.List[string]'
     # ------------------------------------------------------------
     # Core modules
     # ------------------------------------------------------------
@@ -1000,9 +1010,9 @@ function Start-QOTMainWindow {
         }
         catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-        Write-QOTStartupTrace ("Tickets UI failed to load; startup halted.`n{0}" -f $errorDetail) 'ERROR'
-        try { Write-QLog ("Tickets UI failed to load; startup halted.`n{0}" -f $errorDetail) "ERROR" } catch { }
-        throw
+        Write-QOTStartupTrace ("Tickets UI failed to load; continuing startup with Tickets disabled.`n{0}" -f $errorDetail) 'ERROR'
+        try { Write-QLog ("Tickets UI failed to load; continuing startup with Tickets disabled.`n{0}" -f $errorDetail) "ERROR" } catch { }
+        Add-QOTStartupIssue -Issues $startupIssues -Message "Tickets tools failed to load."
         }
 
     # ------------------------------------------------------------
@@ -1029,9 +1039,9 @@ function Start-QOTMainWindow {
         }
         catch {
             $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-            Write-QOTStartupTrace ("Action catalog failed to initialise; startup halted.`n{0}" -f $errorDetail) 'ERROR'
-            try { Write-QLog ("Action catalog failed to initialise; startup halted.`n{0}" -f $errorDetail) "ERROR" } catch { }
-            throw
+            Write-QOTStartupTrace ("Action catalog failed to initialise; continuing startup with Tweaks disabled.`n{0}" -f $errorDetail) 'ERROR'
+            try { Write-QLog ("Action catalog failed to initialise; continuing startup with Tweaks disabled.`n{0}" -f $errorDetail) "ERROR" } catch { }
+            Add-QOTStartupIssue -Issues $startupIssues -Message "Tweaks catalog failed to initialise."
         }
 
     # ------------------------------------------------------------
@@ -1047,9 +1057,9 @@ function Start-QOTMainWindow {
         }
         catch {
             $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
-            Write-QOTStartupTrace ("Tweaks/Cleaning UI failed to load; startup halted.`n{0}" -f $errorDetail) 'ERROR'
-            try { Write-QLog ("Tweaks/Cleaning UI failed to load; startup halted.`n{0}" -f $errorDetail) "ERROR" } catch { }
-            throw
+            Write-QOTStartupTrace ("Tweaks/Cleaning UI failed to load; continuing startup with Tweaks disabled.`n{0}" -f $errorDetail) 'ERROR'
+            try { Write-QLog ("Tweaks/Cleaning UI failed to load; continuing startup with Tweaks disabled.`n{0}" -f $errorDetail) "ERROR" } catch { }
+            Add-QOTStartupIssue -Issues $startupIssues -Message "Tweaks & Cleaning tools failed to load."
         }
 
     # ------------------------------------------------------------
@@ -1129,9 +1139,11 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
         $settingsHost = $resolvedControls["SettingsHost"]
         if (-not $settingsHost) {
-            throw "SettingsHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='SettingsHost' />"
+            Write-QOTStartupTrace "SettingsHost not found. Settings tab content will be unavailable." 'WARN'
+            Add-QOTStartupIssue -Issues $startupIssues -Message "Settings view host is missing."
         }
-
+        
+    if ($settingsHost) {
     try {
         $cmd = Get-Command New-QOTSettingsView -ErrorAction SilentlyContinue
         if (-not $cmd) {
@@ -1156,9 +1168,11 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
         $helpHost = $resolvedControls["HelpHost"]
         if (-not $helpHost) {
-            throw "HelpHost not found. Check MainWindow.xaml contains: <ContentControl x:Name='HelpHost' />"
+            Write-QOTStartupTrace "HelpHost not found. Help tab content will be unavailable." 'WARN'
+            Add-QOTStartupIssue -Issues $startupIssues -Message "Help view host is missing."
         }
-
+        
+    if ($helpHost) {
     try {
         $cmd = Get-Command New-QOTHelpView -ErrorAction SilentlyContinue
         if (-not $cmd) {
@@ -1178,7 +1192,12 @@ function Start-QOTMainWindow {
         $tb.Margin = "10"
         $helpHost.Content = $tb
     }
+    }
 
+    if ($startupIssues.Count -gt 0) {
+        $summary = "Some features failed to load: " + (($startupIssues | Select-Object -Unique) -join " ")
+        Show-QOTStartupErrorBanner -Window $window -Message $summary
+    }
 
     # ------------------------------------------------------------
     # Gear icon switches to Settings tab (tab is hidden)
