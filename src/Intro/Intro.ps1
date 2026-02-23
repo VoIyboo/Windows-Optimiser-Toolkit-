@@ -343,14 +343,17 @@ try {
     $mainWindow.ShowActivated = $true
     $mainWindow.Opacity = 1
 
-    try { if ($splash) { $splash.Close() } } catch { }
-
     $app = [System.Windows.Application]::Current
     if (-not $app) {
         $app = New-Object System.Windows.Application
     }
 
-    $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
+    # Keep the dispatcher alive while transitioning from splash -> main window.
+    # If splash is the only open window and ShutdownMode is OnLastWindowClose,
+    # closing it first can terminate the app before MainWindow is shown.
+    $app.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+
+    try { if ($splash) { $splash.Close() } } catch { }
 
     $isStaThread = [System.Threading.Thread]::CurrentThread.GetApartmentState() -eq [System.Threading.ApartmentState]::STA
     if (-not $isStaThread) {
@@ -363,6 +366,8 @@ try {
 
     Write-StartupMark "Calling MainWindow.Show()"
     & $script:QOTLog "Calling MainWindow.Show()" "INFO"
+    $app.MainWindow = $mainWindow
+    $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
     $mainWindow.Show()
     $mainWindow.Activate() | Out-Null
     Write-StartupMark "MainWindow.Show called"
