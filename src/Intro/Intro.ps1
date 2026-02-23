@@ -329,8 +329,12 @@ try {
     if (-not $mainWindow) {
         $resultTypes = @($mainWindowResult | ForEach-Object { if ($null -eq $_) { '<null>' } else { $_.GetType().FullName } }) -join ', '
         if (-not $resultTypes) { $resultTypes = '<no output>' }
-        & $script:QOTLog "MainWindow warmup returned no window. Output types: $resultTypes" "ERROR"
-        throw "MainWindow warmup failed to create window."
+        & $script:QOTLog "MainWindow warmup returned no window. Output types: $resultTypes" "WARN"
+        & $script:QOTLog "Falling back to direct Start-QOTMain launch without warmup to keep startup resilient." "WARN"
+
+        Stop-StartupChunk "MainWindow warmup"
+        Start-QOTMain -RootPath $rootPath -SplashWindow $splash
+        return
     }
     Write-StartupMark "MainWindow object created"
 
