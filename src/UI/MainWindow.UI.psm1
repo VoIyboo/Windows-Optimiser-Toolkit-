@@ -1163,6 +1163,7 @@ function Start-QOTMainWindow {
         $tb.Margin = "10"
         $settingsHost.Content = $tb
     }
+    }
     # ------------------------------------------------------------
     # Initialise Help UI (hosted in HelpHost)
     # ------------------------------------------------------------
