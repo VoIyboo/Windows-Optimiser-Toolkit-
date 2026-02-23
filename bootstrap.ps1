@@ -32,7 +32,10 @@ try {
     # -------------------------
     # Repo info
     # -------------------------
-    $repoOwner = "VoIyboo"
+    $repoOwners = @(
+        "Volyboo",
+        "VoIyboo"
+    )
     $repoName  = "Windows-Optimiser-Toolkit-"
     if ([string]::IsNullOrWhiteSpace($Branch)) {
         $Branch = "main"
@@ -54,13 +57,30 @@ try {
 
     # Cache bust
     $cacheBust = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-    $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust"
 
     Write-Host "Downloading Quinn Optimiser Toolkit..."
     Write-Host "Branch: $branch"
-    Write-Host $zipUrl
 
-    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing | Out-Null
+    $downloaded = $false
+    $downloadErrors = @()
+
+    foreach ($repoOwner in $repoOwners) {
+        $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust"
+        Write-Host "Trying: $zipUrl"
+
+        try {
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing | Out-Null
+            $downloaded = $true
+            break
+        }
+        catch {
+            $downloadErrors += "[$repoOwner] $($_.Exception.Message)"
+        }
+    }
+
+    if (-not $downloaded) {
+        throw "Failed to download repository zip for branch '$branch'. Errors: $($downloadErrors -join '; ')"
+    }
     Expand-Archive -Path $zipPath -DestinationPath $baseTemp -Force
 
     # -------------------------
