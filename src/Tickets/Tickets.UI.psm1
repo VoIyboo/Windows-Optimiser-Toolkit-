@@ -212,9 +212,10 @@ function New-QOTicketsObservableCollection {
 function Apply-TicketsFilter {
     if (-not $script:TicketsGrid) { return }
 
-    if (-not $script:AllTickets) {
-        $script:AllTickets = @(Get-QOTicketsAllItems)
+    if ($null -eq $script:AllTickets) {
+        $script:AllTickets = @()
     }
+    
     $filterState = [pscustomobject]@{
         ShowOpen    = [bool]$script:ShowOpen
         ShowClosed  = [bool]$script:ShowClosed
@@ -267,10 +268,13 @@ function Refresh-QOTicketsGrid {
         $sourceType = $null
         try { $sourceType = $Grid.ItemsSource.GetType().FullName } catch { }
 
+        $itemSourceCount = 0
+        try { $itemSourceCount = @($script:TicketsGrid.ItemsSource).Count } catch { }
+
         $gridCount = 0
         try { $gridCount = $Grid.Items.Count } catch { }
 
-        Write-QOTicketsUILog ("Tickets: ItemsSource set. Type={0}; Items={1}; GridCount={2}" -f $sourceType, $gridCount, $gridCount)
+        Write-QOTicketsUILog ("Tickets: ItemsSource set. Type={0}; Items={1}; GridCount={2}" -f $sourceType, $itemSourceCount, $gridCount)
         Write-QOTicketsUILog "Tickets: Grid refresh completed."
     }
     catch {
