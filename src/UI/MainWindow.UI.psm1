@@ -826,21 +826,53 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     # Apps modules (data + engine)
     # ------------------------------------------------------------
-    Invoke-QOTStartupStep "Apps module imports" {
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Apps\InstalledApps.psm1")
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Apps\InstallCommonApps.psm1")
+    $appsModuleImports = @(
+        @{ Name = "Apps\InstalledApps.psm1"; Path = (Join-Path $basePath "Apps\InstalledApps.psm1") },
+        @{ Name = "Apps\InstallCommonApps.psm1"; Path = (Join-Path $basePath "Apps\InstallCommonApps.psm1") }
+    )
+
+    foreach ($moduleSpec in $appsModuleImports) {
+        try {
+            Invoke-QOTStartupStep ("Import {0}" -f $moduleSpec.Name) {
+                Import-QOTModuleIfNeeded -Path $moduleSpec.Path
+            }
+        }
+        catch {
+            $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+            Write-QOTStartupTrace (("Failed to import {0}; continuing startup.`n{1}" -f $moduleSpec.Name, $errorDetail)) 'ERROR'
+            try { Write-QLog (("Failed to import {0}; continuing startup.`n{1}" -f $moduleSpec.Name, $errorDetail)) "ERROR" } catch { }
+           
     }
 
     # ------------------------------------------------------------
     # UI modules (import if not already loaded)
     # ------------------------------------------------------------
-    Invoke-QOTStartupStep "UI module imports" {
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Tickets\Tickets.UI.psm1") -Global
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "UI\HelpWindow.UI.psm1")
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Core\Settings\Settings.UI.psm1")
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Apps\Apps.UI.psm1")
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1")
-        Import-QOTModuleIfNeeded -Path (Join-Path $basePath "Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1")
+    $uiModuleImports = @(
+        @{ Name = "Tickets\Tickets.UI.psm1"; Path = (Join-Path $basePath "Tickets\Tickets.UI.psm1"); Global = $true },
+        @{ Name = "UI\HelpWindow.UI.psm1"; Path = (Join-Path $basePath "UI\HelpWindow.UI.psm1") },
+        @{ Name = "Core\Settings\Settings.UI.psm1"; Path = (Join-Path $basePath "Core\Settings\Settings.UI.psm1") },
+        @{ Name = "Apps\Apps.UI.psm1"; Path = (Join-Path $basePath "Apps\Apps.UI.psm1") },
+        @{ Name = "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1"; Path = (Join-Path $basePath "TweaksAndCleaning\CleaningAndMain\TweaksAndCleaning.UI.psm1") },
+        @{ Name = "Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1"; Path = (Join-Path $basePath "Advanced\AdvancedTweaks\AdvancedTweaks.UI.psm1") }
+    )
+
+    foreach ($moduleSpec in $uiModuleImports) {
+        try {
+            Invoke-QOTStartupStep ("Import {0}" -f $moduleSpec.Name) {
+                if ($moduleSpec.Global) {
+                    Import-QOTModuleIfNeeded -Path $moduleSpec.Path -Global
+                }
+                else {
+                    Import-QOTModuleIfNeeded -Path $moduleSpec.Path
+                }
+            }
+        }
+        catch {
+            $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
+            Write-QOTStartupTrace (("Failed to import {0}; continuing startup.`n{1}" -f $moduleSpec.Name, $errorDetail)) 'ERROR'
+            try { Write-QLog (("Failed to import {0}; continuing startup.`n{1}" -f $moduleSpec.Name, $errorDetail)) "ERROR" } catch { }
+            Add-QOTStartupIssue -Issues $startupIssues -Message ("Module failed to load: {0}" -f $moduleSpec.Name)
+        }
     }
 
     if (-not (Get-Command Write-QOTicketsUILog -ErrorAction SilentlyContinue)) {
