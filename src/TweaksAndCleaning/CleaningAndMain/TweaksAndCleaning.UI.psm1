@@ -84,7 +84,103 @@ function Get-QOTNamedElement {
     return $null
 }
 
+function Get-QOTNamedElementsMap {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.DependencyObject]$Root,
+        [Parameter(Mandatory)]
+        [string[]]$Names
+    )
 
+    $lookup = @{}
+    if (-not $Root -or -not $Names -or $Names.Count -eq 0) {
+        return $lookup
+    }
+
+    $remaining = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($name in $Names) {
+        if (-not [string]::IsNullOrWhiteSpace($name)) {
+            $remaining.Add($name) | Out-Null
+        }
+    }
+
+    if ($remaining.Count -eq 0) { return $lookup }
+
+    try {
+        if ($Root -is [System.Windows.FrameworkElement]) {
+            foreach ($name in @($remaining)) {
+                try {
+                    $direct = $Root.FindName($name)
+                    if ($direct) {
+                        $lookup[$name] = $direct
+                        $remaining.Remove($name) | Out-Null
+                    }
+                }
+                catch { }
+            }
+        }
+
+        if ($remaining.Count -eq 0) { return $lookup }
+
+        $visited = New-Object 'System.Collections.Generic.HashSet[int]'
+        $q = New-Object 'System.Collections.Generic.Queue[System.Object]'
+        $q.Enqueue($Root) | Out-Null
+
+        while ($q.Count -gt 0 -and $remaining.Count -gt 0) {
+            $cur = $q.Dequeue()
+            if (-not $cur) { continue }
+
+            $objId = [System.Runtime.CompilerServices.RuntimeHelpers]::GetHashCode($cur)
+            if (-not $visited.Add($objId)) { continue }
+
+            if ($cur -is [System.Windows.FrameworkElement]) {
+                if (-not [string]::IsNullOrWhiteSpace($cur.Name) -and $remaining.Contains($cur.Name)) {
+                    $lookup[$cur.Name] = $cur
+                    $remaining.Remove($cur.Name) | Out-Null
+                }
+
+                foreach ($name in @($remaining)) {
+                    try {
+                        $scoped = $cur.FindName($name)
+                        if ($scoped) {
+                            $lookup[$name] = $scoped
+                            $remaining.Remove($name) | Out-Null
+                        }
+                    }
+                    catch { }
+                }
+            }
+            elseif ($cur -is [System.Windows.FrameworkContentElement]) {
+                if (-not [string]::IsNullOrWhiteSpace($cur.Name) -and $remaining.Contains($cur.Name)) {
+                    $lookup[$cur.Name] = $cur
+                    $remaining.Remove($cur.Name) | Out-Null
+                }
+            }
+
+            try {
+                foreach ($child in [System.Windows.LogicalTreeHelper]::GetChildren($cur)) {
+                    if ($child) { $q.Enqueue($child) | Out-Null }
+                }
+            }
+            catch { }
+
+            if ($cur -is [System.Windows.DependencyObject]) {
+                $count = 0
+                try { $count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($cur) } catch { $count = 0 }
+                for ($i = 0; $i -lt $count; $i++) {
+                    try {
+                        $child = [System.Windows.Media.VisualTreeHelper]::GetChild($cur, $i)
+                        if ($child) { $q.Enqueue($child) | Out-Null }
+                    }
+                    catch { }
+                }
+            }
+        }
+    }
+    catch { }
+
+    return $lookup
+}
 
 function Initialize-QOTTweaksAndCleaningUI {
     param(
@@ -133,8 +229,11 @@ function Initialize-QOTTweaksAndCleaningUI {
 
             $uiCheckboxes = @()
             $missingUICheckboxes = @()
+            $mappedNames = @($actionsSnapshot | ForEach-Object { $_.Name })
+            $namedElements = Get-QOTNamedElementsMap -Root $Window -Names $mappedNames
             foreach ($action in $actionsSnapshot) {
                 $control = Get-QOTNamedElement -Root $Window -Name $action.Name
+                $control = $namedElements[$action.Name]
                 if ($control -and $control -is [System.Windows.Controls.CheckBox]) {
                     $uiCheckboxes += [pscustomobject]@{
                         Name = $control.Name
