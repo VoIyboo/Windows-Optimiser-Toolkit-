@@ -323,7 +323,26 @@ try {
 
     # Route through Start-QOTMain without WarmupOnly so the window lifecycle
     # is owned by MainWindow.UI.psm1 (Show + app.Run) on a single code path.
+    #
+    # Some deployments have reported Start-QOTMain returning immediately after
+    # startup logs report "Starting main window", leaving users with no visible
+    # UI. If that happens in the first couple seconds, attempt a direct
+    # Start-QOTMainWindow fallback path so the app can still recover.
+    $mainWindowLaunchTimer = [System.Diagnostics.Stopwatch]::StartNew()
     Start-QOTMain -RootPath $rootPath -SplashWindow $splash
+    $mainWindowLaunchTimer.Stop()
+    if ($mainWindowLaunchTimer.Elapsed.TotalSeconds -lt 3) {
+        & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms; attempting direct MainWindow fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds)) "WARN"
+
+        $mainWindowModulePath = Join-Path $rootPath "src\UI\MainWindow.UI.psm1"
+        if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
+            if (-not (Test-Path -LiteralPath $mainWindowModulePath)) {
+                throw "MainWindow UI module not found for fallback launch: $mainWindowModulePath"
+            }
+            Import-Module $mainWindowModulePath -Force -ErrorAction Stop
+        }
+
+        
 
     Write-StartupMark "MainWindow run loop exited"
     & $script:QOTLog "MainWindow run loop exited" "INFO"
