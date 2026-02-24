@@ -631,6 +631,24 @@ function Add-QOTStartupIssue {
     $Issues.Add($Message) | Out-Null
 }
 
+function Open-QOTHiddenTab {
+    param(
+        [Parameter(Mandatory)]$Tabs,
+        [Parameter(Mandatory)]$Tab
+    )
+
+    if (-not $Tabs -or -not $Tab) { return }
+
+    # Hidden utility tabs (Help / Settings) are intentionally collapsed in XAML
+    # so they don't appear in the main tab strip. Make the target tab visible
+    # before selecting it when opened via toolbar buttons.
+    if ($Tab.Visibility -ne [System.Windows.Visibility]::Visible) {
+        $Tab.Visibility = [System.Windows.Visibility]::Visible
+    }
+
+    $Tabs.SelectedItem = $Tab
+}
+
 function Get-QOTNamedElementsMap {
     param(
         [Parameter(Mandatory)]
@@ -1243,13 +1261,13 @@ function Start-QOTMainWindow {
         
         if ($btnSettings -and $tabs -and $tabSettings) {
             $btnSettings.Add_Click({
-                $tabs.SelectedItem = $tabSettings
+                Open-QOTHiddenTab -Tabs $tabs -Tab $tabSettings
             })
         }
 
         if ($btnHelp -and $tabs -and $tabHelp) {
             $btnHelp.Add_Click({
-                $tabs.SelectedItem = $tabHelp
+                Open-QOTHiddenTab -Tabs $tabs -Tab $tabHelp
             })
         }
     }
