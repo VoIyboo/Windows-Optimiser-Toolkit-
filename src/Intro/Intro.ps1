@@ -341,8 +341,8 @@ try {
             }
             Import-Module $mainWindowModulePath -Force -ErrorAction Stop
         }
-
-        
+        Start-QOTMainWindow -RootPath $rootPath -SplashWindow $splash
+    }
 
     Write-StartupMark "MainWindow run loop exited"
     & $script:QOTLog "MainWindow run loop exited" "INFO"
