@@ -12,13 +12,38 @@ $ProgressPreference   = "SilentlyContinue"
 
 $originalLocation = Get-Location
 
+function Get-QOTBootstrapLogDir {
+    $candidates = @(
+        (Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"),
+        (Join-Path $env:LOCALAPPDATA "StudioVoly\QuinnToolkit\Logs"),
+        (Join-Path $env:TEMP "QuinnOptimiserToolkit\Logs")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($candidate in $candidates) {
+        try {
+            if (-not (Test-Path -LiteralPath $candidate)) {
+                New-Item -ItemType Directory -Path $candidate -Force | Out-Null
+            }
+
+            # Confirm write access before choosing the folder.
+            $probePath = Join-Path $candidate "write-test.tmp"
+            "ok" | Set-Content -LiteralPath $probePath -Encoding UTF8
+            Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
+
+            return $candidate
+        }
+        catch {
+            # Try next candidate.
+        }
+    }
+
+    throw "Unable to create a writable log directory for bootstrap."
+}
+
 # -------------------------
 # Logging
 # -------------------------
-$logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
-if (-not (Test-Path $logDir)) {
-    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-}
+$logDir = Get-QOTBootstrapLogDir
 
 $bootstrapLog = Join-Path $logDir ("Bootstrap_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 Start-Transcript -Path $bootstrapLog | Out-Null
