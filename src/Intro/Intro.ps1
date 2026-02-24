@@ -347,6 +347,14 @@ try {
     $mainWindow.ShowActivated = $true
     $mainWindow.Opacity = 1
 
+    $app = [System.Windows.Application]::Current
+    if ($app) {
+        # Prevent app-wide shutdown while transitioning from splash -> main window.
+        # With OnLastWindowClose, closing splash before main window is shown can terminate
+        # the dispatcher and cause ShowDialog to return immediately.
+        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+    }
+
     try { if ($splash) { $splash.Close() } } catch { }
 
     $isStaThread = [System.Threading.Thread]::CurrentThread.GetApartmentState() -eq [System.Threading.ApartmentState]::STA
