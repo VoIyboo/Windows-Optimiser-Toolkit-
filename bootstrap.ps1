@@ -1,5 +1,6 @@
 param(
-    [string]$Branch = "main"
+    [string]$Branch = "main",
+    [switch]$VerboseStartup
 )
 
 # bootstrap.ps1
@@ -141,7 +142,19 @@ try {
     # Launch WPF in Windows PowerShell (STA)
     # -------------------------
     $psExe = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-    & $psExe -NoProfile -ExecutionPolicy Bypass -STA -File $introPath -LogPath $introLog
+    $introArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-STA",
+        "-File", $introPath,
+        "-LogPath", $introLog
+    )
+
+    if (-not $VerboseStartup) {
+        $introArgs += "-Quiet"
+    }
+
+    & $psExe @introArgs
 }
 catch {
     try {
