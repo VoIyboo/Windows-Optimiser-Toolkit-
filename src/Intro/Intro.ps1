@@ -347,16 +347,6 @@ try {
     $mainWindow.ShowActivated = $true
     $mainWindow.Opacity = 1
 
-    $app = [System.Windows.Application]::Current
-    if (-not $app) {
-        $app = New-Object System.Windows.Application
-    }
-
-    # Keep the dispatcher alive while transitioning from splash -> main window.
-    # If splash is the only open window and ShutdownMode is OnLastWindowClose,
-    # closing it first can terminate the app before MainWindow is shown.
-    $app.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
-
     try { if ($splash) { $splash.Close() } } catch { }
 
     $isStaThread = [System.Threading.Thread]::CurrentThread.GetApartmentState() -eq [System.Threading.ApartmentState]::STA
@@ -368,25 +358,19 @@ try {
         throw "MainWindow lifecycle must run on the UI dispatcher thread that created the window."
     }    
 
-    Write-StartupMark "Calling MainWindow.Show()"
-    & $script:QOTLog "Calling MainWindow.Show()" "INFO"
-    $app.MainWindow = $mainWindow
-    $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
-    $mainWindow.Show()
-    $mainWindow.Activate() | Out-Null
-    Write-StartupMark "MainWindow.Show called"
-    & $script:QOTLog "MainWindow.Show called" "INFO"
+    Write-StartupMark "Preparing MainWindow dialog loop"
+    & $script:QOTLog "Preparing MainWindow dialog loop" "INFO"
+    $app = [System.Windows.Application]::Current
+    if ($app) {
+        $app.MainWindow = $mainWindow
+        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
+    }
 
-
-    Write-StartupMark "Entering WPF Run loop"
-    & $script:QOTLog "Entering WPF Run loop" "INFO"
-    Write-StartupMark "App.Run entered"
-    & $script:QOTLog "App.Run entered" "INFO"
-    $null = $app.Run($mainWindow)
-    Write-StartupMark "App.Run exited"
-    & $script:QOTLog "App.Run exited" "INFO"
-    Write-StartupMark "WPF Run loop exited"
-    & $script:QOTLog "WPF Run loop exited" "INFO"
+    Write-StartupMark "Entering MainWindow dialog loop"
+    & $script:QOTLog "Entering MainWindow dialog loop" "INFO"
+    $null = $mainWindow.ShowDialog()
+    Write-StartupMark "MainWindow dialog loop exited"
+    & $script:QOTLog "MainWindow dialog loop exited" "INFO"
 }
 finally {
     $WarningPreference = $oldWarningPreference
