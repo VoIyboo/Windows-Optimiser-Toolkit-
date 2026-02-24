@@ -317,68 +317,17 @@ try {
     Set-FoxSplash 92 "Building main window..."
     Refresh-FoxSplash
 
-    Start-StartupChunk "MainWindow warmup"
-
+    Start-StartupChunk "MainWindow launch"
     & $script:QOTLog "Starting main window" "INFO"
+    Write-Host "[STARTUP] MainWindow launch started"
 
-    # MainWindow.UI.psm1 will update splash to Ready, wait 2s, fade, then close.
-   Write-Host "[STARTUP] MainWindow warmup started"
+    # Route through Start-QOTMain without WarmupOnly so the window lifecycle
+    # is owned by MainWindow.UI.psm1 (Show + app.Run) on a single code path.
+    Start-QOTMain -RootPath $rootPath -SplashWindow $splash
 
-    $mainWindowResult = @(Start-QOTMain -RootPath $rootPath -SplashWindow $splash -WarmupOnly -PassThru)
-    $mainWindow = $mainWindowResult | Where-Object { $_ -is [System.Windows.Window] } | Select-Object -Last 1
-    if (-not $mainWindow) {
-        $resultTypes = @($mainWindowResult | ForEach-Object { if ($null -eq $_) { '<null>' } else { $_.GetType().FullName } }) -join ', '
-        if (-not $resultTypes) { $resultTypes = '<no output>' }
-        & $script:QOTLog "MainWindow warmup returned no window. Output types: $resultTypes" "WARN"
-        & $script:QOTLog "Falling back to direct Start-QOTMain launch without warmup to keep startup resilient." "WARN"
-
-        Stop-StartupChunk "MainWindow warmup"
-        Start-QOTMain -RootPath $rootPath -SplashWindow $splash
-        return
-    }
-    Write-StartupMark "MainWindow object created"
-
-    Write-Host "[STARTUP] Intro finished"
-
-    Write-Host "[STARTUP] Showing MainWindow"
-    Stop-StartupChunk "MainWindow warmup"
-
-    $mainWindow.ShowInTaskbar = $true
-    $mainWindow.ShowActivated = $true
-    $mainWindow.Opacity = 1
-
-    $app = [System.Windows.Application]::Current
-    if ($app) {
-        # Prevent app-wide shutdown while transitioning from splash -> main window.
-        # With OnLastWindowClose, closing splash before main window is shown can terminate
-        # the dispatcher and cause ShowDialog to return immediately.
-        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
-    }
-
-    try { if ($splash) { $splash.Close() } } catch { }
-
-    $isStaThread = [System.Threading.Thread]::CurrentThread.GetApartmentState() -eq [System.Threading.ApartmentState]::STA
-    if (-not $isStaThread) {
-        throw "MainWindow lifecycle must run on an STA thread."
-    }
-
-    if (-not $mainWindow.Dispatcher.CheckAccess()) {
-        throw "MainWindow lifecycle must run on the UI dispatcher thread that created the window."
-    }    
-
-    Write-StartupMark "Preparing MainWindow dialog loop"
-    & $script:QOTLog "Preparing MainWindow dialog loop" "INFO"
-    $app = [System.Windows.Application]::Current
-    if ($app) {
-        $app.MainWindow = $mainWindow
-        $app.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
-    }
-
-    Write-StartupMark "Entering MainWindow dialog loop"
-    & $script:QOTLog "Entering MainWindow dialog loop" "INFO"
-    $null = $mainWindow.ShowDialog()
-    Write-StartupMark "MainWindow dialog loop exited"
-    & $script:QOTLog "MainWindow dialog loop exited" "INFO"
+    Write-StartupMark "MainWindow run loop exited"
+    & $script:QOTLog "MainWindow run loop exited" "INFO"
+    Stop-StartupChunk "MainWindow launch"
 }
 finally {
     $WarningPreference = $oldWarningPreference
