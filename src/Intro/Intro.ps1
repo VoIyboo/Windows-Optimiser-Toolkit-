@@ -341,7 +341,7 @@ try {
             }
             Import-Module $mainWindowModulePath -Force -ErrorAction Stop
         }
-        Start-QOTMainWindow -RootPath $rootPath -SplashWindow $splash
+        Start-QOTMainWindow -SplashWindow $splash
     }
 
     Write-StartupMark "MainWindow run loop exited"
