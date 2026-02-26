@@ -13,6 +13,53 @@ $ProgressPreference   = "SilentlyContinue"
 
 $originalLocation = Get-Location
 
+function Invoke-QOTDownloadRepoZip {
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Urls,
+
+        [Parameter(Mandatory)]
+        [string]$OutFile,
+
+        [int]$MaxAttemptsPerUrl = 2
+    )
+
+    $errors = New-Object System.Collections.Generic.List[string]
+
+    foreach ($url in $Urls) {
+        for ($attempt = 1; $attempt -le $MaxAttemptsPerUrl; $attempt++) {
+            try {
+                if (Test-Path -LiteralPath $OutFile) {
+                    Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+                }
+
+                Write-Host ("Trying ({0}/{1}): {2}" -f $attempt, $MaxAttemptsPerUrl, $url)
+                Invoke-WebRequest -Uri $url -OutFile $OutFile -UseBasicParsing | Out-Null
+
+                if (-not (Test-Path -LiteralPath $OutFile)) {
+                    throw "Download completed but zip file was not created."
+                }
+
+                $fileInfo = Get-Item -LiteralPath $OutFile
+                if ($fileInfo.Length -lt 1024) {
+                    throw "Downloaded file is unexpectedly small ($($fileInfo.Length) bytes)."
+                }
+
+                return
+            }
+            catch {
+                $errors.Add("$url (attempt $attempt): $($_.Exception.Message)") | Out-Null
+
+                if ($attempt -lt $MaxAttemptsPerUrl) {
+                    Start-Sleep -Milliseconds 500
+                }
+            }
+        }
+    }
+
+    throw "Failed to download repository zip. Errors: $($errors -join '; ')"
+}
+
 function Get-QOTBootstrapLogDir {
     $candidates = @(
         (Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"),
@@ -87,26 +134,14 @@ try {
     Write-Host "Downloading Quinn Optimiser Toolkit..."
     Write-Host "Branch: $branch"
 
-    $downloaded = $false
-    $downloadErrors = @()
+    $downloadUrls = New-Object System.Collections.Generic.List[string]
 
     foreach ($repoOwner in $repoOwners) {
-        $zipUrl = "https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust"
-        Write-Host "Trying: $zipUrl"
-
-        try {
-            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing | Out-Null
-            $downloaded = $true
-            break
-        }
-        catch {
-            $downloadErrors += "[$repoOwner] $($_.Exception.Message)"
-        }
+        $downloadUrls.Add("https://github.com/$repoOwner/$repoName/archive/refs/heads/$branch.zip?cb=$cacheBust") | Out-Null
+        $downloadUrls.Add("https://codeload.github.com/$repoOwner/$repoName/zip/refs/heads/$branch?cb=$cacheBust") | Out-Null
     }
 
-    if (-not $downloaded) {
-        throw "Failed to download repository zip for branch '$branch'. Errors: $($downloadErrors -join '; ')"
-    }
+    Invoke-QOTDownloadRepoZip -Urls $downloadUrls -OutFile $zipPath
     Expand-Archive -Path $zipPath -DestinationPath $baseTemp -Force
 
     # -------------------------
