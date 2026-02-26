@@ -766,6 +766,10 @@ function Ensure-QOTWpfApplication {
     $existing = [System.Windows.Application]::Current
     if ($existing) {
         Write-QOTStartupTrace ("Using existing WPF Application instance: {0}" -f $existing.GetType().FullName)
+        if ($existing.ShutdownMode -ne [System.Windows.ShutdownMode]::OnMainWindowClose) {
+            $existing.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
+            Write-QOTStartupTrace ("Application.Current.ShutdownMode forced to: {0}" -f $existing.ShutdownMode) 'WARN'
+        }
         if (-not $existing.MainWindow -or -not [object]::ReferenceEquals($existing.MainWindow, $Window)) {
             $existing.MainWindow = $Window
             Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
@@ -1296,7 +1300,7 @@ function Start-QOTMainWindow {
         return
     }
     try {
-        try { if ($SplashWindow) { $SplashWindow.Close() } } catch { }
+
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-show"
 
         Write-QOTStartupTrace "Calling MainWindow.Show()"
@@ -1355,6 +1359,16 @@ function Start-QOTMainWindow {
         $window.Show()
         $window.Activate() | Out-Null
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-run forced-show"
+
+        if ($SplashWindow) {
+            try {
+                Write-QOTStartupTrace "Closing splash window after main window is visible"
+                $SplashWindow.Close()
+            }
+            catch {
+                Write-QOTStartupTrace ("Failed to close splash window cleanly: {0}" -f $_.Exception.Message) 'WARN'
+            }
+        }
 
         Write-QOTStartupTrace "Entering app.Run(mainWindow)"
         try {
