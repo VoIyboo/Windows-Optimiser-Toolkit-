@@ -1394,7 +1394,8 @@ function Start-QOTMainWindow {
                 Write-QOTStartupTrace ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) 'ERROR'
                 try { Write-QLog ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) "ERROR" } catch { }
                 throw
-            }
+            }       
+        }
             
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
