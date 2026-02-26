@@ -34,7 +34,7 @@ function Invoke-QOTDownloadRepoZip {
                 }
 
                 Write-Host ("Trying ({0}/{1}): {2}" -f $attempt, $MaxAttemptsPerUrl, $url)
-                Invoke-WebRequest -Uri $url -OutFile $OutFile -UseBasicParsing | Out-Null
+                Invoke-QOTWebRequestToFile -Uri $url -OutFile $OutFile
 
                 if (-not (Test-Path -LiteralPath $OutFile)) {
                     throw "Download completed but zip file was not created."
@@ -58,6 +58,28 @@ function Invoke-QOTDownloadRepoZip {
     }
 
     throw "Failed to download repository zip. Errors: $($errors -join '; ')"
+}
+
+function Invoke-QOTWebRequestToFile {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Uri,
+
+        [Parameter(Mandatory)]
+        [string]$OutFile
+    )
+
+    $requestParams = @{
+        Uri     = $Uri
+        OutFile = $OutFile
+    }
+
+    $iwrCommand = Get-Command Invoke-WebRequest -ErrorAction Stop
+    if ($iwrCommand.Parameters.ContainsKey('UseBasicParsing')) {
+        $requestParams.UseBasicParsing = $true
+    }
+
+    Invoke-WebRequest @requestParams | Out-Null
 }
 
 function Get-QOTBootstrapLogDir {
@@ -106,8 +128,8 @@ try {
     # Repo info
     # -------------------------
     $repoOwners = @(
-        "Volyboo",
-        "VoIyboo"
+        "VoIyboo",
+        "Volyboo"
     )
     $repoName  = "Windows-Optimiser-Toolkit-"
     if ([string]::IsNullOrWhiteSpace($Branch)) {
@@ -147,20 +169,16 @@ try {
     # -------------------------
     # Resolve extracted folder
     # -------------------------
-    $rootFolder = Get-ChildItem $baseTemp -Directory |
-        Where-Object { $_.Name -like "$repoName*" } |
+    $introCandidate = Get-ChildItem -Path $baseTemp -Filter "Intro.ps1" -File -Recurse |
+        Where-Object { $_.FullName -like "*\src\Intro\Intro.ps1" } |
         Select-Object -First 1
 
     if (-not $rootFolder) {
         throw "Could not locate extracted repo folder"
     }
 
-    $toolkitRoot = $rootFolder.FullName
-    $introPath   = Join-Path $toolkitRoot "src\Intro\Intro.ps1"
-
-    if (-not (Test-Path $introPath)) {
-        throw "Intro.ps1 not found"
-    }
+    $introPath = $introCandidate.FullName
+    $toolkitRoot = Split-Path -Path (Split-Path -Path (Split-Path -Path $introPath -Parent) -Parent) -Parent
 
     $introLog = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 
