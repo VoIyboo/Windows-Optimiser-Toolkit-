@@ -1370,18 +1370,32 @@ function Start-QOTMainWindow {
             }
         }
 
-        Write-QOTStartupTrace "Entering app.Run(mainWindow)"
-        try {
-            $app.Run($window) | Out-Null
-            Write-QOTStartupTrace "app.Run(mainWindow) exited normally"
+        if ($appCreatedHere) {
+            Write-QOTStartupTrace "Entering app.Run(mainWindow)"
+            try {
+                $app.Run($window) | Out-Null
+                Write-QOTStartupTrace "app.Run(mainWindow) exited normally"
+            }
+            catch {
+                $runExceptionText = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
+                Write-QOTStartupTrace ("app.Run(mainWindow) threw an exception.`n{0}" -f $runExceptionText) 'ERROR'
+                try { Write-QLog ("app.Run(mainWindow) threw an exception.`n{0}" -f $runExceptionText) "ERROR" } catch { }
+                throw
+            }
         }
-        catch {
-            $runExceptionText = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
-            Write-QOTStartupTrace ("app.Run(mainWindow) threw an exception.`n{0}" -f $runExceptionText) 'ERROR'
-            try { Write-QLog ("app.Run(mainWindow) threw an exception.`n{0}" -f $runExceptionText) "ERROR" } catch { }
-            throw
-        }
-    }
+        else {
+            Write-QOTStartupTrace "Using existing WPF application run loop; entering MainWindow.ShowDialog()"
+            try {
+                $window.ShowDialog() | Out-Null
+                Write-QOTStartupTrace "MainWindow.ShowDialog() exited normally"
+            }
+            catch {
+                $dialogExceptionText = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
+                Write-QOTStartupTrace ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) 'ERROR'
+                try { Write-QLog ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) "ERROR" } catch { }
+                throw
+            }
+            
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
         Write-QOTStartupTrace ("MainWindow show failed.`n{0}" -f $errorDetail) 'ERROR'
