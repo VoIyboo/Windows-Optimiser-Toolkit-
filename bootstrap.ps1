@@ -173,13 +173,17 @@ try {
         Where-Object { $_.FullName -like "*\src\Intro\Intro.ps1" } |
         Select-Object -First 1
 
-    if (-not $rootFolder) {
+    if (-not $introCandidate) {
         throw "Could not locate extracted repo folder"
     }
 
     $introPath = $introCandidate.FullName
     $toolkitRoot = Split-Path -Path (Split-Path -Path (Split-Path -Path $introPath -Parent) -Parent) -Parent
-
+    
+    if (-not (Test-Path -LiteralPath $toolkitRoot)) {
+        throw "Resolved toolkit root path does not exist: $toolkitRoot"
+    }
+    
     $introLog = Join-Path $logDir ("Intro_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 
     Write-Host ""
