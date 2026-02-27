@@ -169,16 +169,28 @@ try {
     # -------------------------
     # Resolve extracted folder
     # -------------------------
-    $introCandidate = Get-ChildItem -Path $baseTemp -Filter "Intro.ps1" -File -Recurse |
-        Where-Object { $_.FullName -like "*\src\Intro\Intro.ps1" } |
-        Select-Object -First 1
+    $candidateRoots = New-Object System.Collections.Generic.List[string]
+    $candidateRoots.Add($baseTemp) | Out-Null
 
-    if (-not $introCandidate) {
-        throw "Could not locate extracted repo folder"
+    foreach ($directory in (Get-ChildItem -Path $baseTemp -Directory -Recurse -ErrorAction SilentlyContinue)) {
+        $candidateRoots.Add($directory.FullName) | Out-Null
     }
 
-    $introPath = $introCandidate.FullName
-    $toolkitRoot = Split-Path -Path (Split-Path -Path (Split-Path -Path $introPath -Parent) -Parent) -Parent
+    $toolkitRoot = $null
+    $introPath = $null
+
+    foreach ($candidateRoot in ($candidateRoots | Select-Object -Unique)) {
+        $candidateIntro = Join-Path $candidateRoot "src\Intro\Intro.ps1"
+        if (Test-Path -LiteralPath $candidateIntro) {
+            $toolkitRoot = $candidateRoot
+            $introPath = $candidateIntro
+            break
+        }
+    }
+
+    if (-not $introPath) {
+        throw "Could not locate extracted repo folder (missing src\Intro\Intro.ps1 under: $baseTemp)"
+    }
     
     if (-not (Test-Path -LiteralPath $toolkitRoot)) {
         throw "Resolved toolkit root path does not exist: $toolkitRoot"
