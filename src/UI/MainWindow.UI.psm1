@@ -1302,13 +1302,12 @@ function Start-QOTMainWindow {
     try {
 
         Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-show"
-
-        Write-QOTStartupTrace "Calling MainWindow.Show()"
-        $window.Show()
-        $window.Activate() | Out-Null
-        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
         
         if ($appCreatedHere) {
+            Write-QOTStartupTrace "Calling MainWindow.Show()"
+            $window.Show()
+            $window.Activate() | Out-Null
+            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-show"
             Set-QOTWindowSafetyDefaults -Window $window
             if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
                 Write-QOTStartupTrace "MainWindow not visible after Show; re-showing with safety defaults" 'WARN'
@@ -1318,19 +1317,9 @@ function Start-QOTMainWindow {
             }
         }
         else {
-
-            if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
-                Write-QOTStartupTrace "MainWindow not visible after Show; applying safety defaults" 'WARN'
-                Set-QOTWindowSafetyDefaults -Window $window
-                $window.Show()
-                $window.Activate() | Out-Null
-                Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-safety-show"
-            }
-
-            if (-not $window.ShowInTaskbar -or $window.Opacity -lt 1) {
-                Write-QOTStartupTrace "MainWindow taskbar/opacity defaults were not normal; enforcing safety defaults" 'WARN'
-                Set-QOTWindowSafetyDefaults -Window $window
-                Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow post-taskbar-opacity-fix"
+            Write-QOTStartupTrace "Skipping pre-show because existing WPF application path uses MainWindow.ShowDialog()"
+            Set-QOTWindowSafetyDefaults -Window $window
+            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-dialog"
             }
         }
         if (-not $app) {
@@ -1355,10 +1344,12 @@ function Start-QOTMainWindow {
         })
         $window.Add_Closed({ Write-QOTStartupTrace "MainWindow lifecycle event fired: Closed" })
 
-        Write-QOTStartupTrace "Forcing MainWindow.Show() + Activate() immediately before Run"
-        $window.Show()
-        $window.Activate() | Out-Null
-        Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-run forced-show"
+        if ($appCreatedHere) {
+            Write-QOTStartupTrace "Forcing MainWindow.Show() + Activate() immediately before Run"
+            $window.Show()
+            $window.Activate() | Out-Null
+            Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-run forced-show"
+        }
 
         if ($SplashWindow) {
             try {
