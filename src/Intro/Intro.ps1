@@ -336,12 +336,25 @@ try {
     # startup logs report "Starting main window", leaving users with no visible
     # UI. If that happens in the first couple seconds, attempt a direct
     # Start-QOTMainWindow fallback path so the app can still recover.
-    $mainWindowLaunchTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    Start-QOTMain -RootPath $rootPath -SplashWindow $splash
-    $mainWindowLaunchTimer.Stop()
+    $shouldAttemptFallbackLaunch = $false
+
+    try {
+        Start-QOTMain -RootPath $rootPath -SplashWindow $splash
+    }
+    catch {
+        $startMainErrorDetail = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
+        & $script:QOTLog ("[STARTUP] Start-QOTMain threw; attempting direct MainWindow fallback launch.`n{0}" -f $startMainErrorDetail) "ERROR"
+        $shouldAttemptFallbackLaunch = $true
+    }
+    finally {
+        $mainWindowLaunchTimer.Stop()
+    }
     if ($mainWindowLaunchTimer.Elapsed.TotalSeconds -lt 3) {
         & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms; attempting direct MainWindow fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds)) "WARN"
-
+        $shouldAttemptFallbackLaunch = $true
+    }
+    
+    if ($shouldAttemptFallbackLaunch) {
         $mainWindowModulePath = Join-Path $rootPath "src\UI\MainWindow.UI.psm1"
         if (-not (Get-Command Start-QOTMainWindow -ErrorAction SilentlyContinue)) {
             if (-not (Test-Path -LiteralPath $mainWindowModulePath)) {
@@ -349,6 +362,7 @@ try {
             }
             Import-Module $mainWindowModulePath -Force -ErrorAction Stop
         }
+        
         Start-QOTMainWindow -SplashWindow $splash
     }
 
