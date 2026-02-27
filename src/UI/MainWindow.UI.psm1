@@ -1320,7 +1320,6 @@ function Start-QOTMainWindow {
             Write-QOTStartupTrace "Skipping pre-show because existing WPF application path uses MainWindow.ShowDialog()"
             Set-QOTWindowSafetyDefaults -Window $window
             Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow pre-dialog"
-            }
         }
         if (-not $app) {
             throw "WPF Application instance is null before Run()."
@@ -1385,9 +1384,10 @@ function Start-QOTMainWindow {
                 Write-QOTStartupTrace ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) 'ERROR'
                 try { Write-QLog ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) "ERROR" } catch { }
                 throw
-            }       
+            }
         }
-            
+    }
+    
     catch {
         $errorDetail = Get-QOTExceptionReport -Exception $_.Exception
         Write-QOTStartupTrace ("MainWindow show failed.`n{0}" -f $errorDetail) 'ERROR'
