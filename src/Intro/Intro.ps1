@@ -5,7 +5,8 @@
 param(
     [switch]$SkipSplash,
     [string]$LogPath,
-    [switch]$Quiet
+    [switch]$Quiet,
+    [switch]$EnableStartupWarmup
 )
 
 $ErrorActionPreference = "Stop"
@@ -141,25 +142,31 @@ try {
     Stop-StartupChunk "Load engine module"
     Write-StartupMark "Finish module imports"
 
-    Set-FoxSplash 70 "Preparing startup tasks..."
-    Refresh-FoxSplash
-    Start-StartupChunk "Startup runspace preparation"
+    $warmupEnabled = $EnableStartupWarmup.IsPresent
+    if (-not $warmupEnabled) {
+        & $script:QOTLog "[STARTUP] Startup warmup skipped (default launch mode opens MainWindow only)." "INFO"
+    }
 
-    $startupState = [hashtable]::Synchronized(@{
-        Percent   = 70
-        Status    = "Preparing startup tasks..."
-        Completed = $false
-        Error     = $null
-    })
+    if ($warmupEnabled) {
+        Set-FoxSplash 70 "Preparing startup tasks..."
+        Refresh-FoxSplash
+        Start-StartupChunk "Startup runspace preparation"
 
-    $startupRunspace = [runspacefactory]::CreateRunspace()
-    $startupRunspace.ApartmentState = "MTA"
-    $startupRunspace.ThreadOptions  = "ReuseThread"
-    $startupRunspace.Open()
+        $startupState = [hashtable]::Synchronized(@{
+            Percent   = 70
+            Status    = "Preparing startup tasks..."
+            Completed = $false
+            Error     = $null
+        })
 
-    $startupPs = [powershell]::Create()
-    $startupPs.Runspace = $startupRunspace
-    $null = $startupPs.AddScript({
+        $startupRunspace = [runspacefactory]::CreateRunspace()
+        $startupRunspace.ApartmentState = "MTA"
+        $startupRunspace.ThreadOptions  = "ReuseThread"
+        $startupRunspace.Open()
+
+        $startupPs = [powershell]::Create()
+        $startupPs.Runspace = $startupRunspace
+        $null = $startupPs.AddScript({
         param(
             [string]$RootPath,
             [hashtable]$State,
@@ -261,57 +268,58 @@ try {
             $State.Completed = $true
             throw
         }
-    }).AddArgument($rootPath).AddArgument($startupState).AddArgument($script:QOTLogPath)
+        }).AddArgument($rootPath).AddArgument($startupState).AddArgument($script:QOTLogPath)
 
-    Stop-StartupChunk "Startup runspace preparation"
-    Start-StartupChunk "Startup background tasks"
+        Stop-StartupChunk "Startup runspace preparation"
+        Start-StartupChunk "Startup background tasks"
 
-    $startupAsync = $startupPs.BeginInvoke()
+        $startupAsync = $startupPs.BeginInvoke()
 
-    $startupFrame = New-Object System.Windows.Threading.DispatcherFrame
-    $startupTimer = New-Object System.Windows.Threading.DispatcherTimer
-    $startupTimeoutMs = 45000
-    $startupTimeoutHit = $false
-    $startupStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    $startupTimer.Interval = [TimeSpan]::FromMilliseconds(120)
-    $startupTimer.Add_Tick({
-        if ($startupState.Status) {
-            Set-FoxSplash $startupState.Percent $startupState.Status
+        $startupFrame = New-Object System.Windows.Threading.DispatcherFrame
+        $startupTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $startupTimeoutMs = 45000
+        $startupTimeoutHit = $false
+        $startupStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $startupTimer.Interval = [TimeSpan]::FromMilliseconds(120)
+        $startupTimer.Add_Tick({
+            if ($startupState.Status) {
+                Set-FoxSplash $startupState.Percent $startupState.Status
+            }
+            if ($startupAsync.IsCompleted) {
+                $startupTimer.Stop()
+                $startupFrame.Continue = $false
+                return
+            }
+
+            if ($startupStopwatch.ElapsedMilliseconds -ge $startupTimeoutMs) {
+                $startupTimeoutHit = $true
+                $startupState.Status = "Startup warmup timed out, continuing..."
+                $startupTimer.Stop()
+                $startupFrame.Continue = $false
+            }
+        })
+        $startupTimer.Start()
+        [System.Windows.Threading.Dispatcher]::PushFrame($startupFrame)
+
+        try {
+            if ($startupTimeoutHit) {
+                try {
+                    $startupPs.Stop()
+                } catch { }
+                & $script:QOTLog ("[STARTUP] Background startup tasks timed out after {0} ms. Continuing with main window initialisation." -f $startupTimeoutMs) "WARN"
+            } else {
+                $null = $startupPs.EndInvoke($startupAsync)
+            }
+        } finally {
+            $startupStopwatch.Stop()
+            $startupPs.Dispose()
+            $startupRunspace.Dispose()
         }
-        if ($startupAsync.IsCompleted) {
-            $startupTimer.Stop()
-            $startupFrame.Continue = $false
-            return
-        }
+        Stop-StartupChunk "Startup background tasks"
 
-        if ($startupStopwatch.ElapsedMilliseconds -ge $startupTimeoutMs) {
-            $startupTimeoutHit = $true
-            $startupState.Status = "Startup warmup timed out, continuing..."
-            $startupTimer.Stop()
-            $startupFrame.Continue = $false
+        if ($startupState.Error) {
+            throw $startupState.Error
         }
-    })
-    $startupTimer.Start()
-    [System.Windows.Threading.Dispatcher]::PushFrame($startupFrame)
-
-    try {
-        if ($startupTimeoutHit) {
-            try {
-                $startupPs.Stop()
-            } catch { }
-            & $script:QOTLog ("[STARTUP] Background startup tasks timed out after {0} ms. Continuing with main window initialisation." -f $startupTimeoutMs) "WARN"
-        } else {
-            $null = $startupPs.EndInvoke($startupAsync)
-        }
-    } finally {
-        $startupStopwatch.Stop()
-        $startupPs.Dispose()
-        $startupRunspace.Dispose()
-    }
-    Stop-StartupChunk "Startup background tasks"
-
-    if ($startupState.Error) {
-        throw $startupState.Error
     }
 
     Set-FoxSplash 92 "Building main window..."
