@@ -7,7 +7,7 @@ Import-Module "$PSScriptRoot\..\Logging\Logging.psm1" -Force -ErrorAction Silent
 Import-Module "$PSScriptRoot\ActionRegistry.psm1" -Force -ErrorAction SilentlyContinue
 
 function Initialize-QOTActionCatalog {
-    $scriptsBasePath = Join-Path $PSScriptRoot "..\..\Scripts"
+    $scriptsBasePath = (Resolve-Path (Join-Path $PSScriptRoot "..\..\Scripts")).Path
 
     try {
         Clear-QOTActionDefinitions
@@ -20,7 +20,8 @@ function Initialize-QOTActionCatalog {
             [Parameter(Mandatory)][string]$Label,
             [Parameter(Mandatory)][string]$RelativeScriptPath
         )
-        $scriptPath = Join-Path $scriptsBasePath $RelativeScriptPath
+        $normalizedRelativePath = $RelativeScriptPath -replace '^[\\/]+', ''
+        $scriptPath = [System.IO.Path]::GetFullPath((Join-Path $scriptsBasePath $normalizedRelativePath))
         Register-QOTActionDefinition -ActionId $ActionId -Label $Label -ScriptPath $scriptPath
     }
 
