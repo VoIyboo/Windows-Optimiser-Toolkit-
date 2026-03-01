@@ -77,11 +77,29 @@ try {
     # Load Splash UI module so New-QOTSplashWindow exists
     $splashUIModule = Join-Path $rootPath "src\Intro\Splash.UI.psm1"
     if (Test-Path $splashUIModule) {
-        Import-Module $splashUIModule -Force -ErrorAction SilentlyContinue
+        try {
+            Import-Module $splashUIModule -Force -ErrorAction Stop
+        }
+        catch {
+            & $script:QOTLog ("[STARTUP] Failed to import splash UI module: {0}" -f $_.Exception.Message) "WARN"
+        }
     }
 
     # Create fox splash
     $splash = $null
+
+    # Clean stale splash completion signal from previous sessions
+    $staleSignalPath = Join-Path $env:TEMP "QOT.Splash.complete.signal"
+    if (Test-Path -LiteralPath $staleSignalPath) {
+        try {
+            Remove-Item -LiteralPath $staleSignalPath -Force -ErrorAction Stop
+            & $script:QOTLog "[STARTUP] Removed stale splash completion signal file." "INFO"
+        }
+        catch {
+            & $script:QOTLog ("[STARTUP] Failed to remove stale splash signal file: {0}" -f $_.Exception.Message) "WARN"
+        }
+    }
+    
     if (-not $SkipSplash -and (Get-Command New-QOTSplashWindow -ErrorAction SilentlyContinue)) {
         $splashXaml = Join-Path $rootPath "src\Intro\Splash.xaml"
         $splash     = New-QOTSplashWindow -Path $splashXaml
@@ -125,13 +143,13 @@ try {
     Set-FoxSplash 20 "Loading config..."
     Refresh-FoxSplash
     Start-StartupChunk "Load config module"
-    if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $configModule) { Import-Module $configModule -Force -ErrorAction Stop }
     Stop-StartupChunk "Load config module"
 
     Set-FoxSplash 40 "Loading logging..."
     Refresh-FoxSplash
     Start-StartupChunk "Load logging module"
-    if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $loggingModule) { Import-Module $loggingModule -Force -ErrorAction Stop }
     Stop-StartupChunk "Load logging module"
 
     Set-FoxSplash 65 "Loading engine..."
@@ -160,7 +178,7 @@ try {
         })
 
         $startupRunspace = [runspacefactory]::CreateRunspace()
-        $startupRunspace.ApartmentState = "MTA"
+        $startupRunspace.ApartmentState = "STA"
         $startupRunspace.ThreadOptions  = "ReuseThread"
         $startupRunspace.Open()
 
