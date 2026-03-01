@@ -265,11 +265,21 @@ function Refresh-QOTicketsGrid {
         Write-QOTicketsUILog "Tickets: Grid refresh started."
         $script:AllTickets = @(Get-QOTicketsAllItems)
         Invoke-QOTicketsFilterSafely -ForceRefresh
-        $sourceType = $null
-        try { $sourceType = $Grid.ItemsSource.GetType().FullName } catch { }
+        $sourceType = "<null>"
+        $itemsSource = $null
+        try {
+            $itemsSource = $Grid.ItemsSource
+            if ($null -ne $itemsSource) {
+                $sourceType = $itemsSource.GetType().FullName
+            }
+        } catch { }
 
         $itemSourceCount = 0
-        try { $itemSourceCount = @($script:TicketsGrid.ItemsSource).Count } catch { }
+        try {
+            if ($null -ne $itemsSource) {
+                $itemSourceCount = @($itemsSource | ForEach-Object { $_ }).Count
+            }
+        } catch { }
 
         $gridCount = 0
         try { $gridCount = $Grid.Items.Count } catch { }
