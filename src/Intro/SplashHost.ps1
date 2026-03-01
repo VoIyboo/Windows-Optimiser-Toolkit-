@@ -54,8 +54,10 @@ $win    = [Windows.Markup.XamlReader]::Load($reader)
 $bar = $win.FindName("BarProgress")
 $txt = $win.FindName("TxtStatus")
 
+$script:SignalSeenCount = 0
+$script:LastProgressStatus = $null
 
-# Poll for the signal file, then close
+# Poll for the signal file, then close (debounced to avoid stale/race triggers)
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(150)
 $timer.Add_Tick({
@@ -69,8 +71,15 @@ $timer.Add_Tick({
         } catch { }
     }
 
-    # Signal file means we are done
+    # Signal file means we are done, but require two consecutive observations to avoid race/stale file timing.
     if (Test-Path -LiteralPath $SignalPath) {
+        $script:SignalSeenCount += 1
+    }
+    else {
+        $script:SignalSeenCount = 0
+    }
+
+    if ($script:SignalSeenCount -ge 2) {
         $timer.Stop()
         try { Remove-Item -LiteralPath $SignalPath -Force -ErrorAction SilentlyContinue } catch {}
         $win.Close()
