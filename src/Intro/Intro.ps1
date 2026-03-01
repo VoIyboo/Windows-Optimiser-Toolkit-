@@ -337,6 +337,7 @@ try {
     # UI. If that happens in the first couple seconds, attempt a direct
     # Start-QOTMainWindow fallback path so the app can still recover.
     $shouldAttemptFallbackLaunch = $false
+    $mainWindowLaunchTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
     try {
         Start-QOTMain -RootPath $rootPath -SplashWindow $splash
@@ -347,7 +348,9 @@ try {
         $shouldAttemptFallbackLaunch = $true
     }
     finally {
-        $mainWindowLaunchTimer.Stop()
+        if ($mainWindowLaunchTimer) {
+            $mainWindowLaunchTimer.Stop()
+        }
     }
     if ($mainWindowLaunchTimer.Elapsed.TotalSeconds -lt 3) {
         & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms; attempting direct MainWindow fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds)) "WARN"
