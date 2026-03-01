@@ -739,6 +739,21 @@ function Get-QOTNamedElementsSnapshot {
     return @($result)
 }
 
+$script:MainWindowAllowClose = $false
+$script:MainWindowCloseReason = $null
+$script:MainWindowNativeHook = $null
+
+function Request-QOTMainWindowClose {
+    param(
+        [Parameter(Mandatory)][System.Windows.Window]$Window,
+        [string]$Reason = "InternalRequest"
+    )
+
+    $script:MainWindowAllowClose = $true
+    $script:MainWindowCloseReason = $Reason
+    $Window.Close()
+}
+
 function Write-QOTWindowVisibilityDiagnostics {
     param(
         [Parameter(Mandatory)][System.Windows.Window]$Window,
@@ -1336,12 +1351,55 @@ function Start-QOTMainWindow {
         Write-QOTStartupTrace ("Application ShutdownMode set to: {0}" -f $app.ShutdownMode)
 
         $window.Add_Loaded({ Write-QOTStartupTrace "MainWindow lifecycle event fired: Loaded" })
+        $window.Add_SourceInitialized({
+            try {
+                $helper = New-Object System.Windows.Interop.WindowInteropHelper($window)
+                $source = [System.Windows.Interop.HwndSource]::FromHwnd($helper.Handle)
+                if ($source -and -not $script:MainWindowNativeHook) {
+                    $script:MainWindowNativeHook = [System.Windows.Interop.HwndSourceHook]{
+                        param($hwnd, $msg, $wParam, $lParam, [ref]$handled)
+
+                        $WM_SYSCOMMAND = 0x0112
+                        $SC_CLOSE = 0xF060
+                        if ($msg -eq $WM_SYSCOMMAND) {
+                            $cmd = ([int64]$wParam) -band 0xFFF0
+                            if ($cmd -eq $SC_CLOSE) {
+                                $script:MainWindowAllowClose = $true
+                                $script:MainWindowCloseReason = "SystemCommandClose"
+                                Write-QOTStartupTrace "MainWindow close intent detected via WM_SYSCOMMAND/SC_CLOSE"
+                            }
+                        }
+                        return [IntPtr]::Zero
+                    }
+                    $source.AddHook($script:MainWindowNativeHook)
+                    Write-QOTStartupTrace "MainWindow native close hook attached"
+                }
+            }
+            catch {
+                Write-QOTStartupTrace ("Failed to attach main window native close hook: {0}" -f $_.Exception.Message) 'WARN'
+            }
+        })
         $window.Add_ContentRendered({ Write-QOTStartupTrace "MainWindow lifecycle event fired: ContentRendered" })
         $window.Add_Closing({
             param($sender, $eventArgs)
-            Write-QOTStartupTrace ("MainWindow lifecycle event fired: Closing (Cancel={0})" -f $eventArgs.Cancel)
+            $closeReason = if ($script:MainWindowCloseReason) { $script:MainWindowCloseReason } else { "User/System close request" }
+            Write-QOTStartupTrace ("MainWindow lifecycle event fired: Closing (Cancel={0}; Reason={1}; AllowClose={2})" -f $eventArgs.Cancel, $closeReason, $script:MainWindowAllowClose)
+
+            if (-not $script:MainWindowAllowClose) {
+                $eventArgs.Cancel = $true
+                Write-QOTStartupTrace "MainWindow close request blocked because no close intent was detected (WM_SYSCOMMAND or internal request)" 'WARN'
+                return
+            }
+
+            $script:MainWindowAllowClose = $false
+            $script:MainWindowCloseReason = $null
         })
-        $window.Add_Closed({ Write-QOTStartupTrace "MainWindow lifecycle event fired: Closed" })
+        $window.Add_Closed({
+            Write-QOTStartupTrace "MainWindow lifecycle event fired: Closed"
+            $script:MainWindowAllowClose = $false
+            $script:MainWindowCloseReason = $null
+            $script:MainWindowNativeHook = $null
+        })
 
         if ($appCreatedHere) {
             Write-QOTStartupTrace "Forcing MainWindow.Show() + Activate() immediately before Run"
@@ -1398,4 +1456,4 @@ function Start-QOTMainWindow {
     if ($PassThru) { return $window }
 }
 
-Export-ModuleMember -Function Start-QOTMainWindow, Set-QOTSummary, Resolve-QOTControlSet
+Export-ModuleMember -Function Start-QOTMainWindow, Set-QOTSummary, Resolve-QOTControlSet, Request-QOTMainWindowClose
