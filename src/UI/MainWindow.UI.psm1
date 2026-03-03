@@ -837,6 +837,49 @@ function Set-QOTWindowSafetyDefaults {
     }
 }
 
+function Invoke-QOTSplashFadeOut {
+    param(
+        [Parameter(Mandatory)]
+        [System.Windows.Window]$SplashWindow,
+
+        [int]$DurationMs = 350
+    )
+
+    try {
+        if (-not $SplashWindow.Dispatcher.CheckAccess()) {
+            $SplashWindow.Dispatcher.Invoke([action]{
+                Invoke-QOTSplashFadeOut -SplashWindow $SplashWindow -DurationMs $DurationMs
+            })
+            return
+        }
+
+        Write-QOTStartupTrace ("Fading out splash window over {0} ms" -f $DurationMs)
+
+        $animation = New-Object System.Windows.Media.Animation.DoubleAnimation
+        $animation.From = if ($SplashWindow.Opacity -gt 0) { [double]$SplashWindow.Opacity } else { 1.0 }
+        $animation.To = 0.0
+        $animation.Duration = [System.Windows.Duration]::new([System.TimeSpan]::FromMilliseconds([Math]::Max(50, $DurationMs)))
+        $animation.FillBehavior = [System.Windows.Media.Animation.FillBehavior]::Stop
+
+        $animation.Add_Completed({
+            try {
+                $SplashWindow.Opacity = 0
+                $SplashWindow.Close()
+                Write-QOTStartupTrace "Splash window fade-out completed and window closed"
+            }
+            catch {
+                Write-QOTStartupTrace ("Splash close after fade failed: {0}" -f $_.Exception.Message) 'WARN'
+            }
+        })
+
+        $SplashWindow.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $animation)
+    }
+    catch {
+        Write-QOTStartupTrace ("Splash fade-out failed, closing immediately: {0}" -f $_.Exception.Message) 'WARN'
+        try { $SplashWindow.Close() } catch { }
+    }
+}
+
 function Start-QOTMainWindow {
     param(
         [Parameter(Mandatory)]
