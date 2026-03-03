@@ -1091,6 +1091,21 @@ function Start-QOTMainWindow {
     $tabs    = $resolvedControls["MainTabControl"]
     $tabApps = $resolvedControls["TabApps"]
 
+    if (-not $WarmupOnly -and $appCreatedHere) {
+        try {
+            Write-QOTStartupTrace "Early MainWindow reveal before feature module wiring"
+            Set-QOTWindowSafetyDefaults -Window $window
+            if (-not $window.IsVisible -or $window.Visibility -ne [System.Windows.Visibility]::Visible) {
+                $window.Show()
+                $window.Activate() | Out-Null
+                Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow early-show"
+            }
+        }
+        catch {
+            Write-QOTStartupTrace ("Early MainWindow reveal failed: {0}" -f $_.Exception.Message) 'WARN'
+        }
+    }
+
     # ------------------------------------------------------------
     # Initialise Apps UI
     # ------------------------------------------------------------
