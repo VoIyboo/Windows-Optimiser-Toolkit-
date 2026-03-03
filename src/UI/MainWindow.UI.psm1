@@ -1453,11 +1453,12 @@ function Start-QOTMainWindow {
 
         if ($SplashWindow) {
             try {
-                Write-QOTStartupTrace "Closing splash window after main window is visible"
-                $SplashWindow.Close()
+                Write-QOTStartupTrace "Main window visible; starting splash fade-out"
+                Invoke-QOTSplashFadeOut -SplashWindow $SplashWindow -DurationMs 350
             }
             catch {
-                Write-QOTStartupTrace ("Failed to close splash window cleanly: {0}" -f $_.Exception.Message) 'WARN'
+                Write-QOTStartupTrace ("Failed to fade splash window cleanly: {0}" -f $_.Exception.Message) 'WARN'
+                try { $SplashWindow.Close() } catch { }
             }
         }
 
