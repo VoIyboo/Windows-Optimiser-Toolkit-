@@ -1429,9 +1429,7 @@ function Start-QOTMainWindow {
             Write-QOTStartupTrace ("MainWindow lifecycle event fired: Closing (Cancel={0}; Reason={1}; AllowClose={2})" -f $eventArgs.Cancel, $closeReason, $script:MainWindowAllowClose)
 
             if (-not $script:MainWindowAllowClose) {
-                $eventArgs.Cancel = $true
-                Write-QOTStartupTrace "MainWindow close request blocked because no close intent was detected (WM_SYSCOMMAND or internal request)" 'WARN'
-                return
+                Write-QOTStartupTrace "MainWindow close request arrived without explicit close intent marker; allowing close as safety fallback" 'WARN'
             }
 
             $script:MainWindowAllowClose = $false
