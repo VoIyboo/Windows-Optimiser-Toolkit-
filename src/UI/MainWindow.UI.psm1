@@ -984,9 +984,11 @@ function Start-QOTMainWindow {
     # Keeping startup in explicit shutdown mode prevents the process from
     # tearing down when the intro splash closes while the main window is
     # still transitioning to visible.
+    $startupAppCreatedHere = $false
     $startupApp = [System.Windows.Application]::Current
     if (-not $startupApp) {
         $startupApp = [System.Windows.Application]::new()
+        $startupAppCreatedHere = $true
         Write-QOTStartupTrace "Created WPF Application instance during intro bootstrap."
     }
     if ($startupApp.ShutdownMode -ne [System.Windows.ShutdownMode]::OnExplicitShutdown) {
@@ -1037,7 +1039,7 @@ function Start-QOTMainWindow {
     $script:MainWindow = $window
     $applicationState = Ensure-QOTWpfApplication -Window $window
     $app = $applicationState.Application
-    $appCreatedHere = [bool]$applicationState.CreatedHere
+    $appCreatedHere = [bool]($applicationState.CreatedHere -or $startupAppCreatedHere)
 
     if (-not [System.Windows.Application]::Current) {
         Write-QOTStartupTrace "Application.Current is unexpectedly null after Ensure-QOTWpfApplication" 'ERROR'
