@@ -1133,7 +1133,28 @@ function Start-QOTMainWindow {
     $script:MainWindow = $window
     $applicationState = Ensure-QOTWpfApplication -Window $window
     $app = $applicationState.Application
-    $appCreatedHere = [bool]($applicationState.CreatedHere -or $startupAppCreatedHere -or $applicationState.BootstrapOnly)
+    
+    # Intro typically creates a bootstrap Application + shows the splash before
+    # MainWindow startup begins. In that state, ShowDialog() can return
+    # immediately in some hosts, leaving no visible main UI.
+    #
+    # When the only existing WPF window is the splash, treat this process as a
+    # bootstrap launch and prefer app.Run(mainWindow) for a stable primary loop.
+    $splashOnlyWindowBootstrap = $false
+    if ($SplashWindow -and $app) {
+        try {
+            $currentWindows = @($app.Windows)
+            if ($currentWindows.Count -eq 1 -and [object]::ReferenceEquals($currentWindows[0], $SplashWindow)) {
+                $splashOnlyWindowBootstrap = $true
+                Write-QOTStartupTrace "Detected splash-only bootstrap state; forcing app.Run(mainWindow) path."
+            }
+        }
+        catch {
+            Write-QOTStartupTrace ("Failed to inspect current WPF window set before launch: {0}" -f $_.Exception.Message) 'WARN'
+        }
+    }
+
+    $appCreatedHere = [bool]($applicationState.CreatedHere -or $startupAppCreatedHere -or $applicationState.BootstrapOnly -or $splashOnlyWindowBootstrap)
     Register-QOTGlobalExceptionGuards -Application $app
 
     if (-not [System.Windows.Application]::Current) {
