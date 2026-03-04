@@ -986,11 +986,11 @@ function Start-QOTMainWindow {
     $startupApp = [System.Windows.Application]::Current
     if (-not $startupApp) {
         $startupApp = [System.Windows.Application]::new()
-        & $script:QOTLog "[STARTUP] Created WPF Application instance during intro bootstrap." "INFO"
+        Write-QOTStartupTrace "Created WPF Application instance during intro bootstrap."
     }
     if ($startupApp.ShutdownMode -ne [System.Windows.ShutdownMode]::OnExplicitShutdown) {
         $startupApp.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
-        & $script:QOTLog ("[STARTUP] Intro set Application.ShutdownMode to {0}." -f $startupApp.ShutdownMode) "INFO"
+        Write-QOTStartupTrace ("Intro set Application.ShutdownMode to {0}." -f $startupApp.ShutdownMode)
     }
 
     $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
