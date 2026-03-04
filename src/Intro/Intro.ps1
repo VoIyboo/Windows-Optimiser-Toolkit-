@@ -11,6 +11,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($Quiet) {
+    [Environment]::SetEnvironmentVariable('QOT_QUIET_CONSOLE', '1', 'Process')
+}
+else {
+    [Environment]::SetEnvironmentVariable('QOT_QUIET_CONSOLE', $null, 'Process')
+}
+
 if (-not $LogPath) {
     $logDir = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
     if (-not (Test-Path $logDir)) {
@@ -124,7 +131,9 @@ try {
             Write-StartupMark "Intro shown (splash displayed)"
         }
     }
-    Write-Host "[STARTUP] Intro started"
+    if (-not $Quiet) {
+        Write-Host "[STARTUP] Intro started"
+    }
     Write-StartupMark "Start heavy init phase 1 (module imports)"
     if (-not $splash) {
         Write-StartupMark "Intro shown (no splash)"
@@ -358,7 +367,9 @@ try {
 
     Start-StartupChunk "MainWindow launch"
     & $script:QOTLog "Starting main window" "INFO"
-    Write-Host "[STARTUP] MainWindow launch started"
+    if (-not $Quiet) {
+        Write-Host "[STARTUP] MainWindow launch started"
+    }
 
     # Route through Start-QOTMain without WarmupOnly so the window lifecycle
     # is owned by MainWindow.UI.psm1 (Show + app.Run) on a single code path.
