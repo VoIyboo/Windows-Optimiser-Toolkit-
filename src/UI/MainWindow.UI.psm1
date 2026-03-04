@@ -782,6 +782,7 @@ function Ensure-QOTWpfApplication {
 
     $existing = [System.Windows.Application]::Current
     if ($existing) {
+        $isBootstrapApplication = (-not $existing.MainWindow) -and ($existing.Windows.Count -eq 0)
         Write-QOTStartupTrace ("Using existing WPF Application instance: {0}" -f $existing.GetType().FullName)
         if ($existing.ShutdownMode -ne [System.Windows.ShutdownMode]::OnMainWindowClose) {
             $existing.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
@@ -795,6 +796,7 @@ function Ensure-QOTWpfApplication {
         return [pscustomobject]@{
             Application = $existing
             CreatedHere = $false
+            BootstrapOnly = $isBootstrapApplication
         }
     }
 
