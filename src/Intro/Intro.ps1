@@ -69,6 +69,19 @@ $WarningPreference    = "SilentlyContinue"
 try {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
+    # Ensure a WPF Application exists before showing the splash.
+    # This prevents the process from shutting down when the splash closes
+    # in environments where WPF defaults to closing on last-window-close.
+    $introApp = [System.Windows.Application]::Current
+    if (-not $introApp) {
+        $introApp = [System.Windows.Application]::new()
+        & $script:QOTLog "[STARTUP] Intro created WPF Application instance before splash." "INFO"
+    }
+    if ($introApp.ShutdownMode -ne [System.Windows.ShutdownMode]::OnExplicitShutdown) {
+        $introApp.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+        & $script:QOTLog ("[STARTUP] Intro forced Application.ShutdownMode to {0} before splash display." -f $introApp.ShutdownMode) "INFO"
+    }
+
     $rootPath      = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
     $configModule  = Join-Path $rootPath "src\Core\Config\Config.psm1"
     $loggingModule = Join-Path $rootPath "src\Core\Logging\Logging.psm1"
