@@ -809,6 +809,7 @@ function Ensure-QOTWpfApplication {
     return [pscustomobject]@{
         Application = $created
         CreatedHere = $true
+        BootstrapOnly = $false
     }
 }
 
@@ -1050,7 +1051,7 @@ function Start-QOTMainWindow {
     $script:MainWindow = $window
     $applicationState = Ensure-QOTWpfApplication -Window $window
     $app = $applicationState.Application
-    $appCreatedHere = [bool]($applicationState.CreatedHere -or $startupAppCreatedHere)
+    $appCreatedHere = [bool]($applicationState.CreatedHere -or $startupAppCreatedHere -or $applicationState.BootstrapOnly)
 
     if (-not [System.Windows.Application]::Current) {
         Write-QOTStartupTrace "Application.Current is unexpectedly null after Ensure-QOTWpfApplication" 'ERROR'
