@@ -797,6 +797,26 @@ function Ensure-QOTWpfApplication {
             Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
         }
 
+        return [pscustomobject]@{
+            Application = $existing
+            CreatedHere = $false
+            BootstrapOnly = $isBootstrapApplication
+        }
+    }
+
+    $created = [System.Windows.Application]::new()
+    $created.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
+    $created.MainWindow = $Window
+    Write-QOTStartupTrace ("Created new WPF Application instance: {0}" -f $created.GetType().FullName)
+    Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
+
+    return [pscustomobject]@{
+        Application = $created
+        CreatedHere = $true
+        BootstrapOnly = $false
+    }
+}
+
 function Register-QOTGlobalExceptionGuards {
     param(
         [Parameter(Mandatory)][System.Windows.Application]$Application
@@ -873,26 +893,6 @@ function Register-QOTGlobalExceptionGuards {
 
     $script:GlobalExceptionHandlersRegistered = $true
     Write-QOTStartupTrace "Registered global WPF/CLR exception guards for MainWindow stability"
-}
-
-        return [pscustomobject]@{
-            Application = $existing
-            CreatedHere = $false
-            BootstrapOnly = $isBootstrapApplication
-        }
-    }
-
-    $created = [System.Windows.Application]::new()
-    $created.ShutdownMode = [System.Windows.ShutdownMode]::OnMainWindowClose
-    $created.MainWindow = $Window
-    Write-QOTStartupTrace ("Created new WPF Application instance: {0}" -f $created.GetType().FullName)
-    Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
-
-    return [pscustomobject]@{
-        Application = $created
-        CreatedHere = $true
-        BootstrapOnly = $false
-    }
 }
 
 function Set-QOTWindowSafetyDefaults {
