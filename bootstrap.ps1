@@ -72,6 +72,7 @@ function Invoke-QOTWebRequestToFile {
     $requestParams = @{
         Uri     = $Uri
         OutFile = $OutFile
+        Headers = @{ "User-Agent" = "QuinnOptimiserToolkit-Bootstrap/1.0"; "Accept" = "application/octet-stream,*/*" }
     }
 
     $iwrCommand = Get-Command Invoke-WebRequest -ErrorAction Stop
@@ -79,7 +80,31 @@ function Invoke-QOTWebRequestToFile {
         $requestParams.UseBasicParsing = $true
     }
 
-    Invoke-WebRequest @requestParams | Out-Null
+    try {
+        Invoke-WebRequest @requestParams | Out-Null
+        return
+    }
+    catch {
+        $iwrMessage = $_.Exception.Message
+
+        # Fallback for environments where Invoke-WebRequest fails due to TLS proxying,
+        # content filtering, or stricter network stack policies.
+        $webClient = $null
+        try {
+            $webClient = New-Object System.Net.WebClient
+            $webClient.Headers.Add("User-Agent", "QuinnOptimiserToolkit-Bootstrap/1.0")
+            $webClient.Headers.Add("Accept", "application/octet-stream,*/*")
+            $webClient.DownloadFile($Uri, $OutFile)
+            return
+        }
+        catch {
+            $wcMessage = $_.Exception.Message
+            throw "Invoke-WebRequest failed: $iwrMessage | WebClient fallback failed: $wcMessage"
+        }
+        finally {
+            if ($webClient) { $webClient.Dispose() }
+        }
+    }
 }
 
 function Get-QOTBootstrapLogDir {
