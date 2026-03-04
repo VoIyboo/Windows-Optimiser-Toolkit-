@@ -1626,9 +1626,13 @@ function Start-QOTMainWindow {
             }
         }
         else {
-            Write-QOTStartupTrace "Using existing WPF application run loop; entering MainWindow.ShowDialog()"
+            Write-QOTStartupTrace "Using existing WPF application run loop; attempting MainWindow.ShowDialog()"
+
+            $showDialogCompleted = $false
+            $showDialogStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
             try {
                 $window.ShowDialog() | Out-Null
+                $showDialogCompleted = $true
                 Write-QOTStartupTrace "MainWindow.ShowDialog() exited normally"
             }
             catch {
@@ -1636,6 +1640,40 @@ function Start-QOTMainWindow {
                 Write-QOTStartupTrace ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) 'ERROR'
                 try { Write-QLog ("MainWindow.ShowDialog() threw an exception.`n{0}" -f $dialogExceptionText) "ERROR" } catch { }
                 throw
+            }
+ finally {
+                $showDialogStopwatch.Stop()
+            }
+
+            # Some hosts create a bootstrap WPF app where ShowDialog can return
+            # almost immediately without a visible window. Recover by forcing a
+            # modeless show and waiting on a local dispatcher frame.
+            if ($showDialogCompleted -and (-not $window.IsVisible) -and $showDialogStopwatch.ElapsedMilliseconds -lt 1500) {
+                Write-QOTStartupTrace ("MainWindow.ShowDialog() returned in {0} ms with IsVisible={1}; forcing modeless fallback show." -f [math]::Round($showDialogStopwatch.Elapsed.TotalMilliseconds), $window.IsVisible) 'WARN'
+                try {
+                    $window.Show()
+                    $window.Activate() | Out-Null
+                    Write-QOTWindowVisibilityDiagnostics -Window $window -Prefix "MainWindow modeless fallback"
+
+                    $dispatcherFrame = [System.Windows.Threading.DispatcherFrame]::new($true)
+                    $closedHandler = [System.EventHandler]{
+                        param($sender, $eventArgs)
+                        $dispatcherFrame.Continue = $false
+                    }
+                    $window.add_Closed($closedHandler)
+                    try {
+                        [System.Windows.Threading.Dispatcher]::PushFrame($dispatcherFrame)
+                    }
+                    finally {
+                        $window.remove_Closed($closedHandler)
+                    }
+                }
+                catch {
+                    $fallbackError = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
+                    Write-QOTStartupTrace ("MainWindow modeless fallback failed.`n{0}" -f $fallbackError) 'ERROR'
+                    try { Write-QLog ("MainWindow modeless fallback failed.`n{0}" -f $fallbackError) "ERROR" } catch { }
+                    throw
+                }
             }
         }
     }
