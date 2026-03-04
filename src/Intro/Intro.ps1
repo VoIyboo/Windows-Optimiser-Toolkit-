@@ -428,6 +428,49 @@ try {
         Start-QOTMainWindow -SplashWindow $splash
     }
 
+    # Final safeguard: if startup paths return without a visible non-splash
+    # window, spawn a clean STA PowerShell process and launch MainWindow there.
+    # This recovers from hosts where intro/splash state leaves the current
+    # process with no active UI even though startup did not throw.
+    $visibleNonSplashAfterLaunch = 0
+    try {
+        $app = [System.Windows.Application]::Current
+        if ($app) {
+            $visibleNonSplashAfterLaunch = @(
+                $app.Windows | Where-Object {
+                    if (-not $_) { return $false }
+                    if (-not $_.IsVisible) { return $false }
+                    if ($splash -and [object]::ReferenceEquals($_, $splash)) { return $false }
+                    return $true
+                }
+            ).Count
+        }
+    }
+    catch {
+        & $script:QOTLog ("[STARTUP] Failed to verify post-launch window visibility: {0}" -f $_.Exception.Message) "WARN"
+    }
+
+    if ($visibleNonSplashAfterLaunch -lt 1) {
+        $psExe = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+        $mainWindowModulePath = Join-Path $rootPath "src\UI\MainWindow.UI.psm1"
+
+        if (Test-Path -LiteralPath $psExe -and (Test-Path -LiteralPath $mainWindowModulePath)) {
+            $rescueCommand = @(
+                "`$ErrorActionPreference = 'Stop'"
+                "Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase"
+                "Import-Module -Name '$($mainWindowModulePath.Replace("'", "''"))' -Force -ErrorAction Stop"
+                "Start-QOTMainWindow"
+            ) -join '; '
+
+            & $script:QOTLog "[STARTUP] No visible MainWindow detected after launch path; starting isolated rescue launcher process." "WARN"
+            Start-Process -FilePath $psExe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-Command', $rescueCommand) | Out-Null
+            return
+        }
+        else {
+            & $script:QOTLog "[STARTUP] Rescue launcher skipped because PowerShell.exe or MainWindow.UI.psm1 is missing." "ERROR"
+        }
+    }
+
     Write-StartupMark "MainWindow run loop exited"
     & $script:QOTLog "MainWindow run loop exited" "INFO"
     Stop-StartupChunk "MainWindow launch"
