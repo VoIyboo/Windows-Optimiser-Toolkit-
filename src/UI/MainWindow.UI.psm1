@@ -979,6 +979,20 @@ function Start-QOTMainWindow {
     # ------------------------------------------------------------
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
+    # Ensure there is a WPF Application before showing the splash window.
+    # Keeping startup in explicit shutdown mode prevents the process from
+    # tearing down when the intro splash closes while the main window is
+    # still transitioning to visible.
+    $startupApp = [System.Windows.Application]::Current
+    if (-not $startupApp) {
+        $startupApp = [System.Windows.Application]::new()
+        & $script:QOTLog "[STARTUP] Created WPF Application instance during intro bootstrap." "INFO"
+    }
+    if ($startupApp.ShutdownMode -ne [System.Windows.ShutdownMode]::OnExplicitShutdown) {
+        $startupApp.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+        & $script:QOTLog ("[STARTUP] Intro set Application.ShutdownMode to {0}." -f $startupApp.ShutdownMode) "INFO"
+    }
+
     $xamlPath = Join-Path $PSScriptRoot "MainWindow.xaml"
     if (-not (Test-Path -LiteralPath $xamlPath)) {
         throw "MainWindow.xaml not found at $xamlPath"
