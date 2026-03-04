@@ -388,16 +388,25 @@ try {
     if (-not $startMainThrew -and -not $shouldAttemptFallbackLaunch) {
         try {
             $visibleWindowCount = 0
+            $visibleNonSplashWindowCount = 0
             $app = [System.Windows.Application]::Current
             if ($app) {
-                $visibleWindowCount = @($app.Windows | Where-Object { $_ -and $_.IsVisible }).Count
+                $visibleWindows = @($app.Windows | Where-Object { $_ -and $_.IsVisible })
+                $visibleWindowCount = $visibleWindows.Count
+                $visibleNonSplashWindowCount = @(
+                    $visibleWindows | Where-Object {
+                        if (-not $_) { return $false }
+                        if ($splash -and [object]::ReferenceEquals($_, $splash)) { return $false }
+                        return $true
+                    }
+                ).Count
             }
 
-            if ($visibleWindowCount -gt 0) {
-                & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms and detected {1} visible WPF window(s); skipping fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds), $visibleWindowCount) "INFO"
+            if ($visibleNonSplashWindowCount -gt 0) {
+                & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms and detected {1} visible WPF window(s) ({2} excluding splash); skipping fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds), $visibleWindowCount, $visibleNonSplashWindowCount) "INFO"
             }
             else {
-                & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms with no visible window; attempting direct MainWindow fallback launch regardless of elapsed time." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds)) "WARN"
+                & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms with no visible non-splash window (visible windows total: {1}); attempting direct MainWindow fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds), $visibleWindowCount) "WARN"
                 $shouldAttemptFallbackLaunch = $true
             }
         }
