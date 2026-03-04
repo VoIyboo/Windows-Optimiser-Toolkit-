@@ -882,7 +882,8 @@ function Invoke-QOTSplashFadeOut {
 
 function Start-QOTMainWindow {
     param(
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
         $SplashWindow,
 
         [switch]$WarmupOnly,
