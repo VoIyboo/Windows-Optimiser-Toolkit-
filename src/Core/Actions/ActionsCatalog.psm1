@@ -77,12 +77,49 @@ function Initialize-QOTActionCatalog {
         @{ ActionId = "Invoke-QRepairAdapter"; Label = "Repair network adapter"; Script = "Network\\Invoke-QRepairAdapter.ps1" },
         @{ ActionId = "Invoke-QServiceTune"; Label = "Service tuning"; Script = "Network\\Invoke-QServiceTune.ps1" }
     )
-
+    
+    $failedRegistrations = New-Object System.Collections.Generic.List[object]
+    
     foreach ($action in $actionDefinitions) {
-        Register-QOTActionScript -ActionId $action.ActionId -Label $action.Label -RelativeScriptPath $action.Script
+        try {
+            Register-QOTActionScript -ActionId $action.ActionId -Label $action.Label -RelativeScriptPath $action.Script
+        }
+        catch {
+            $failedRegistrations.Add([pscustomobject]@{
+                ActionId = $action.ActionId
+                Script   = $action.Script
+                Error    = $_.Exception.Message
+            }) | Out-Null
+            try {
+                Write-QLog ("Failed to register action definition '{0}' ({1}): {2}" -f $action.ActionId, $action.Script, $_.Exception.Message) "ERROR"
+            } catch { }
+        }
     }
 
-    Register-QOTActionScript -ActionId "Apps.RunSelected" -Label "Run selected app actions" -RelativeScriptPath "Apps\\Apps.RunSelected.ps1"   
+    try {
+        Register-QOTActionScript -ActionId "Apps.RunSelected" -Label "Run selected app actions" -RelativeScriptPath "Apps\\Apps.RunSelected.ps1"
+    }
+    catch {
+        $failedRegistrations.Add([pscustomobject]@{
+            ActionId = "Apps.RunSelected"
+            Script   = "Apps\\Apps.RunSelected.ps1"
+            Error    = $_.Exception.Message
+        }) | Out-Null
+        try {
+            Write-QLog ("Failed to register action definition '{0}' ({1}): {2}" -f "Apps.RunSelected", "Apps\\Apps.RunSelected.ps1", $_.Exception.Message) "ERROR"
+        } catch { }
+    }
+
+    if ($failedRegistrations.Count -gt 0) {
+        try {
+            Write-QLog ("Action catalog registration finished with {0} failure(s)." -f $failedRegistrations.Count) "WARN"
+        } catch { }
+    }
+
+    if ((Get-QOTActionDefinitionCount) -le 0) {
+        throw "Action catalog registration completed with zero valid action definitions."
+    }
+
     try { Write-QOTActionCatalogState -Context "initialise catalog complete" } catch { }
     try { Write-QLog "Action catalog initialised." "DEBUG" } catch { }
 }
