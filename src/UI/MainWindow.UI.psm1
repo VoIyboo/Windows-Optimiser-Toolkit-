@@ -11,6 +11,10 @@ $script:SummaryTextBlock = $null
 $script:SummaryTimer = $null
 $script:PlayButtonTimer = $null
 $script:IsPlayRunning = $false
+$script:GlobalExceptionHandlersRegistered = $false
+$script:DispatcherUnhandledExceptionHandler = $null
+$script:AppDomainUnhandledExceptionHandler = $null
+$script:TaskUnobservedExceptionHandler = $null
 
 function Write-QOTStartupTrace {
     param(
@@ -793,6 +797,84 @@ function Ensure-QOTWpfApplication {
             Write-QOTStartupTrace ("Application.Current.MainWindow assigned to: {0}" -f $Window.GetType().FullName)
         }
 
+function Register-QOTGlobalExceptionGuards {
+    param(
+        [Parameter(Mandatory)][System.Windows.Application]$Application
+    )
+
+    if ($script:GlobalExceptionHandlersRegistered) {
+        return
+    }
+
+    $script:DispatcherUnhandledExceptionHandler = [System.Windows.Threading.DispatcherUnhandledExceptionEventHandler]{
+        param($sender, $eventArgs)
+
+        try {
+            $exceptionText = if ($eventArgs.Exception) {
+                Get-QOTExceptionReport -Exception $eventArgs.Exception
+            }
+            else {
+                "DispatcherUnhandledException fired without an Exception payload."
+            }
+
+            Write-QOTStartupTrace ("Unhandled dispatcher exception intercepted; keeping MainWindow alive.`n{0}" -f $exceptionText) 'ERROR'
+            try { Write-QLog ("Unhandled dispatcher exception intercepted; keeping MainWindow alive.`n{0}" -f $exceptionText) 'ERROR' } catch { }
+
+            $eventArgs.Handled = $true
+        }
+        catch {
+            try { $eventArgs.Handled = $true } catch { }
+        }
+    }
+    $Application.add_DispatcherUnhandledException($script:DispatcherUnhandledExceptionHandler)
+
+    $script:AppDomainUnhandledExceptionHandler = [System.UnhandledExceptionEventHandler]{
+        param($sender, $eventArgs)
+
+        try {
+            $exceptionObject = $eventArgs.ExceptionObject
+            $exceptionText = if ($exceptionObject -is [System.Exception]) {
+                Get-QOTExceptionReport -Exception $exceptionObject
+            }
+            elseif ($exceptionObject) {
+                $exceptionObject.ToString()
+            }
+            else {
+                "<null exception object>"
+            }
+
+            Write-QOTStartupTrace ("AppDomain unhandled exception observed (IsTerminating={0}).`n{1}" -f $eventArgs.IsTerminating, $exceptionText) 'ERROR'
+            try { Write-QLog ("AppDomain unhandled exception observed (IsTerminating={0}).`n{1}" -f $eventArgs.IsTerminating, $exceptionText) 'ERROR' } catch { }
+        }
+        catch {
+        }
+    }
+    [System.AppDomain]::CurrentDomain.add_UnhandledException($script:AppDomainUnhandledExceptionHandler)
+
+    $script:TaskUnobservedExceptionHandler = [System.EventHandler[System.Threading.Tasks.UnobservedTaskExceptionEventArgs]]{
+        param($sender, $eventArgs)
+
+        try {
+            $exceptionText = if ($eventArgs.Exception) {
+                Get-QOTExceptionReport -Exception $eventArgs.Exception
+            }
+            else {
+                "TaskScheduler.UnobservedTaskException fired without Exception payload."
+            }
+
+            Write-QOTStartupTrace ("Unobserved task exception intercepted and marked observed.`n{0}" -f $exceptionText) 'ERROR'
+            try { Write-QLog ("Unobserved task exception intercepted and marked observed.`n{0}" -f $exceptionText) 'ERROR' } catch { }
+            $eventArgs.SetObserved()
+        }
+        catch {
+        }
+    }
+    [System.Threading.Tasks.TaskScheduler]::add_UnobservedTaskException($script:TaskUnobservedExceptionHandler)
+
+    $script:GlobalExceptionHandlersRegistered = $true
+    Write-QOTStartupTrace "Registered global WPF/CLR exception guards for MainWindow stability"
+}
+
         return [pscustomobject]@{
             Application = $existing
             CreatedHere = $false
@@ -1052,6 +1134,7 @@ function Start-QOTMainWindow {
     $applicationState = Ensure-QOTWpfApplication -Window $window
     $app = $applicationState.Application
     $appCreatedHere = [bool]($applicationState.CreatedHere -or $startupAppCreatedHere -or $applicationState.BootstrapOnly)
+    Register-QOTGlobalExceptionGuards -Application $app
 
     if (-not [System.Windows.Application]::Current) {
         Write-QOTStartupTrace "Application.Current is unexpectedly null after Ensure-QOTWpfApplication" 'ERROR'
