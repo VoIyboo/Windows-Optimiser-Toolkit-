@@ -355,6 +355,7 @@ try {
     # UI. If that happens in the first couple seconds, attempt a direct
     # Start-QOTMainWindow fallback path so the app can still recover.
     $shouldAttemptFallbackLaunch = $false
+    $startMainThrew = $false
     $mainWindowLaunchTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
     try {
@@ -364,31 +365,33 @@ try {
         $startMainErrorDetail = if ($_.Exception) { $_.Exception.ToString() } else { $_.ToString() }
         & $script:QOTLog ("[STARTUP] Start-QOTMain threw; attempting direct MainWindow fallback launch.`n{0}" -f $startMainErrorDetail) "ERROR"
         $shouldAttemptFallbackLaunch = $true
-        try {
-            $app = [System.Windows.Application]::Current
-            if ($app) {
-                $visibleWindowCount = @($app.Windows | Where-Object { $_ -and $_.IsVisible }).Count
-                if ($visibleWindowCount -gt 0) {
-                    & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms but detected {1} visible WPF window(s); skipping fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds), $visibleWindowCount) "INFO"
-                    $shouldAttemptFallbackLaunch = $false
-                }
-            }
-        }
-        catch {
-            & $script:QOTLog ("[STARTUP] Could not verify WPF window visibility after Start-QOTMain returned: {0}" -f $_.Exception.Message) "WARN"
-        }
-
-        if ($shouldAttemptFallbackLaunch) {
-            & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms with no visible window; attempting direct MainWindow fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds)) "WARN"
-        }        
+        $startMainThrew = $true
     }
     finally {
         if ($mainWindowLaunchTimer) {
             $mainWindowLaunchTimer.Stop()
         }
     }
-    if (-not $shouldAttemptFallbackLaunch -and $mainWindowLaunchTimer.Elapsed.TotalSeconds -lt 3) {
-        $shouldAttemptFallbackLaunch = $true
+    if (-not $startMainThrew -and -not $shouldAttemptFallbackLaunch -and $mainWindowLaunchTimer.Elapsed.TotalSeconds -lt 3) {
+        try {
+            $visibleWindowCount = 0
+            $app = [System.Windows.Application]::Current
+            if ($app) {
+                $visibleWindowCount = @($app.Windows | Where-Object { $_ -and $_.IsVisible }).Count
+            }
+
+            if ($visibleWindowCount -gt 0) {
+                & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms and detected {1} visible WPF window(s); skipping fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds), $visibleWindowCount) "INFO"
+            }
+            else {
+                & $script:QOTLog ("[STARTUP] Start-QOTMain returned after {0} ms with no visible window; attempting direct MainWindow fallback launch." -f [math]::Round($mainWindowLaunchTimer.Elapsed.TotalMilliseconds)) "WARN"
+                $shouldAttemptFallbackLaunch = $true
+            }
+        }
+        catch {
+            & $script:QOTLog ("[STARTUP] Could not verify WPF window visibility after Start-QOTMain returned: {0}`nAttempting fallback launch as a safeguard." -f $_.Exception.Message) "WARN"
+            $shouldAttemptFallbackLaunch = $true
+        }
     }
     
     if ($shouldAttemptFallbackLaunch) {
