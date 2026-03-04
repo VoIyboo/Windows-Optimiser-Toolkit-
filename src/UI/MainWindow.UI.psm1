@@ -742,6 +742,8 @@ function Get-QOTNamedElementsSnapshot {
 $script:MainWindowAllowClose = $false
 $script:MainWindowCloseReason = $null
 $script:MainWindowNativeHook = $null
+$script:MainWindowStartupCloseGuard = [System.Diagnostics.Stopwatch]::StartNew()
+$script:MainWindowUnexpectedCloseBlocked = $false
 
 function Request-QOTMainWindowClose {
     param(
@@ -892,6 +894,13 @@ function Start-QOTMainWindow {
 
     $basePath = Join-Path $PSScriptRoot ".."
     $startupIssues = New-Object 'System.Collections.Generic.List[string]'
+    if (-not $script:MainWindowStartupCloseGuard) {
+        $script:MainWindowStartupCloseGuard = [System.Diagnostics.Stopwatch]::StartNew()
+    }
+    else {
+        $script:MainWindowStartupCloseGuard.Restart()
+    }
+    $script:MainWindowUnexpectedCloseBlocked = $false
     # ------------------------------------------------------------
     # Core modules
     # ------------------------------------------------------------
@@ -1459,6 +1468,27 @@ function Start-QOTMainWindow {
             param($sender, $eventArgs)
             $closeReason = if ($script:MainWindowCloseReason) { $script:MainWindowCloseReason } else { "User/System close request" }
             Write-QOTStartupTrace ("MainWindow lifecycle event fired: Closing (Cancel={0}; Reason={1}; AllowClose={2})" -f $eventArgs.Cancel, $closeReason, $script:MainWindowAllowClose)
+                $closeGuardWindowMs = 5000
+                $elapsedMs = if ($script:MainWindowStartupCloseGuard) { [math]::Round($script:MainWindowStartupCloseGuard.Elapsed.TotalMilliseconds) } else { -1 }
+
+                if (-not $script:MainWindowUnexpectedCloseBlocked -and $elapsedMs -ge 0 -and $elapsedMs -lt $closeGuardWindowMs) {
+                    $eventArgs.Cancel = $true
+                    $script:MainWindowUnexpectedCloseBlocked = $true
+                    Write-QOTStartupTrace ("Blocked unexpected early MainWindow close request at {0} ms after startup; keeping UI alive." -f $elapsedMs) 'WARN'
+                    try {
+                        $sender.Dispatcher.BeginInvoke([action]{
+                            try {
+                                $sender.Show()
+                                $sender.Activate() | Out-Null
+                            }
+                            catch {
+                            }
+                        }, [System.Windows.Threading.DispatcherPriority]::Background) | Out-Null
+                    }
+                    catch {
+                    }
+                    return
+                }
 
             if (-not $script:MainWindowAllowClose) {
                 Write-QOTStartupTrace "MainWindow close request arrived without explicit close intent marker; allowing close as safety fallback" 'WARN'
@@ -1472,6 +1502,10 @@ function Start-QOTMainWindow {
             $script:MainWindowAllowClose = $false
             $script:MainWindowCloseReason = $null
             $script:MainWindowNativeHook = $null
+            $script:MainWindowUnexpectedCloseBlocked = $false
+            if ($script:MainWindowStartupCloseGuard) {
+                try { $script:MainWindowStartupCloseGuard.Stop() } catch { }
+            }
         })
 
         if ($appCreatedHere) {
