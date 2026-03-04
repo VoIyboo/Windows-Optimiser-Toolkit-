@@ -5,6 +5,16 @@
 $script:QLogRoot = Join-Path $env:ProgramData "QuinnOptimiserToolkit\Logs"
 $script:QLogFile = $null
 
+function Test-QOTConsoleLoggingEnabled {
+    $quietEnv = [Environment]::GetEnvironmentVariable('QOT_QUIET_CONSOLE', 'Process')
+    if ([string]::IsNullOrWhiteSpace($quietEnv)) {
+        return $true
+    }
+
+    $quietToken = $quietEnv.Trim().ToLowerInvariant()
+    return ($quietToken -notin @('1', 'true', 'yes', 'on'))
+}
+
 function Ensure-QLogRoot {
     try {
         if (-not $script:QLogRoot) {
@@ -57,8 +67,9 @@ function Write-QLog {
     $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     $line = "[{0}] [{1}] {2}" -f $ts, $Level, $Message
 
-    # Write to console (useful during dev)
-    Write-Host $line
+    if (Test-QOTConsoleLoggingEnabled) {
+        try { Write-Host $line } catch { }
+    }
 
     if ($script:QLogFile) {
         Add-Content -LiteralPath $script:QLogFile -Value $line -Encoding UTF8
@@ -97,4 +108,3 @@ Export-ModuleMember -Function `
     Write-QLog, `
     Write-QOSettingsUILog, `
     Stop-QLogSession
-
